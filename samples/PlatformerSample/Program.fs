@@ -44,9 +44,7 @@ let jumpSpeed = -700.0f
 // ─────────────────────────────────────────────────────────────
 
 [<Struct>]
-type Platform = {
-    Bounds: Raylib_cs.Rectangle
-}
+type Platform = { Bounds: Raylib_cs.Rectangle }
 
 let generateTerrain (seed: int) : Platform list =
     let rng = Random(seed)
@@ -56,9 +54,11 @@ let generateTerrain (seed: int) : Platform list =
     // Ground segments with gaps
     while x < 5000.0f do
         let segmentLength = rng.Next(3, 8) |> float32 |> (*) tileSize
-        platforms <- {
-            Bounds = Raylib_cs.Rectangle(x, groundSurface, segmentLength, tileSize)
-        } :: platforms
+
+        platforms <-
+            { Bounds = Raylib_cs.Rectangle(x, groundSurface, segmentLength, tileSize) }
+            :: platforms
+
         x <- x + segmentLength + (rng.Next(2, 5) |> float32 |> (*) tileSize)
 
     // Elevated platforms
@@ -66,9 +66,7 @@ let generateTerrain (seed: int) : Platform list =
         let px = rng.Next(200, 4800) |> float32
         let pw = rng.Next(2, 5) |> float32 |> (*) tileSize
         let py = groundSurface - (rng.Next(2, 5) |> float32 |> (*) tileSize)
-        platforms <- {
-            Bounds = Raylib_cs.Rectangle(px, py, pw, tileSize)
-        } :: platforms
+        platforms <- { Bounds = Raylib_cs.Rectangle(px, py, pw, tileSize) } :: platforms
 
     platforms |> List.rev
 
@@ -76,27 +74,25 @@ let generateTerrain (seed: int) : Platform list =
 // Model
 // ─────────────────────────────────────────────────────────────
 
-type SpriteAssets = {
-    PlayerTexture: Texture2D
-    TileTexture: Texture2D
-    Font: Font
-    JumpSound: Sound
-}
+type SpriteAssets =
+    { PlayerTexture: Texture2D
+      TileTexture: Texture2D
+      Font: Font
+      JumpSound: Sound }
 
-type Model = {
-    PlayerPosition: Vector2
-    PlayerVelocity: Vector2
-    PlayerFacing: float32
-    IsGrounded: bool
-    CameraX: float32
-    Actions: ActionState<GameAction>
-    InputMap: InputMap<GameAction>
-    Assets: SpriteAssets
-    TotalTime: float32
-    AnimationState: AnimationState
-    Platforms: Platform list
-    Seed: int
-}
+type Model =
+    { PlayerPosition: Vector2
+      PlayerVelocity: Vector2
+      PlayerFacing: float32
+      IsGrounded: bool
+      CameraX: float32
+      Actions: ActionState<GameAction>
+      InputMap: InputMap<GameAction>
+      Assets: SpriteAssets
+      TotalTime: float32
+      AnimationState: AnimationState
+      Platforms: Platform list
+      Seed: int }
 
 // ─────────────────────────────────────────────────────────────
 // Messages
@@ -125,7 +121,7 @@ let getPlayerSrcRect (totalTime: float32) (state: AnimationState) : Raylib_cs.Re
     match state with
     | Idle -> r 645 0 128 128
     | Walk ->
-        let frame = int(totalTime * 10.0f) % 2
+        let frame = int (totalTime * 10.0f) % 2
         if frame = 0 then r 0 129 128 128 else r 129 129 128 128
     | Jump -> r 774 0 128 128
     | Fall -> r 774 0 128 128
@@ -153,6 +149,7 @@ let resolvePlatformCollision
 
     for platform in platforms do
         let pb = platform.Bounds
+
         if Raylib.CheckCollisionRecs(newBounds, pb).AsBool() then
             // Vertical resolution: landing on top
             let prevFeetY = prevPos.Y + playerHeight
@@ -186,8 +183,12 @@ let resolvePlatformCollision
 // ─────────────────────────────────────────────────────────────
 
 let init (ctx: GameContext) =
-    let playerTex = ctx.Assets.Texture("assets/kenney_platformer/Spritesheets/spritesheet-characters-default.png")
-    let tileTex = ctx.Assets.Texture("assets/kenney_platformer/Spritesheets/spritesheet-tiles-default.png")
+    let playerTex =
+        ctx.Assets.Texture("assets/kenney_platformer/Spritesheets/spritesheet-characters-default.png")
+
+    let tileTex =
+        ctx.Assets.Texture("assets/kenney_platformer/Spritesheets/spritesheet-tiles-default.png")
+
     let font = ctx.Assets.Font("assets/Fonts/monogram.ttf")
     let jumpSound = ctx.Assets.Sound("assets/sfx_jump.ogg")
 
@@ -200,34 +201,29 @@ let init (ctx: GameContext) =
         |> InputMap.key GameAction.Jump KeyboardKey.Space
         |> InputMap.key Respawn KeyboardKey.R
 
-    let assets = {
-        PlayerTexture = playerTex
-        TileTexture = tileTex
-        Font = font
-        JumpSound = jumpSound
-    }
+    let assets =
+        { PlayerTexture = playerTex
+          TileTexture = tileTex
+          Font = font
+          JumpSound = jumpSound }
 
     let seed = Random().Next()
     let platforms = generateTerrain seed
     let spawnY = groundSurface - playerHeight
 
-    struct (
-        {
-            PlayerPosition = Vector2(200.0f, spawnY)
-            PlayerVelocity = Vector2.Zero
-            PlayerFacing = 1.0f
-            IsGrounded = true
-            CameraX = 0.0f
-            Actions = ActionState.empty
-            InputMap = inputMap
-            Assets = assets
-            TotalTime = 0.0f
-            AnimationState = Idle
-            Platforms = platforms
-            Seed = seed
-        },
-        Cmd.none
-    )
+    struct ({ PlayerPosition = Vector2(200.0f, spawnY)
+              PlayerVelocity = Vector2.Zero
+              PlayerFacing = 1.0f
+              IsGrounded = true
+              CameraX = 0.0f
+              Actions = ActionState.empty
+              InputMap = inputMap
+              Assets = assets
+              TotalTime = 0.0f
+              AnimationState = Idle
+              Platforms = platforms
+              Seed = seed },
+            Cmd.none)
 
 // ─────────────────────────────────────────────────────────────
 // Update
@@ -235,8 +231,7 @@ let init (ctx: GameContext) =
 
 let update (msg: Msg) (model: Model) =
     match msg with
-    | InputMapped actions ->
-        struct ({ model with Actions = actions }, Cmd.none)
+    | InputMapped actions -> struct ({ model with Actions = actions }, Cmd.none)
     | Tick gameTime ->
         let dt = float32 gameTime.ElapsedGameTime.TotalSeconds
 
@@ -311,19 +306,16 @@ let update (msg: Msg) (model: Model) =
         if playedJumpSound then
             Raylib.PlaySound(model.Assets.JumpSound)
 
-        struct (
-            { model with
-                PlayerPosition = finalPos
-                PlayerVelocity = finalVel
-                PlayerFacing = newFacing
-                IsGrounded = isGrounded
-                CameraX = cameraX
-                Actions = actions
-                TotalTime = model.TotalTime + dt
-                AnimationState = animState
-            },
-            Cmd.none
-        )
+        struct ({ model with
+                    PlayerPosition = finalPos
+                    PlayerVelocity = finalVel
+                    PlayerFacing = newFacing
+                    IsGrounded = isGrounded
+                    CameraX = cameraX
+                    Actions = actions
+                    TotalTime = model.TotalTime + dt
+                    AnimationState = animState },
+                Cmd.none)
 
 // ─────────────────────────────────────────────────────────────
 // View
@@ -333,74 +325,73 @@ let view (ctx: GameContext) (model: Model) (buffer: RenderBuffer<RenderCmd2D>) =
     // World camera
     let cameraCenterX = model.CameraX + float32 ctx.WindowWidth / 2.0f
     let cameraCenterY = groundLevel - float32 ctx.WindowHeight / 2.0f
+
     buffer.Add(
         0<RenderLayer>,
-        SetCamera2D {
-            Position = Vector2(cameraCenterX, cameraCenterY)
-            Zoom = 1.0f
-            Layer = 0<RenderLayer>
-        }
+        SetCamera2D
+            { Position = Vector2(cameraCenterX, cameraCenterY)
+              Zoom = 1.0f
+              Layer = 0<RenderLayer> }
     )
 
     // Platforms
     let tileSrc = r 260 585 64 64
+
     for platform in model.Platforms do
         let pb = platform.Bounds
-        let tileCount = int(pb.Width / tileSize)
+        let tileCount = int (pb.Width / tileSize)
+
         for i = 0 to tileCount - 1 do
-            let dest = r (int(pb.X) + i * int tileSize) (int pb.Y) (int tileSize) (int tileSize)
+            let dest =
+                r (int (pb.X) + i * int tileSize) (int pb.Y) (int tileSize) (int tileSize)
+
             buffer.Add(
                 1<RenderLayer>,
-                DrawSprite {
-                    Texture = model.Assets.TileTexture
-                    Dest = dest
-                    Source = tileSrc
-                    Origin = Vector2.Zero
-                    Rotation = 0.0f
-                    Color = Color.White
-                    Layer = 1<RenderLayer>
-                }
+                DrawSprite
+                    { Texture = model.Assets.TileTexture
+                      Dest = dest
+                      Source = tileSrc
+                      Origin = Vector2.Zero
+                      Rotation = 0.0f
+                      Color = Color.White
+                      Layer = 1<RenderLayer> }
             )
 
     // Player sprite
     let playerSrc = getPlayerSrcRect model.TotalTime model.AnimationState
     let mutable playerSrcMut = playerSrc
+
     if model.PlayerFacing < 0.0f then
         playerSrcMut <- Raylib_cs.Rectangle(playerSrcMut.X, playerSrcMut.Y, -playerSrcMut.Width, playerSrcMut.Height)
 
-    let playerDrawY = int(model.PlayerPosition.Y + playerHeight - 64.0f)
+    let playerDrawY = int (model.PlayerPosition.Y + playerHeight - 64.0f)
     let playerDest = r (int model.PlayerPosition.X) playerDrawY 64 64
 
     buffer.Add(
         2<RenderLayer>,
-        DrawSprite {
-            Texture = model.Assets.PlayerTexture
-            Dest = playerDest
-            Source = playerSrcMut
-            Origin = Vector2.Zero
-            Rotation = 0.0f
-            Color = Color.White
-            Layer = 2<RenderLayer>
-        }
+        DrawSprite
+            { Texture = model.Assets.PlayerTexture
+              Dest = playerDest
+              Source = playerSrcMut
+              Origin = Vector2.Zero
+              Rotation = 0.0f
+              Color = Color.White
+              Layer = 2<RenderLayer> }
     )
 
     // UI camera
-    buffer.Add(
-        1000<RenderLayer>,
-        ResetCamera2D
-    )
+    buffer.Add(1000<RenderLayer>, ResetCamera2D)
 
     buffer.Add(
         1001<RenderLayer>,
-        DrawText {
-            Font = model.Assets.Font
-            Text = "Mibo Raylib MVP - WASD/Arrows: Move, Space: Jump, R: Respawn"
-            Position = Vector2(10.0f, 10.0f)
-            FontSize = 20.0f
-            Spacing = 1.0f
-            Color = Color.White
-            Layer = 1001<RenderLayer>
-        }
+        DrawText
+            { Font = model.Assets.Font
+              Text = "Mibo Raylib MVP - WASD/Arrows: Move, Space: Jump, R: Respawn"
+              Position = Vector2(10.0f, 10.0f)
+              FontSize = 20.0f
+              Spacing = 1.0f
+              Color = Color.White
+              Layer = 1001<RenderLayer> }
     )
 
 // ─────────────────────────────────────────────────────────────
@@ -413,13 +404,13 @@ let subscribe _ctx _model = Sub.none
 let main _ =
     let program =
         Program.mkProgram init update
-        |> Program.withConfig(fun cfg ->
+        |> Program.withConfig (fun cfg ->
             cfg.Width <- 1280
             cfg.Height <- 720
             cfg.Title <- "Mibo Raylib MVP"
             cfg.TargetFPS <- 60)
         |> Program.withTick Tick
-        |> Program.withRenderer(fun () -> Batch2DRenderer.create view)
+        |> Program.withRenderer (fun () -> Batch2DRenderer.create view)
 
     let game = new RaylibGame<Model, Msg>(program)
     game.Run()

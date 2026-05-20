@@ -8,36 +8,32 @@ open Mibo.Elmish
 [<Measure>]
 type RenderLayer
 
-type SpriteState = {
-    Texture: Texture2D
-    Dest: Raylib_cs.Rectangle
-    Source: Raylib_cs.Rectangle
-    Origin: Vector2
-    Rotation: float32
-    Color: Color
-    Layer: int<RenderLayer>
-}
+type SpriteState =
+    { Texture: Texture2D
+      Dest: Raylib_cs.Rectangle
+      Source: Raylib_cs.Rectangle
+      Origin: Vector2
+      Rotation: float32
+      Color: Color
+      Layer: int<RenderLayer> }
 
-type TextState = {
-    Font: Font
-    Text: string
-    Position: Vector2
-    FontSize: float32
-    Spacing: float32
-    Color: Color
-    Layer: int<RenderLayer>
-}
+type TextState =
+    { Font: Font
+      Text: string
+      Position: Vector2
+      FontSize: float32
+      Spacing: float32
+      Color: Color
+      Layer: int<RenderLayer> }
 
-type Camera2DState = {
-    Position: Vector2
-    Zoom: float32
-    Layer: int<RenderLayer>
-}
+type Camera2DState =
+    { Position: Vector2
+      Zoom: float32
+      Layer: int<RenderLayer> }
 
-type ShaderState = {
-    Shader: Shader
-    Layer: int<RenderLayer>
-}
+type ShaderState =
+    { Shader: Shader
+      Layer: int<RenderLayer> }
 
 [<Struct>]
 type RenderCmd2D =
@@ -53,7 +49,8 @@ type RenderCmd2D =
 type RenderBuffer<'Cmd> = Mibo.Elmish.RenderBuffer<int<RenderLayer>, 'Cmd>
 
 type Batch2DRenderer<'Model>(view: GameContext -> 'Model -> RenderBuffer<RenderCmd2D> -> unit) =
-    let buffer = RenderBuffer<RenderCmd2D>(capacity=4096)
+    let buffer = RenderBuffer<RenderCmd2D>(capacity = 4096)
+
     interface IRenderer<'Model> with
         member _.Draw(ctx, model, gameTime) =
             buffer.Clear()
@@ -85,16 +82,25 @@ type Batch2DRenderer<'Model>(view: GameContext -> 'Model -> RenderBuffer<RenderC
                         Raylib.EndShaderMode()
                         inShader <- false
                 | _, DrawSprite sprite ->
-                    Raylib.DrawTexturePro(sprite.Texture, sprite.Source, sprite.Dest, sprite.Origin, sprite.Rotation, sprite.Color)
+                    Raylib.DrawTexturePro(
+                        sprite.Texture,
+                        sprite.Source,
+                        sprite.Dest,
+                        sprite.Origin,
+                        sprite.Rotation,
+                        sprite.Color
+                    )
                 | _, DrawText text ->
                     Raylib.DrawTextEx(text.Font, text.Text, text.Position, text.FontSize, text.Spacing, text.Color)
-                | _, DrawRect(rect, color, _) ->
-                    Raylib.DrawRectangleRec(rect, color)
-                | _, DrawLine(start, finish, color, _) ->
-                    Raylib.DrawLineV(start, finish, color)
+                | _, DrawRect(rect, color, _) -> Raylib.DrawRectangleRec(rect, color)
+                | _, DrawLine(start, finish, color, _) -> Raylib.DrawLineV(start, finish, color)
 
-            if inShader then Raylib.EndShaderMode()
-            if inCamera then Raylib.EndMode2D()
+            if inShader then
+                Raylib.EndShaderMode()
+
+            if inCamera then
+                Raylib.EndMode2D()
 
 module Batch2DRenderer =
-    let create view = new Batch2DRenderer<'Model>(view) :> IRenderer<'Model>
+    let create view =
+        new Batch2DRenderer<'Model>(view) :> IRenderer<'Model>

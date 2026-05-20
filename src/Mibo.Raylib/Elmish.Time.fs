@@ -3,11 +3,10 @@ namespace Mibo.Elmish
 open System
 
 [<Struct>]
-type GameTime = {
-    TotalTime: TimeSpan
-    ElapsedGameTime: TimeSpan
-    IsRunningSlowly: bool
-}
+type GameTime =
+    { TotalTime: TimeSpan
+      ElapsedGameTime: TimeSpan
+      IsRunningSlowly: bool }
 
 [<Struct>]
 type DispatchMode =
@@ -15,12 +14,11 @@ type DispatchMode =
     | FrameBounded
 
 [<Struct>]
-type FixedStepConfig<'Msg> = {
-    StepSeconds: float32
-    MaxStepsPerFrame: int
-    MaxFrameSeconds: float32 voption
-    Map: float32 -> 'Msg
-}
+type FixedStepConfig<'Msg> =
+    { StepSeconds: float32
+      MaxStepsPerFrame: int
+      MaxFrameSeconds: float32 voption
+      Map: float32 -> 'Msg }
 
 module FixedStep =
     let inline compute

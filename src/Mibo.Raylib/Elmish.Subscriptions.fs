@@ -10,18 +10,19 @@ type subId
 type SubId = string<subId>
 
 module SubId =
-    let inline ofString(value: string) : SubId = UMX.tag<subId> value
-    let inline value(id: SubId) : string = UMX.untag id
+    let inline ofString (value: string) : SubId = UMX.tag<subId> value
+    let inline value (id: SubId) : string = UMX.untag id
 
     let inline prefix (prefix: string) (id: SubId) : SubId =
         if String.IsNullOrEmpty(prefix) then
             id
         else
             let idStr = value id
+
             if String.IsNullOrEmpty(idStr) then
                 ofString prefix
             else
-                ofString(prefix + "/" + idStr)
+                ofString (prefix + "/" + idStr)
 
 type Dispatch<'Msg> = 'Msg -> unit
 type Subscribe<'Msg> = Dispatch<'Msg> -> IDisposable
@@ -35,13 +36,14 @@ type Sub<'Msg> =
 module Sub =
     let none = NoSub
 
-    let batch(subs: seq<Sub<'Msg>>) : Sub<'Msg> =
+    let batch (subs: seq<Sub<'Msg>>) : Sub<'Msg> =
         let inline isNoSub s =
             match s with
             | NoSub -> true
             | _ -> false
 
         let mutable count = 0
+
         for s in subs do
             match s with
             | NoSub -> ()
@@ -52,18 +54,22 @@ module Sub =
             NoSub
         elif count = 1 then
             let mutable found = NoSub
+
             for s in subs do
                 match s with
                 | NoSub -> ()
                 | Active _ ->
-                    if isNoSub found then found <- s
+                    if isNoSub found then
+                        found <- s
                 | BatchSub b ->
                     if b.Length = 1 && isNoSub found then
                         found <- b[0]
+
             found
         else
             let arr = Array.zeroCreate<Sub<'Msg>> count
             let mutable i = 0
+
             for s in subs do
                 match s with
                 | NoSub -> ()
@@ -73,24 +79,17 @@ module Sub =
                 | BatchSub b ->
                     Array.Copy(b, 0, arr, i, b.Length)
                     i <- i + b.Length
+
             BatchSub arr
 
-    let inline batch2(a: Sub<'Msg>, b: Sub<'Msg>) : Sub<'Msg> =
-        batch [ a; b ]
+    let inline batch2 (a: Sub<'Msg>, b: Sub<'Msg>) : Sub<'Msg> = batch [ a; b ]
 
-    let inline batch3(a: Sub<'Msg>, b: Sub<'Msg>, c: Sub<'Msg>) : Sub<'Msg> =
-        batch [ a; b; c ]
+    let inline batch3 (a: Sub<'Msg>, b: Sub<'Msg>, c: Sub<'Msg>) : Sub<'Msg> = batch [ a; b; c ]
 
-    let inline batch4
-        (a: Sub<'Msg>, b: Sub<'Msg>, c: Sub<'Msg>, d: Sub<'Msg>)
-        : Sub<'Msg> =
-        batch [ a; b; c; d ]
+    let inline batch4 (a: Sub<'Msg>, b: Sub<'Msg>, c: Sub<'Msg>, d: Sub<'Msg>) : Sub<'Msg> = batch [ a; b; c; d ]
 
     [<TailCall>]
-    let rec internal flatten
-        (stack: ResizeArray<Sub<'Msg>>)
-        (results: ResizeArray<struct (SubId * Subscribe<'Msg>)>)
-        =
+    let rec internal flatten (stack: ResizeArray<Sub<'Msg>>) (results: ResizeArray<struct (SubId * Subscribe<'Msg>)>) =
         if stack.Count = 0 then
             ()
         else
@@ -130,8 +129,8 @@ module Sub =
                 | Active(subId, subscribe) ->
                     let newId = SubId.prefix idPrefix subId
 
-                    let newSub(dispatch: Dispatch<'Msg>) =
-                        let innerDispatch msgA = dispatch(f msgA)
+                    let newSub (dispatch: Dispatch<'Msg>) =
+                        let innerDispatch msgA = dispatch (f msgA)
                         subscribe innerDispatch
 
                     results.Add(Active(newId, newSub))

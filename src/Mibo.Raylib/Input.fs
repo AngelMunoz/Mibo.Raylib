@@ -6,21 +6,20 @@ open Raylib_cs
 
 type KeyboardKey = Raylib_cs.KeyboardKey
 
-type ActionState<'Action when 'Action: comparison> = {
-    Held: Set<'Action>
-    Started: Set<'Action>
-    Released: Set<'Action>
-}
+type ActionState<'Action when 'Action: comparison> =
+    { Held: Set<'Action>
+      Started: Set<'Action>
+      Released: Set<'Action> }
 
 module ActionState =
-    let empty: ActionState<'Action> = {
-        Held = Set.empty
-        Started = Set.empty
-        Released = Set.empty
-    }
+    let empty: ActionState<'Action> =
+        { Held = Set.empty
+          Started = Set.empty
+          Released = Set.empty }
 
 type InputMap<'Action when 'Action: comparison> =
-    private { Bindings: Map<KeyboardKey, 'Action> }
+    private
+        { Bindings: Map<KeyboardKey, 'Action> }
 
 module InputMap =
     let empty<'Action when 'Action: comparison> : InputMap<'Action> =
@@ -40,14 +39,17 @@ module Keyboard =
         let mutable released = Set.empty
 
         for KeyValue(k, action) in map.Bindings do
-            let isDown = RaylibHelpers.isKeyDown(k)
+            let isDown = RaylibHelpers.isKeyDown (k)
             let wasDown = previous.Held.Contains(action)
 
             if isDown then
                 held <- held.Add(action)
+
                 if not wasDown then
                     started <- started.Add(action)
             elif wasDown then
                 released <- released.Add(action)
 
-        { Held = held; Started = started; Released = released }
+        { Held = held
+          Started = started
+          Released = released }

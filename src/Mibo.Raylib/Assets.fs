@@ -43,15 +43,18 @@ type AssetsService() =
         member _.Dispose() =
             for kv in textures do
                 Raylib.UnloadTexture(kv.Value)
+
             textures.Clear()
 
             for kv in fonts do
                 Raylib.UnloadFont(kv.Value)
+
             fonts.Clear()
 
             for kv in sounds do
                 Raylib.UnloadSound(kv.Value)
+
             sounds.Clear()
 
 module AssetsService =
-    let create() = new AssetsService() :> IAssets
+    let create () = new AssetsService() :> IAssets
