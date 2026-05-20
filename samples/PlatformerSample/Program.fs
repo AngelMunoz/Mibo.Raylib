@@ -152,16 +152,25 @@ let generateTerrain
 
     // Top edge occluder
     occluders <-
-      { P1 = Vector2(x, py); P2 = Vector2(x + segmentLength, py) }
+      {
+        P1 = Vector2(x, py)
+        P2 = Vector2(x + segmentLength, py)
+      }
       :: occluders
 
     // Left and right side occluders (for sideways shadows)
     occluders <-
-      { P1 = Vector2(x, py); P2 = Vector2(x, py + tileSize) }
+      {
+        P1 = Vector2(x, py)
+        P2 = Vector2(x, py + tileSize)
+      }
       :: occluders
 
     occluders <-
-      { P1 = Vector2(x + segmentLength, py); P2 = Vector2(x + segmentLength, py + tileSize) }
+      {
+        P1 = Vector2(x + segmentLength, py)
+        P2 = Vector2(x + segmentLength, py + tileSize)
+      }
       :: occluders
 
     // Add torches every few tiles
@@ -366,8 +375,7 @@ let init(ctx: GameContext) =
   let font = ctx.Assets.Font("assets/Fonts/monogram.ttf")
   let jumpSound = ctx.Assets.Sound("assets/sfx_jump.ogg")
 
-  let shadowImg =
-    Raylib.GenImageColor(1, 1, Color(0uy, 0uy, 0uy, 200uy))
+  let shadowImg = Raylib.GenImageColor(1, 1, Color(0uy, 0uy, 0uy, 200uy))
 
   let shadowTex = Raylib.LoadTextureFromImage(shadowImg)
   Raylib.UnloadImage(shadowImg)
@@ -602,12 +610,7 @@ let view (ctx: GameContext) (model: Model) (buffer: RenderBuffer<RenderCmd2D>) =
         9<RenderLayer>,
         DrawSprite {
           Texture = model.Assets.ShadowTexture
-          Dest =
-            r
-              (int pb.X + 4)
-              platformBottom
-              (int pb.Width - 8)
-              shadowH
+          Dest = r (int pb.X + 4) platformBottom (int pb.Width - 8) shadowH
           Source = Raylib_cs.Rectangle(0.0f, 0.0f, 1.0f, 1.0f)
           Origin = Vector2.Zero
           Rotation = 0.0f
