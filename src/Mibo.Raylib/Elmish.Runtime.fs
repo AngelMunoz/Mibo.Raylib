@@ -104,6 +104,7 @@ type RaylibGame<'Model, 'Msg>(program: Program<'Model, 'Msg>) =
             configure config
 
         Raylib.InitWindow(config.Width, config.Height, config.Title)
+        Raylib.InitAudioDevice()
         if config.TargetFPS > 0 then
             Raylib.SetTargetFPS(config.TargetFPS)
 
@@ -183,4 +184,5 @@ type RaylibGame<'Model, 'Msg>(program: Program<'Model, 'Msg>) =
             | :? IDisposable as d -> d.Dispose()
             | _ -> ()
         ctx.Assets.Dispose()
+        Raylib.CloseAudioDevice()
         Raylib.CloseWindow()

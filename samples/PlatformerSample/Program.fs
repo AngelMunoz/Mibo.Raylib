@@ -40,6 +40,39 @@ let moveSpeed = 300.0f
 let jumpSpeed = -700.0f
 
 // ─────────────────────────────────────────────────────────────
+// Terrain
+// ─────────────────────────────────────────────────────────────
+
+[<Struct>]
+type Platform = {
+    Bounds: Raylib_cs.Rectangle
+}
+
+let generateTerrain (seed: int) : Platform list =
+    let rng = Random(seed)
+    let mutable platforms = []
+    let mutable x = 0.0f
+
+    // Ground segments with gaps
+    while x < 5000.0f do
+        let segmentLength = rng.Next(3, 8) |> float32 |> (*) tileSize
+        platforms <- {
+            Bounds = Raylib_cs.Rectangle(x, groundSurface, segmentLength, tileSize)
+        } :: platforms
+        x <- x + segmentLength + (rng.Next(2, 5) |> float32 |> (*) tileSize)
+
+    // Elevated platforms
+    for _ = 1 to 10 do
+        let px = rng.Next(200, 4800) |> float32
+        let pw = rng.Next(2, 5) |> float32 |> (*) tileSize
+        let py = groundSurface - (rng.Next(2, 5) |> float32 |> (*) tileSize)
+        platforms <- {
+            Bounds = Raylib_cs.Rectangle(px, py, pw, tileSize)
+        } :: platforms
+
+    platforms |> List.rev
+
+// ─────────────────────────────────────────────────────────────
 // Model
 // ─────────────────────────────────────────────────────────────
 
@@ -47,6 +80,7 @@ type SpriteAssets = {
     PlayerTexture: Texture2D
     TileTexture: Texture2D
     Font: Font
+    JumpSound: Sound
 }
 
 type Model = {
@@ -60,6 +94,8 @@ type Model = {
     Assets: SpriteAssets
     TotalTime: float32
     AnimationState: AnimationState
+    Platforms: Platform list
+    Seed: int
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -95,6 +131,57 @@ let getPlayerSrcRect (totalTime: float32) (state: AnimationState) : Raylib_cs.Re
     | Fall -> r 774 0 128 128
 
 // ─────────────────────────────────────────────────────────────
+// Collision
+// ─────────────────────────────────────────────────────────────
+
+let playerBounds (pos: Vector2) : Raylib_cs.Rectangle =
+    Raylib_cs.Rectangle(pos.X, pos.Y, playerWidth, playerHeight)
+
+let resolvePlatformCollision
+    (prevPos: Vector2)
+    (newPos: Vector2)
+    (velocity: Vector2)
+    (platforms: Platform list)
+    : struct (Vector2 * Vector2 * bool) =
+
+    let mutable pos = newPos
+    let mutable vel = velocity
+    let mutable grounded = false
+
+    let prevBounds = playerBounds prevPos
+    let newBounds = playerBounds pos
+
+    for platform in platforms do
+        let pb = platform.Bounds
+        if Raylib.CheckCollisionRecs(newBounds, pb).AsBool() then
+            // Vertical resolution: landing on top
+            let prevFeetY = prevPos.Y + playerHeight
+            let currFeetY = pos.Y + playerHeight
+            let platformTop = pb.Y
+
+            let crossedSurface = prevFeetY <= platformTop + 5.0f && currFeetY >= platformTop
+            let movingDown = vel.Y >= 0.0f
+
+            if crossedSurface && movingDown then
+                pos <- Vector2(pos.X, platformTop - playerHeight)
+                vel <- Vector2(vel.X, 0.0f)
+                grounded <- true
+            elif vel.Y < 0.0f then
+                // Hit head
+                pos <- Vector2(pos.X, pb.Y + pb.Height)
+                vel <- Vector2(vel.X, 0.0f)
+            elif vel.X > 0.0f && prevPos.X + playerWidth <= pb.X then
+                // Hit left wall
+                pos <- Vector2(pb.X - playerWidth, pos.Y)
+                vel <- Vector2(0.0f, vel.Y)
+            elif vel.X < 0.0f && prevPos.X >= pb.X + pb.Width then
+                // Hit right wall
+                pos <- Vector2(pb.X + pb.Width, pos.Y)
+                vel <- Vector2(0.0f, vel.Y)
+
+    struct (pos, vel, grounded)
+
+// ─────────────────────────────────────────────────────────────
 // Init
 // ─────────────────────────────────────────────────────────────
 
@@ -102,6 +189,7 @@ let init (ctx: GameContext) =
     let playerTex = ctx.Assets.Texture("assets/kenney_platformer/Spritesheets/spritesheet-characters-default.png")
     let tileTex = ctx.Assets.Texture("assets/kenney_platformer/Spritesheets/spritesheet-tiles-default.png")
     let font = ctx.Assets.Font("assets/Fonts/monogram.ttf")
+    let jumpSound = ctx.Assets.Sound("assets/sfx_jump.ogg")
 
     let inputMap =
         InputMap.empty
@@ -116,8 +204,11 @@ let init (ctx: GameContext) =
         PlayerTexture = playerTex
         TileTexture = tileTex
         Font = font
+        JumpSound = jumpSound
     }
 
+    let seed = Random().Next()
+    let platforms = generateTerrain seed
     let spawnY = groundSurface - playerHeight
 
     struct (
@@ -132,6 +223,8 @@ let init (ctx: GameContext) =
             Assets = assets
             TotalTime = 0.0f
             AnimationState = Idle
+            Platforms = platforms
+            Seed = seed
         },
         Cmd.none
     )
@@ -160,8 +253,11 @@ let update (msg: Msg) (model: Model) =
         let canJump = model.IsGrounded
         let jumpPressed = actions.Started.Contains(GameAction.Jump)
 
+        let mutable playedJumpSound = false
+
         let velocityY =
             if jumpPressed && canJump then
+                playedJumpSound <- true
                 jumpSpeed
             else
                 model.PlayerVelocity.Y + gravity * dt
@@ -170,28 +266,32 @@ let update (msg: Msg) (model: Model) =
         let velocity = Vector2(velocityX, velocityY)
 
         // ── Integrate position ──
-        let newPos = model.PlayerPosition + velocity * dt
+        let prevPos = model.PlayerPosition
+        let newPos = prevPos + velocity * dt
 
-        // ── Ground collision ──
-        let mutable finalPos = newPos
-        let mutable finalVel = velocity
-        let mutable isGrounded = false
+        // ── Platform collision ──
+        let struct (finalPos, finalVel, isGrounded) =
+            resolvePlatformCollision prevPos newPos velocity model.Platforms
 
-        if finalPos.Y >= groundSurface - playerHeight then
-            finalPos <- Vector2(finalPos.X, groundSurface - playerHeight)
-            finalVel <- Vector2(finalVel.X, 0.0f)
+        // ── Fall off world ──
+        let mutable finalPos = finalPos
+        let mutable finalVel = finalVel
+        let mutable isGrounded = isGrounded
+
+        if finalPos.Y > groundLevel + 200.0f then
+            finalPos <- Vector2(200.0f, groundSurface - playerHeight)
+            finalVel <- Vector2.Zero
             isGrounded <- true
 
         // ── Respawn ──
-        let mutable finalPos = finalPos
         if actions.Started.Contains(Respawn) then
             finalPos <- Vector2(200.0f, groundSurface - playerHeight)
             finalVel <- Vector2.Zero
             isGrounded <- true
 
         // ── Constrain to left edge ──
-        if finalPos.X < model.CameraX then
-            finalPos <- Vector2(model.CameraX, finalPos.Y)
+        if finalPos.X < 0.0f then
+            finalPos <- Vector2(0.0f, finalPos.Y)
 
         // ── Facing ──
         let newFacing =
@@ -206,6 +306,10 @@ let update (msg: Msg) (model: Model) =
 
         // ── Animation state ──
         let animState = getAnimationState finalVel isGrounded
+
+        // ── Play sound ──
+        if playedJumpSound then
+            Raylib.PlaySound(model.Assets.JumpSound)
 
         struct (
             { model with
@@ -226,7 +330,7 @@ let update (msg: Msg) (model: Model) =
 // ─────────────────────────────────────────────────────────────
 
 let view (ctx: GameContext) (model: Model) (buffer: RenderBuffer<RenderCmd2D>) =
-    // World camera: center horizontally on player, align ground with bottom of screen
+    // World camera
     let cameraCenterX = model.CameraX + float32 ctx.WindowWidth / 2.0f
     let cameraCenterY = groundLevel - float32 ctx.WindowHeight / 2.0f
     buffer.Add(
@@ -238,25 +342,25 @@ let view (ctx: GameContext) (model: Model) (buffer: RenderBuffer<RenderCmd2D>) =
         }
     )
 
-    // Ground tiles
-    let firstTile = int(model.CameraX / tileSize) - 1
-    let lastTile = firstTile + int(float32 ctx.WindowWidth / tileSize) + 2
-
-    for i = firstTile to lastTile do
-        let dest = r (i * int tileSize) (int groundLevel - int tileSize) (int tileSize) (int tileSize)
-        let src = r 260 585 64 64
-        buffer.Add(
-            1<RenderLayer>,
-            DrawSprite {
-                Texture = model.Assets.TileTexture
-                Dest = dest
-                Source = src
-                Origin = Vector2.Zero
-                Rotation = 0.0f
-                Color = Color.White
-                Layer = 1<RenderLayer>
-            }
-        )
+    // Platforms
+    let tileSrc = r 260 585 64 64
+    for platform in model.Platforms do
+        let pb = platform.Bounds
+        let tileCount = int(pb.Width / tileSize)
+        for i = 0 to tileCount - 1 do
+            let dest = r (int(pb.X) + i * int tileSize) (int pb.Y) (int tileSize) (int tileSize)
+            buffer.Add(
+                1<RenderLayer>,
+                DrawSprite {
+                    Texture = model.Assets.TileTexture
+                    Dest = dest
+                    Source = tileSrc
+                    Origin = Vector2.Zero
+                    Rotation = 0.0f
+                    Color = Color.White
+                    Layer = 1<RenderLayer>
+                }
+            )
 
     // Player sprite
     let playerSrc = getPlayerSrcRect model.TotalTime model.AnimationState
@@ -264,7 +368,6 @@ let view (ctx: GameContext) (model: Model) (buffer: RenderBuffer<RenderCmd2D>) =
     if model.PlayerFacing < 0.0f then
         playerSrcMut <- Raylib_cs.Rectangle(playerSrcMut.X, playerSrcMut.Y, -playerSrcMut.Width, playerSrcMut.Height)
 
-    // Align sprite bottom with collision box bottom (playerHeight = 54, sprite = 64)
     let playerDrawY = int(model.PlayerPosition.Y + playerHeight - 64.0f)
     let playerDest = r (int model.PlayerPosition.X) playerDrawY 64 64
 
