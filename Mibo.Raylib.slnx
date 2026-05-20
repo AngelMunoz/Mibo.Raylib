@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/samples/">
+    <Project Path="samples/PlatformerSample/PlatformerSample.fsproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Mibo.Raylib/Mibo.Raylib.fsproj" />
+  </Folder>
+</Solution>
