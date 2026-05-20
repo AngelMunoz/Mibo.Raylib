@@ -3,7 +3,7 @@ module Mibo.Elmish.Graphics2D.DefaultShaders
 open Raylib_cs
 
 let sepiaTintFragment =
-    """#version 330
+  """#version 330
 in vec2 fragTexCoord;
 in vec4 fragColor;
 out vec4 finalColor;
@@ -18,5 +18,5 @@ void main()
 }
 """
 
-let loadSepiaTintShader () =
-    Raylib.LoadShaderFromMemory(null, sepiaTintFragment)
+let loadSepiaTintShader() =
+  Raylib.LoadShaderFromMemory(null, sepiaTintFragment)
