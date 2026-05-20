@@ -40,7 +40,7 @@ module Keyboard =
         let mutable released = Set.empty
 
         for KeyValue(k, action) in map.Bindings do
-            let isDown = Raylib.IsKeyDown(k)
+            let isDown = RaylibHelpers.isKeyDown(k)
             let wasDown = previous.Held.Contains(action)
 
             if isDown then

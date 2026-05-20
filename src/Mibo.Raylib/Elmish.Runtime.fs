@@ -1,5 +1,3 @@
-#nowarn "3391"
-
 namespace Mibo.Elmish
 
 open System
@@ -127,8 +125,8 @@ type RaylibGame<'Model, 'Msg>(program: Program<'Model, 'Msg>) =
 
         let mutable totalTime = TimeSpan.Zero
 
-        while Raylib.WindowShouldClose() = false do
-            let dt = Raylib.GetFrameTime()
+        while not (RaylibHelpers.windowShouldClose()) do
+            let dt = RaylibHelpers.getFrameTime()
             let elapsed = TimeSpan.FromSeconds(float dt)
             totalTime <- totalTime + elapsed
             let gameTime = {

@@ -12,6 +12,7 @@
     <Compile Include="Elmish.Rendering.fs" />
     <Compile Include="Elmish.ProgramTypes.fs" />
     <Compile Include="Elmish.Program.fs" />
+    <Compile Include="RaylibHelpers.fs" />
     <Compile Include="Elmish.Runtime.fs" />
     <Compile Include="Graphics2D.fs" />
     <Compile Include="Input.fs" />
