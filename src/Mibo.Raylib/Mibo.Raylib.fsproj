@@ -14,6 +14,7 @@
     <Compile Include="Elmish.Program.fs" />
     <Compile Include="RaylibHelpers.fs" />
     <Compile Include="Elmish.Runtime.fs" />
+    <Compile Include="DefaultShaders.fs" />
     <Compile Include="Graphics2D.fs" />
     <Compile Include="Input.fs" />
   </ItemGroup>

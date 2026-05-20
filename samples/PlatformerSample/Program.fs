@@ -410,7 +410,15 @@ let main _ =
             cfg.Title <- "Mibo Raylib MVP"
             cfg.TargetFPS <- 60)
         |> Program.withTick Tick
-        |> Program.withRenderer (fun () -> Batch2DRenderer.create view)
+        |> Program.withRenderer (fun () ->
+            let shader = DefaultShaders.loadSepiaTintShader ()
+
+            let postProcessConfig =
+                { Shader = shader
+                  TintColor = Color(112uy, 66uy, 20uy, 128uy)
+                  TintAmount = 0.15f }
+
+            Batch2DRenderer.createWithPostProcess postProcessConfig view)
 
     let game = new RaylibGame<Model, Msg>(program)
     game.Run()
