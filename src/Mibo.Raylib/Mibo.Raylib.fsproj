@@ -3,6 +3,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <OutputType>Library</OutputType>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Elmish.Time.fs" />
@@ -16,6 +17,7 @@
     <Compile Include="Elmish.Runtime.fs" />
     <Compile Include="DefaultShaders.fs" />
     <Compile Include="Graphics2D.fs" />
+    <Compile Include="Graphics3D.fs" />
     <Compile Include="Input.fs" />
   </ItemGroup>
   <ItemGroup>

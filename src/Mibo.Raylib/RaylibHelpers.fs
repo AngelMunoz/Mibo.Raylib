@@ -1,5 +1,6 @@
 namespace Mibo.Elmish
 
+open System.Numerics
 open System.Runtime.CompilerServices
 open Raylib_cs
 
@@ -19,3 +20,17 @@ module RaylibHelpers =
 
   let inline isKeyPressed(key: KeyboardKey) : bool =
     Raylib.IsKeyPressed(key).AsBool()
+
+  let createCamera3D
+    (position: Vector3)
+    (target: Vector3)
+    (up: Vector3)
+    (fovY: float32)
+    =
+    let mutable c = Camera3D()
+    c.Position <- position
+    c.Target <- target
+    c.Up <- up
+    c.FovY <- fovY
+    c.Projection <- CameraProjection.Perspective
+    c

@@ -8,12 +8,14 @@ type IAssets =
   abstract Texture: path: string -> Texture2D
   abstract Font: path: string -> Font
   abstract Sound: path: string -> Sound
+  abstract Model: path: string -> Model
   abstract Dispose: unit -> unit
 
 type AssetsService() =
   let textures = Dictionary<string, Texture2D>()
   let fonts = Dictionary<string, Font>()
   let sounds = Dictionary<string, Sound>()
+  let models = Dictionary<string, Model>()
 
   interface IAssets with
     member _.Texture(path) =
@@ -40,6 +42,14 @@ type AssetsService() =
         sounds.Add(path, sound)
         sound
 
+    member _.Model(path) =
+      match models.TryGetValue(path) with
+      | true, m -> m
+      | _ ->
+        let m = Raylib.LoadModel(path)
+        models.Add(path, m)
+        m
+
     member _.Dispose() =
       for kv in textures do
         Raylib.UnloadTexture(kv.Value)
@@ -55,6 +65,11 @@ type AssetsService() =
         Raylib.UnloadSound(kv.Value)
 
       sounds.Clear()
+
+      for kv in models do
+        Raylib.UnloadModel(kv.Value)
+
+      models.Clear()
 
 module AssetsService =
   let create() = new AssetsService() :> IAssets
