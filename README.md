@@ -63,6 +63,68 @@ This repository contains a **proof-of-concept** port of the Mibo F# micro-framew
 5. **Model material shader patching (3D)** — `ModelHelper.setMaterialShader` overwrites the material's shader pointer directly because raylib's `DrawModel` will not respect `BeginShaderMode`. This is a necessary evil; a future wrapper could hide the `NativePtr` behind a safe API.
 6. **No C# interop wrappers** — everything is idiomatic F#. Helper functions live in `RaylibHelpers.fs`.
 
+## 3D Shader Patching — Why It Was Needed
+
+### The Problem
+
+raylib's `DrawModel` **ignores `BeginShaderMode`**. Internally, `DrawModel` extracts the shader from `model.materials[meshMaterial].shader` and binds it directly. No matter what shader you activate globally, the model wins.
+
+This means our `Batch3DRenderer` would call:
+
+```fsharp
+Raylib.BeginShaderMode(phongShader)      // sets global shader to Phong (ID 6)
+Raylib.DrawModel(model, pos, 1.0f, White) // IGNORES global shader, uses default (ID 3)
+```
+
+The Phong shader never gets used. Models render with flat default lighting.
+
+### The PoC Workaround
+
+`ModelHelper.setMaterialShader` performs direct memory surgery on the loaded model:
+
+```fsharp
+let matPtr = model.Materials
+let mutable mat = NativePtr.read matPtr   // read Material[0]
+mat.Shader <- shader                       // replace shader
+NativePtr.write matPtr mat                 // write back
+```
+
+This permanently replaces the model's material shader with our Phong shader. After patching, `DrawModel` uses Phong because the model itself carries it.
+
+### Impact on Userland (PoC)
+
+In the sample, the user must manually patch every loaded model:
+
+```fsharp
+let phong = loadPhong3DShader()
+ModelHelper.setMaterialShader playerModel phong
+ModelHelper.setMaterialShader platformModel phong
+// ... repeat for every distinct model
+```
+
+This leaks `NativePtr` and an implementation detail (`DrawModel` ignores `BeginShaderMode`) into userland.
+
+### Selected Solution for the Main Repo: Option A + B
+
+The framework will hide this entirely inside the asset cache.
+
+**Option A:** `IAssets` gains a `ModelWithShader(path, shader)` method that loads the model, patches all materials internally, caches the result, and returns it.
+
+**Option B:** The cache is shader-aware so the same `.obj` can coexist with different shaders:
+
+```fsharp
+type IAssets =
+    abstract Model: path: string -> Model                    // default shader
+    abstract ModelWithShader: path: string * shader: Shader -> Model  // patched
+
+// Userland — completely safe, no pointers, no leaks
+let ball = ctx.Assets.ModelWithShader("Models/ball_blue.obj", phong)
+```
+
+The `NativePtr` manipulation becomes a **framework-internal implementation detail** inside `Assets.fs`. Userland never sees it. Multi-material models are supported by looping all `materialCount` entries.
+
+---
+
 ## Outcomes
 
 ### ✅ Worth Further Investment
@@ -100,7 +162,7 @@ That capability is what makes raylib worth pursuing: once we reach API parity wi
 4. **Replace CPU light accumulation with a shader-based forward lighting pass** once parity is achieved and the shadow technique graduates to a full shadow-map or SDF approach.
 5. **Add `LoadShaderFromMemory` wrapper** that accepts vertex + fragment F# strings and returns a typed `ShaderHandle`, hiding `rlgl` details.
 6. **Retain the `RenderBuffer` / `IRenderer` abstraction** — it has proven clean enough to support 2D, 3D, and mixed renderers without changing the Elmish loop.
-7. **Abstract `ModelHelper.setMaterialShader`** into a safe wrapper (`ShaderHandle.applyToModel`) so userland never touches `NativePtr`.
+7. **Hide `ModelHelper.setMaterialShader` behind `IAssets.ModelWithShader`** (Option A + B) so userland never touches `NativePtr`. The asset cache patches materials at load time and supports the same `.obj` with different shaders via a shader-aware cache key.
 8. **Only after parity is proven**: begin advanced 3D shader work (SSAO, deferred rendering, post-process chains) that raylib's runtime shader loading makes practical.
 
 ## Architectural Roadmap: Shared Core, Divergent Renderers
