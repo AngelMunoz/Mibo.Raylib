@@ -1,0 +1,14 @@
+<Project>
+    <PropertyGroup>
+        <RepositoryUrl>https://github.com/AngelMunoz/Mibo.Raylib</RepositoryUrl>
+        <FsDocsLicenseLink>https://github.com/AngelMunoz/Mibo.Raylib/blob/main/LICENSE</FsDocsLicenseLink>
+        <FsDocsReleaseNotesLink>https://github.com/AngelMunoz/Mibo.Raylib/blob/main/CHANGELOG.md</FsDocsReleaseNotesLink>
+        <PackageProjectUrl>https://AngelMunoz.github.io/Mibo.Raylib</PackageProjectUrl>
+        <PackageLicenseFile>LICENSE</PackageLicenseFile>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+    </PropertyGroup>
+    <ItemGroup>
+        <None Include="$(MSBuildThisFileDirectory)/../LICENSE" Pack="true" PackagePath=""/>
+        <None Include="$(MSBuildThisFileDirectory)/../README.md" Pack="true" PackagePath=""/>
+    </ItemGroup>
+</Project>

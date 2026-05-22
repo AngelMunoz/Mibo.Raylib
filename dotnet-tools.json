@@ -6,6 +6,11 @@
       "version": "7.0.5",
       "commands": ["fantomas"],
       "rollForward": true
+    },
+    "fsdocs-tool": {
+      "version": "21.0.0",
+      "commands": ["fsdocs"],
+      "rollForward": true
     }
   }
 }
