@@ -711,7 +711,7 @@ let main _ =
       cfg.Title <- "Mibo Raylib MVP"
       cfg.TargetFPS <- 60)
     |> Program.withTick Tick
-    |> Program.withRenderer(fun () -> Batch2DRenderer.create view)
+    |> Program.withRenderer(fun () -> LegacyBatch2DRenderer.create view)
 
   let game = new RaylibGame<Model, Msg>(program)
   game.Run()

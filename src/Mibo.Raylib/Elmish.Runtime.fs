@@ -141,8 +141,6 @@ type RaylibGame<'Model, 'Msg>(program: Program<'Model, 'Msg>) =
     execCmd initialCmds
     updateSubs ctx
 
-    let mutable totalTime = TimeSpan.Zero
-
     while not(RaylibHelpers.windowShouldClose()) do
       let dt = Raylib.GetFrameTime()
       let elapsed = TimeSpan.FromSeconds(float dt)

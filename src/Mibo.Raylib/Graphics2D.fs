@@ -8,7 +8,7 @@ open Mibo.Elmish
 [<Measure>]
 type RenderLayer
 
-type SpriteState = {
+type LegacySpriteState = {
   Texture: Texture2D
   Dest: Raylib_cs.Rectangle
   Source: Raylib_cs.Rectangle
@@ -18,7 +18,7 @@ type SpriteState = {
   Layer: int<RenderLayer>
 }
 
-type TextState = {
+type LegacyTextState = {
   Font: Font
   Text: string
   Position: Vector2
@@ -64,8 +64,8 @@ type PostProcessConfig = {
 }
 
 type RenderCmd2D =
-  | DrawSprite of sprite: SpriteState
-  | DrawText of text: TextState
+  | DrawSprite of sprite: LegacySpriteState
+  | DrawText of text: LegacyTextState
   | SetCamera2D of camera: Camera2DState
   | ResetCamera2D
   | SetShader of shader: ShaderState
@@ -138,7 +138,7 @@ module Lighting2D =
     let a = int ca.A * int cb.A / 255 |> byte
     Color(r, g, b, a)
 
-type Batch2DRenderer<'Model>
+type LegacyBatch2DRenderer<'Model>
   (
     view: GameContext -> 'Model -> RenderBuffer<RenderCmd2D> -> unit,
     postProcess: PostProcessConfig option
@@ -381,9 +381,9 @@ type Batch2DRenderer<'Model>
       | Some rt -> Raylib.UnloadRenderTexture(rt)
       | _ -> ()
 
-module Batch2DRenderer =
+module LegacyBatch2DRenderer =
   let create view =
-    new Batch2DRenderer<'Model>(view, None) :> IRenderer<'Model>
+    new LegacyBatch2DRenderer<'Model>(view, None) :> IRenderer<'Model>
 
   let createWithPostProcess postProcess view =
-    new Batch2DRenderer<'Model>(view, Some postProcess) :> IRenderer<'Model>
+    new LegacyBatch2DRenderer<'Model>(view, Some postProcess) :> IRenderer<'Model>
