@@ -215,7 +215,7 @@ When ported, textures will be `Raylib_cs.Texture2D` and rectangles will be `Rayl
 ```fsharp
 // Example: pseudo-code for a custom loader
 let loadHero (ctx: GameContext) =
-    let tex = Assets.texture "hero_atlas" ctx
+    let tex = Raylib.LoadTexture "hero_atlas"
     let frames = MyJsonParser.parse "hero_metadata.json"
     SpriteSheet.fromFrames tex (Vector2(32.f, 32.f)) frames
 ```

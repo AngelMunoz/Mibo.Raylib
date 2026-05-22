@@ -5,11 +5,9 @@ categoryindex: 1
 index: 3
 ---
 
-# System Pipeline (Coming Soon)
+# System Pipeline
 
-> **Status**: The `Mibo.Elmish.System` module has **not yet been ported** to Mibo.Raylib. It is planned for a future release.
->
-> This page describes the conceptual design. Once ported, the API will follow the same structure described below.
+The `Mibo.Elmish.System` module provides a generic pipeline pattern for composing frame updates with type-enforced snapshot boundaries.
 
 When `update` grows, the hardest part is maintaining a clear mental model of:
 

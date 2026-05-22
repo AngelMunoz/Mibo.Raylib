@@ -6,6 +6,7 @@ open System.Numerics
 open Raylib_cs
 open Mibo.Elmish
 
+/// <summary>A 2D point with integer coordinates.</summary>
 [<Struct>]
 type Point = {
   X: int
@@ -14,6 +15,13 @@ type Point = {
 with
   static member Zero = { X = 0; Y = 0 }
 
+/// <summary>
+/// A single animation with pre-computed frame rectangles.
+/// </summary>
+/// <remarks>
+/// This struct is designed for cache-friendly access during the hot path.
+/// Users can construct these from any source format.
+/// </remarks>
 [<Struct>]
 type Animation = {
   Frames: Rectangle[]
@@ -21,6 +29,12 @@ type Animation = {
   Loop: bool
 }
 
+/// <summary>
+/// Definition for an animation in a grid-based sprite sheet.
+/// </summary>
+/// <remarks>
+/// Use this with SpriteSheet.fromGrid for self-documenting animation definitions.
+/// </remarks>
 [<Struct>]
 type GridAnimationDef = {
   Name: string
@@ -31,6 +45,13 @@ type GridAnimationDef = {
   Loop: bool
 }
 
+/// <summary>
+/// A loaded sprite sheet with texture and named animations.
+/// </summary>
+/// <remarks>
+/// Uses Dictionary for O(1) runtime lookup of animations by name.
+/// The AnimationsByIndex array enables index-based access for zero-allocation updates.
+/// </remarks>
 type SpriteSheet = {
   Texture: Texture2D
   NormalMap: Texture2D voption
@@ -41,6 +62,13 @@ type SpriteSheet = {
   FrameSize: Point
 }
 
+/// <summary>
+/// Runtime state for a playing animation.
+/// </summary>
+/// <remarks>
+/// This is a small struct designed for zero-allocation updates.
+/// Store this in your Elmish model for each animated entity.
+/// </remarks>
 [<Struct>]
 type AnimatedSprite = {
   Sheet: SpriteSheet
@@ -56,10 +84,16 @@ type AnimatedSprite = {
 }
 
 module Animation =
+  /// <summary>Get the total duration of an animation in seconds.</summary>
   let inline duration(anim: Animation) =
     float32 anim.Frames.Length * anim.FrameDuration
 
+/// <summary>
+/// Functions for creating sprite sheets from various sources.
+/// </summary>
+/// <remarks>These are factory functions intended for use at initialization time.</remarks>
 module SpriteSheet =
+  /// <summary>Create a sprite sheet from explicit frame rectangles.</summary>
   let fromFrames
     (texture: Texture2D)
     (origin: Vector2)
@@ -97,11 +131,13 @@ module SpriteSheet =
       FrameSize = frameSize
     }
 
+  /// <summary>Add a normal map to an existing sprite sheet.</summary>
   let withNormalMap (nm: Texture2D) (sheet: SpriteSheet) = {
     sheet with
         NormalMap = ValueSome nm
   }
 
+  /// <summary>Create a sprite sheet from a uniform grid layout.</summary>
   let fromGrid
     (texture: Texture2D)
     (frameWidth: int)
@@ -151,6 +187,7 @@ module SpriteSheet =
       FrameSize = { X = frameWidth; Y = frameHeight }
     }
 
+  /// <summary>Create a single-animation sprite sheet.</summary>
   let single
     (texture: Texture2D)
     (frames: Rectangle[])
@@ -190,9 +227,14 @@ module SpriteSheet =
       FrameSize = frameSize
     }
 
+  /// <summary>Create a sprite sheet for a single static frame (no animation).</summary>
   let static' (texture: Texture2D) (sourceRect: Rectangle) : SpriteSheet =
     single texture [| sourceRect |] 1.0f false
 
+  /// <summary>
+  /// Try to get the index for an animation name.
+  /// </summary>
+  /// <remarks>Use at load time to resolve animation names to indices for zero-allocation playback.</remarks>
   let inline tryGetAnimationIndex
     (name: string)
     (sheet: SpriteSheet)
@@ -201,11 +243,17 @@ module SpriteSheet =
     | true, idx -> ValueSome idx
     | false, _ -> ValueNone
 
+  /// <summary>Get the list of animation names in this sheet.</summary>
   let animationNames(sheet: SpriteSheet) : string seq =
     sheet.AnimationIndices.Keys
 
+/// <summary>
+/// Functions for creating, updating, and drawing animated sprites.
+/// </summary>
+/// <remarks>Update functions are designed for zero allocations during the game loop.</remarks>
 module AnimatedSprite =
 
+  /// <summary>Create a new animated sprite starting on the specified animation.</summary>
   let create (sheet: SpriteSheet) (animationName: string) : AnimatedSprite =
     let idx =
       match sheet.AnimationIndices.TryGetValue(animationName) with
@@ -225,6 +273,7 @@ module AnimatedSprite =
       Rotation = 0.0f
     }
 
+  /// <summary>Create with initial visual properties.</summary>
   let createWith
     (sheet: SpriteSheet)
     (animationName: string)
@@ -237,6 +286,7 @@ module AnimatedSprite =
           Scale = scale
     }
 
+  /// <summary>Play an animation by name. Does string lookup only when actually changing.</summary>
   let play (animationName: string) (sprite: AnimatedSprite) : AnimatedSprite =
     match sprite.Sheet.AnimationIndices.TryGetValue(animationName) with
     | false, _ -> sprite
@@ -251,6 +301,10 @@ module AnimatedSprite =
               Finished = false
         }
 
+  /// <summary>
+  /// Play by animation index (zero string allocation).
+  /// </summary>
+  /// <remarks>For maximum performance, resolve animation names to indices once at load time.</remarks>
   let playByIndex (animIndex: int) (sprite: AnimatedSprite) : AnimatedSprite =
     if animIndex = sprite.AnimationIndex && not sprite.Finished then
       sprite
@@ -267,6 +321,7 @@ module AnimatedSprite =
             Finished = false
       }
 
+  /// <summary>Play animation only if not already playing it.</summary>
   let playIfNot
     (animationName: string)
     (sprite: AnimatedSprite)
@@ -276,6 +331,7 @@ module AnimatedSprite =
     | true, _ -> play animationName sprite
     | false, _ -> sprite
 
+  /// <summary>Force restart the current animation from the beginning.</summary>
   let restart(sprite: AnimatedSprite) : AnimatedSprite = {
     sprite with
         CurrentFrame = 0
@@ -283,6 +339,10 @@ module AnimatedSprite =
         Finished = false
   }
 
+  /// <summary>
+  /// Advance the animation by delta time.
+  /// </summary>
+  /// <remarks>Call from your Elmish update function each frame.</remarks>
   let update (deltaSeconds: float32) (sprite: AnimatedSprite) : AnimatedSprite =
     if sprite.Finished then
       sprite
@@ -321,6 +381,7 @@ module AnimatedSprite =
                   TimeInFrame = 0.0f
             }
 
+  /// <summary>Get the current source rectangle for rendering.</summary>
   let inline currentSource(sprite: AnimatedSprite) : Rectangle =
     let anim = sprite.Sheet.AnimationsByIndex.[sprite.AnimationIndex]
 
@@ -329,13 +390,16 @@ module AnimatedSprite =
     else
       anim.Frames.[min sprite.CurrentFrame (anim.Frames.Length - 1)]
 
+  /// <summary>Is the current animation finished? (always false for looping animations).</summary>
   let inline isFinished(sprite: AnimatedSprite) = sprite.Finished
 
+  /// <summary>Is currently playing the specified animation?</summary>
   let isPlaying (animName: string) (sprite: AnimatedSprite) =
     match sprite.Sheet.AnimationIndices.TryGetValue(animName) with
     | true, idx -> idx = sprite.AnimationIndex && not sprite.Finished
     | false, _ -> false
 
+  /// <summary>Get the total duration of the current animation.</summary>
   let inline duration(sprite: AnimatedSprite) =
     Animation.duration sprite.Sheet.AnimationsByIndex.[sprite.AnimationIndex]
 
@@ -376,5 +440,3 @@ module AnimatedSprite =
     sprite with
         FlipX = false
   }
-
-

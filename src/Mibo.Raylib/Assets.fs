@@ -2,53 +2,140 @@ namespace Mibo.Elmish
 
 open System
 open System.Collections.Generic
+open System.IO
 open Raylib_cs
 
+/// <summary>
+/// Per-game asset loader/cache service.
+/// </summary>
+/// <remarks>
+/// Provides cached loading for textures, fonts, sounds, models, and shaders
+/// from loose files (no content pipeline). Also supports generic typed cache
+/// for custom asset types.
+/// </remarks>
+/// <example>
+/// <code>
+/// let assets = GameContext.getService&lt;IAssets&gt; ctx
+/// let tex = assets.Texture "sprites/player.png"
+/// let font = assets.Font "fonts/main.ttf"
+/// let config = assets.GetOrCreate "gameConfig" (fun () -> loadConfig())
+/// </code>
+/// </example>
 type IAssets =
+  /// <summary>Loads and caches a <see cref="T:Raylib_cs.Texture2D"/> from file.</summary>
   abstract Texture: path: string -> Texture2D
+
+  /// <summary>Loads and caches a <see cref="T:Raylib_cs.Font"/> from file.</summary>
   abstract Font: path: string -> Font
+
+  /// <summary>Loads and caches a <see cref="T:Raylib_cs.Sound"/> from file.</summary>
   abstract Sound: path: string -> Sound
+
+  /// <summary>Loads and caches a <see cref="T:Raylib_cs.Model"/> from file.</summary>
   abstract Model: path: string -> Model
+
+  /// <summary>Gets a previously created custom asset by key.</summary>
+  abstract Get<'T> : key: string -> 'T voption
+
+  /// <summary>Creates and caches a custom asset using the provided factory.</summary>
+  abstract Create<'T> : key: string * factory: (unit -> 'T) -> 'T
+
+  /// <summary>Gets a cached asset or creates it if not present.</summary>
+  /// <remarks>This is the preferred method for custom assets - idempotent, ensures assets are created only once.</remarks>
+  abstract GetOrCreate<'T> : key: string * factory: (unit -> 'T) -> 'T
+
+  /// <summary>Clears all caches (does not dispose GPU resources).</summary>
+  abstract Clear: unit -> unit
+
+  /// <summary>Disposes all cached assets and clears caches.</summary>
   abstract Dispose: unit -> unit
 
-type AssetsService() =
+/// <summary>
+/// Implementation of <see cref="T:Mibo.Elmish.IAssets"/> with dictionary-based caches.
+/// </summary>
+/// <param name="baseAssetPath">Optional base path prepended to all relative asset paths.</param>
+type AssetsService
+  (baseAssetPath: string voption) =
+
+  let resolvePath (path: string) =
+    match baseAssetPath with
+    | ValueSome bp -> Path.Combine(bp, path)
+    | ValueNone -> path
+
+  let typedCache = Dictionary<string, obj>()
+
   let textures = Dictionary<string, Texture2D>()
   let fonts = Dictionary<string, Font>()
   let sounds = Dictionary<string, Sound>()
   let models = Dictionary<string, Model>()
 
+  member _.BasePath = baseAssetPath
+
   interface IAssets with
     member _.Texture(path) =
-      match textures.TryGetValue(path) with
+      let resolved = resolvePath path
+
+      match textures.TryGetValue(resolved) with
       | true, tex -> tex
       | _ ->
-        let tex = Raylib.LoadTexture(path)
-        textures.Add(path, tex)
+        let tex = Raylib.LoadTexture(resolved)
+        textures.Add(resolved, tex)
         tex
 
     member _.Font(path) =
-      match fonts.TryGetValue(path) with
+      let resolved = resolvePath path
+
+      match fonts.TryGetValue(resolved) with
       | true, font -> font
       | _ ->
-        let font = Raylib.LoadFont(path)
-        fonts.Add(path, font)
+        let font = Raylib.LoadFont(resolved)
+        fonts.Add(resolved, font)
         font
 
     member _.Sound(path) =
-      match sounds.TryGetValue(path) with
+      let resolved = resolvePath path
+
+      match sounds.TryGetValue(resolved) with
       | true, sound -> sound
       | _ ->
-        let sound = Raylib.LoadSound(path)
-        sounds.Add(path, sound)
+        let sound = Raylib.LoadSound(resolved)
+        sounds.Add(resolved, sound)
         sound
 
     member _.Model(path) =
-      match models.TryGetValue(path) with
+      let resolved = resolvePath path
+
+      match models.TryGetValue(resolved) with
       | true, m -> m
       | _ ->
-        let m = Raylib.LoadModel(path)
-        models.Add(path, m)
+        let m = Raylib.LoadModel(resolved)
+        models.Add(resolved, m)
         m
+
+    member _.Get<'T>(key: string) : 'T voption =
+      match typedCache.TryGetValue(key) with
+      | true, (:? 'T as v) -> ValueSome v
+      | _ -> ValueNone
+
+    member _.Create<'T>(key: string, factory: unit -> 'T) : 'T =
+      let value = factory()
+      typedCache[key] <- box value
+      value
+
+    member _.GetOrCreate<'T>(key: string, factory: unit -> 'T) : 'T =
+      match typedCache.TryGetValue(key) with
+      | true, (:? 'T as v) -> v
+      | _ ->
+        let value = factory()
+        typedCache[key] <- box value
+        value
+
+    member _.Clear() =
+      typedCache.Clear()
+      textures.Clear()
+      fonts.Clear()
+      sounds.Clear()
+      models.Clear()
 
     member _.Dispose() =
       for kv in textures do
@@ -71,5 +158,13 @@ type AssetsService() =
 
       models.Clear()
 
+      typedCache.Clear()
+
+/// Factory for <see cref="T:Mibo.Elmish.IAssets"/> implementations.
 module AssetsService =
-  let create() = new AssetsService() :> IAssets
+  /// <summary>Creates an asset service with no base path.</summary>
+  let create() : IAssets = new AssetsService(ValueNone) :> IAssets
+
+  /// <summary>Creates an asset service where all relative paths are prepended with the given base path.</summary>
+  let createWithBasePath(basePath: string) : IAssets =
+    new AssetsService(ValueSome basePath) :> IAssets

@@ -4,15 +4,37 @@ open System
 open System.Collections.Generic
 open FSharp.UMX
 
+/// <summary>
+/// Subscription identifier used as the key for subscription diffing.
+/// </summary>
+/// <remarks>
+/// The Elmish runtime uses SubIds to determine which subscriptions to start,
+/// stop, or keep running across frames. Use stable, unique IDs for each subscription.
+/// Keep this allocation-free in hot paths (avoid list-based IDs).
+/// </remarks>
 [<Measure>]
 type subId
 
+/// A typed string wrapper for subscription identifiers.
 type SubId = string<subId>
 
+/// Functions for creating and manipulating subscription identifiers.
 module SubId =
+  /// <summary>Wraps a raw string into a <see cref="T:Mibo.Elmish.SubId"/>.</summary>
   let inline ofString(value: string) : SubId = UMX.tag<subId> value
+
+  /// <summary>Extracts the raw string value from a <see cref="T:Mibo.Elmish.SubId"/>.</summary>
   let inline value(id: SubId) : string = UMX.untag id
 
+  /// <summary>
+  /// Prefixes a SubId with a namespace for parent-child subscription composition.
+  /// </summary>
+  /// <example>
+  /// <code>
+  /// // Creates "Player/moveInput"
+  /// SubId.prefix "Player" (SubId.ofString "moveInput")
+  /// </code>
+  /// </example>
   let inline prefix (prefix: string) (id: SubId) : SubId =
     if String.IsNullOrEmpty(prefix) then
       id
@@ -24,18 +46,53 @@ module SubId =
       else
         ofString(prefix + "/" + idStr)
 
+/// <summary>A function that dispatches messages to the Elmish update loop.</summary>
 type Dispatch<'Msg> = 'Msg -> unit
+
+/// <summary>
+/// A function that sets up a subscription and returns a disposable for cleanup.
+/// </summary>
+/// <remarks>
+/// When the runtime calls this, it passes the dispatch function. The returned
+/// <see cref="T:System.IDisposable"/> will be called when the subscription is no longer needed.
+/// </remarks>
 type Subscribe<'Msg> = Dispatch<'Msg> -> IDisposable
 
+/// <summary>
+/// Represents a subscription that listens for external events and dispatches messages.
+/// </summary>
+/// <remarks>
+/// Subscriptions are the Elmish way to handle external event sources (input devices,
+/// timers, network events). The runtime diffs subscriptions by SubId to determine
+/// which to start/stop across frames.
+/// </remarks>
 [<Struct>]
 type Sub<'Msg> =
+  /// No subscription (use <see cref="M:Mibo.Elmish.Sub.none"/>)
   | NoSub
+  /// An active subscription with a unique ID
   | Active of SubId * Subscribe<'Msg>
+  /// Multiple subscriptions combined
   | BatchSub of Sub<'Msg>[]
 
+/// <summary>
+/// Functions for creating and composing Elmish subscriptions.
+/// </summary>
+/// <remarks>
+/// Subscriptions connect external event sources to the Elmish update loop.
+/// The runtime automatically manages subscription lifecycle based on SubId diffing.
+/// </remarks>
 module Sub =
+  /// <summary>An empty subscription that does nothing. Use when no subscriptions are needed.</summary>
   let none = NoSub
 
+  /// <summary>
+  /// Combines multiple subscriptions into a single subscription.
+  /// </summary>
+  /// <remarks>
+  /// Subscriptions are merged efficiently and duplicates are not filtered.
+  /// Use unique SubIds to ensure proper subscription diffing.
+  /// </remarks>
   let batch(subs: seq<Sub<'Msg>>) : Sub<'Msg> =
     let inline isNoSub s =
       match s with
@@ -82,15 +139,34 @@ module Sub =
 
       BatchSub arr
 
-  let inline batch2(a: Sub<'Msg>, b: Sub<'Msg>) : Sub<'Msg> = batch [ a; b ]
+  let inline batch2(a: Sub<'Msg>, b: Sub<'Msg>) : Sub<'Msg> =
+    match a, b with
+    | NoSub, x
+    | x, NoSub -> x
+    | BatchSub aa, BatchSub bb ->
+      let merged = Array.zeroCreate<Sub<'Msg>>(aa.Length + bb.Length)
+      Array.Copy(aa, 0, merged, 0, aa.Length)
+      Array.Copy(bb, 0, merged, aa.Length, bb.Length)
+      BatchSub merged
+    | BatchSub aa, x ->
+      let merged = Array.zeroCreate<Sub<'Msg>>(aa.Length + 1)
+      Array.Copy(aa, 0, merged, 0, aa.Length)
+      merged[merged.Length - 1] <- x
+      BatchSub merged
+    | x, BatchSub bb ->
+      let merged = Array.zeroCreate<Sub<'Msg>>(1 + bb.Length)
+      merged[0] <- x
+      Array.Copy(bb, 0, merged, 1, bb.Length)
+      BatchSub merged
+    | x, y -> BatchSub [| x; y |]
 
   let inline batch3(a: Sub<'Msg>, b: Sub<'Msg>, c: Sub<'Msg>) : Sub<'Msg> =
-    batch [ a; b; c ]
+    batch2(batch2(a, b), c)
 
   let inline batch4
     (a: Sub<'Msg>, b: Sub<'Msg>, c: Sub<'Msg>, d: Sub<'Msg>)
     : Sub<'Msg> =
-    batch [ a; b; c; d ]
+    batch2(batch3(a, b, c), d)
 
   [<TailCall>]
   let rec internal flatten
@@ -118,6 +194,20 @@ module Sub =
     | Visit of sub: Sub<'A>
     | BuildBatch of len: int
 
+  /// <summary>
+  /// Maps a subscription producing messages of type 'A to produce messages of type 'Msg.
+  /// </summary>
+  /// <remarks>
+  /// This is essential for parent-child composition where child modules have
+  /// their own message types. The idPrefix is prepended to all subscription IDs
+  /// to namespace them properly.
+  /// </remarks>
+  /// <example>
+  /// <code>
+  /// // In parent module:
+  /// let childSub = Child.subscribe ctx |> Sub.map "child" ChildMsg
+  /// </code>
+  /// </example>
   let map (idPrefix: string) (f: 'A -> 'Msg) (sub: Sub<'A>) : Sub<'Msg> =
     let work = ResizeArray<MapWork<'A>>(64)
     let results = ResizeArray<Sub<'Msg>>(64)

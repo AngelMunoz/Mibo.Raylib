@@ -4,6 +4,7 @@ open System
 open System.Collections.Concurrent
 open System.Collections.Generic
 open Raylib_cs
+open Mibo.Input
 
 type internal DispatchQueue<'Msg>(mode: DispatchMode) =
   let gate = obj()
@@ -54,6 +55,8 @@ type RaylibGame<'Model, 'Msg>(program: Program<'Model, 'Msg>) =
   let deferredEffsRun = ResizeArray<Effect<'Msg>>(64)
   let mutable fixedAccSeconds = 0.0f
 
+  let mutable inputServiceOpt: IInput voption = ValueNone
+
   let dispatch(msg: 'Msg) = msgQueue.Dispatch(msg)
 
   let execCmd(cmd: Cmd<'Msg>) =
@@ -102,15 +105,11 @@ type RaylibGame<'Model, 'Msg>(program: Program<'Model, 'Msg>) =
       | _ -> ()
 
   member _.Run() =
-    let config = {
-      Width = 800
-      Height = 600
-      Title = "Mibo Raylib"
-      TargetFPS = 60
-    }
-
-    for configure in List.rev program.Config do
-      configure config
+    let config =
+      List.fold
+        (fun c f -> f c)
+        GameConfig.defaultConfig
+        (List.rev program.Config)
 
     Raylib.InitWindow(config.Width, config.Height, config.Title)
     Raylib.InitAudioDevice()
@@ -121,13 +120,19 @@ type RaylibGame<'Model, 'Msg>(program: Program<'Model, 'Msg>) =
     for f in program.Renderers do
       renderers.Add(f())
 
-    let assets = AssetsService.create()
+    let ctx = GameContext.create(config.Width, config.Height)
 
-    let ctx = {
-      WindowWidth = config.Width
-      WindowHeight = config.Height
-      Assets = assets
-    }
+    let assets =
+      match program.AssetsBasePath with
+      | ValueSome p -> AssetsService.createWithBasePath(p)
+      | ValueNone -> AssetsService.create()
+
+    GameContext.register<IAssets> assets ctx
+
+    if program.HasInput then
+      let inputService = Input.create []
+      GameContext.register<IInput> inputService ctx
+      inputServiceOpt <- ValueSome inputService
 
     ctxOpt <- ValueSome ctx
 
@@ -139,15 +144,16 @@ type RaylibGame<'Model, 'Msg>(program: Program<'Model, 'Msg>) =
     let mutable totalTime = TimeSpan.Zero
 
     while not(RaylibHelpers.windowShouldClose()) do
-      let dt = RaylibHelpers.getFrameTime()
+      let dt = Raylib.GetFrameTime()
       let elapsed = TimeSpan.FromSeconds(float dt)
-      totalTime <- totalTime + elapsed
 
       let gameTime = {
-        TotalTime = totalTime
+        TotalTime = TimeSpan.FromSeconds(Raylib.GetTime())
         ElapsedGameTime = elapsed
-        IsRunningSlowly = false
       }
+
+      // Poll hardware input before processing messages
+      inputServiceOpt |> ValueOption.iter(fun svc -> svc.Poll())
 
       if deferredEffs.Count <> 0 then
         deferredEffsRun.Clear()
@@ -205,6 +211,6 @@ type RaylibGame<'Model, 'Msg>(program: Program<'Model, 'Msg>) =
       | :? IDisposable as d -> d.Dispose()
       | _ -> ()
 
-    ctx.Assets.Dispose()
+    (GameContext.getService<IAssets> ctx).Dispose()
     Raylib.CloseAudioDevice()
     Raylib.CloseWindow()

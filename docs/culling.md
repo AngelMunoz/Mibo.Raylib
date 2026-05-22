@@ -7,9 +7,7 @@ index: 14
 
 # Culling (visibility helpers)
 
-> **⚠️ PLANNED**
->
-> The `Mibo.Elmish.Culling` module has not been ported to Mibo.Raylib yet. This page documents the planned API.
+`Mibo.Elmish.Culling` is a helper module that keeps _visibility math_ separate from your renderer and your spatial partitioning.
 
 `Mibo.Elmish.Culling` is a tiny helper module that keeps _visibility math_ separate from your renderer and your spatial partitioning.
 
@@ -19,14 +17,13 @@ It operates on geometric primitives such as:
 - `BoundingSphere` / `BoundingBox` (from `System.Numerics`)
 - 2D `Rectangle` overlap
 
-## 3D: frustum culling (planned)
+## 3D: frustum culling
 
-The planned API will work with manually computed frustum planes from the camera view-projection matrix:
+Create a `Frustum` from the camera's `View * Projection` matrix and test geometry:
 
 ```fsharp
-// Compute frustum planes from camera
-let viewProj = Matrix4x4.Multiply(cam.View, cam.Proj)
-let frustum = computeFrustumPlanes viewProj
+// Extract frustum from camera matrices
+let frustum = Frustum(Matrix4x4.Multiply(cam.View, cam.Projection))
 
 if Culling.isVisible frustum entitySphere then
     // submit draw commands
@@ -40,9 +37,9 @@ if Culling.isGenericVisible frustum nodeBounds then
     ()
 ```
 
-## 2D: rectangle overlap (planned)
+## 2D: rectangle overlap
 
-The planned 2D culling will use viewport bounds with rectangle overlap:
+Use `Camera2D.viewportBounds` with `Culling.isVisible2D`:
 
 ```fsharp
 let viewBounds = getViewportBounds camera viewportSize
