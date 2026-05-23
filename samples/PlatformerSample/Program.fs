@@ -19,7 +19,7 @@ open PlatformerSample.WorldGen
 let inline r (x: int) (y: int) (w: int) (h: int) =
   Rectangle(float32 x, float32 y, float32 w, float32 h)
 
-let loadAssets (ctx: GameContext) : SpriteAssets =
+let loadAssets(ctx: GameContext) : SpriteAssets =
   let assets = GameContext.getService<IAssets> ctx
 
   let playerTex =
@@ -36,29 +36,50 @@ let loadAssets (ctx: GameContext) : SpriteAssets =
   let jumpSound = assets.Sound("assets/sfx_jump.ogg")
 
   // White 1x1 texture for particles (black would multiply to zero)
-  let particleImg = Raylib.GenImageColor(1, 1, Color(255uy, 255uy, 255uy, 255uy))
+  let particleImg =
+    Raylib.GenImageColor(1, 1, Color(255uy, 255uy, 255uy, 255uy))
+
   let particleTex = Raylib.LoadTextureFromImage(particleImg)
   Raylib.UnloadImage(particleImg)
 
   let playerSheet =
-    SpriteSheet.fromFrames
-      playerTex
-      (Vector2(64.0f, 64.0f))
-      [|
-        struct ("idle", { Frames = [| r 645 0 128 128 |]; FrameDuration = 1.0f; Loop = false })
-        struct ("walk", { Frames = [| r 0 129 128 128; r 129 129 128 128 |]; FrameDuration = 0.1f; Loop = true })
-        struct ("jump", { Frames = [| r 774 0 128 128 |]; FrameDuration = 1.0f; Loop = false })
-        struct ("fall", { Frames = [| r 774 0 128 128 |]; FrameDuration = 1.0f; Loop = false })
-      |]
+    SpriteSheet.fromFrames playerTex (Vector2(64.0f, 64.0f)) [|
+      struct ("idle",
+              {
+                Frames = [| r 645 0 128 128 |]
+                FrameDuration = 1.0f
+                Loop = false
+              })
+      struct ("walk",
+              {
+                Frames = [| r 0 129 128 128; r 129 129 128 128 |]
+                FrameDuration = 0.1f
+                Loop = true
+              })
+      struct ("jump",
+              {
+                Frames = [| r 774 0 128 128 |]
+                FrameDuration = 1.0f
+                Loop = false
+              })
+      struct ("fall",
+              {
+                Frames = [| r 774 0 128 128 |]
+                FrameDuration = 1.0f
+                Loop = false
+              })
+    |]
 
   // torch_on_a (65,1105) and torch_on_b (130,1105) — 64x64 each
   let torchSheet =
-    SpriteSheet.fromFrames
-      tileTex
-      (Vector2(32.0f, 32.0f))
-      [|
-        struct ("lit", { Frames = [| r 65 1105 64 64; r 130 1105 64 64 |]; FrameDuration = 0.15f; Loop = true })
-      |]
+    SpriteSheet.fromFrames tileTex (Vector2(32.0f, 32.0f)) [|
+      struct ("lit",
+              {
+                Frames = [| r 65 1105 64 64; r 130 1105 64 64 |]
+                FrameDuration = 0.15f
+                Loop = true
+              })
+    |]
 
   {
     PlayerSheet = playerSheet
@@ -73,7 +94,7 @@ let loadAssets (ctx: GameContext) : SpriteAssets =
 // Init
 // -------------------------------------------------------------
 
-let init (ctx: GameContext) =
+let init(ctx: GameContext) =
   let assets = loadAssets ctx
 
   let inputMap =
@@ -97,14 +118,22 @@ let init (ctx: GameContext) =
   // Pre-load spawn chunks
   let spawnChunkX = 0
   let spawnChunkY = 0
+
   for x in spawnChunkX - chunkLoadRadius .. spawnChunkX + chunkLoadRadius do
     for y in spawnChunkY - chunkLoadRadius .. spawnChunkY + chunkLoadRadius do
       if x >= 0 then
-        model.Chunks[struct(x, y)] <- generateChunk x y seed
+        model.Chunks[struct (x, y)] <- generateChunk x y seed
 
   model.PlayerPosition <- Vector2(spawnX, spawnY)
-  model.CameraPos <- Vector2(spawnX, spawnY)
+
+  model.Camera <-
+    Camera2D.create
+      (Vector2(spawnX, spawnY))
+      1.0f
+      (Vector2(viewportWidth, viewportHeight))
+
   model.Seed <- seed
+
   model.Lighting <-
     new LightContext2D(softness = 0.05f, maxShadowDistance = 2000.0f)
 

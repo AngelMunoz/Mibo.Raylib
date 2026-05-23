@@ -18,6 +18,7 @@ type NoopLightCommand(cmdLayer: int<RenderLayer>) =
 type LitSpriteCommand(lightCtx: LightContext2D, sprite: Command2D.SpriteState) =
   interface IRenderCommand2D with
     member _.Layer = sprite.Layer
+
     member _.Render ctx =
       if not lightCtx.ShaderActive then
         ctx.BeginShader(lightCtx.Shader)
@@ -40,6 +41,7 @@ type LitSpriteCommand(lightCtx: LightContext2D, sprite: Command2D.SpriteState) =
 type EndLightingCommand(lightCtx: LightContext2D, cmdLayer: int<RenderLayer>) =
   interface IRenderCommand2D with
     member _.Layer = cmdLayer
+
     member _.Render ctx =
       if lightCtx.ShaderActive then
         ctx.EndShader()

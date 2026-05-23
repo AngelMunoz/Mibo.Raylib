@@ -87,23 +87,42 @@ type LightContext2D
       locDirCount <- Raylib.GetShaderLocation(litShader, "dirLightCount")
 
       for i = 0 to maxDir - 1 do
-        locDirDirs[i] <- Raylib.GetShaderLocation(litShader, $"dirLightDirs[{i}]")
-        locDirColors[i] <- Raylib.GetShaderLocation(litShader, $"dirLightColors[{i}]")
-        locDirIntensities[i] <- Raylib.GetShaderLocation(litShader, $"dirLightIntensities[{i}]")
-        locDirShadowIdx[i] <- Raylib.GetShaderLocation(litShader, $"dirLightShadowIdx[{i}]")
+        locDirDirs[i] <-
+          Raylib.GetShaderLocation(litShader, $"dirLightDirs[{i}]")
+
+        locDirColors[i] <-
+          Raylib.GetShaderLocation(litShader, $"dirLightColors[{i}]")
+
+        locDirIntensities[i] <-
+          Raylib.GetShaderLocation(litShader, $"dirLightIntensities[{i}]")
+
+        locDirShadowIdx[i] <-
+          Raylib.GetShaderLocation(litShader, $"dirLightShadowIdx[{i}]")
 
       locPointCount <- Raylib.GetShaderLocation(litShader, "pointLightCount")
 
       for i = 0 to maxPoint - 1 do
-        locPointPos[i] <- Raylib.GetShaderLocation(litShader, $"pointLightPos[{i}]")
-        locPointColors[i] <- Raylib.GetShaderLocation(litShader, $"pointLightColors[{i}]")
-        locPointIntensities[i] <- Raylib.GetShaderLocation(litShader, $"pointLightIntensities[{i}]")
-        locPointRadii[i] <- Raylib.GetShaderLocation(litShader, $"pointLightRadii[{i}]")
-        locPointFalloffs[i] <- Raylib.GetShaderLocation(litShader, $"pointLightFalloffs[{i}]")
-        locPointShadowIdx[i] <- Raylib.GetShaderLocation(litShader, $"pointLightShadowIdx[{i}]")
+        locPointPos[i] <-
+          Raylib.GetShaderLocation(litShader, $"pointLightPos[{i}]")
+
+        locPointColors[i] <-
+          Raylib.GetShaderLocation(litShader, $"pointLightColors[{i}]")
+
+        locPointIntensities[i] <-
+          Raylib.GetShaderLocation(litShader, $"pointLightIntensities[{i}]")
+
+        locPointRadii[i] <-
+          Raylib.GetShaderLocation(litShader, $"pointLightRadii[{i}]")
+
+        locPointFalloffs[i] <-
+          Raylib.GetShaderLocation(litShader, $"pointLightFalloffs[{i}]")
+
+        locPointShadowIdx[i] <-
+          Raylib.GetShaderLocation(litShader, $"pointLightShadowIdx[{i}]")
 
       for i = 0 to maxOccluders - 1 do
-        locOccluders[i] <- Raylib.GetShaderLocation(litShader, $"occluders[{i}]")
+        locOccluders[i] <-
+          Raylib.GetShaderLocation(litShader, $"occluders[{i}]")
 
       locOccluderCount <- Raylib.GetShaderLocation(litShader, "occluderCount")
       locSoftness <- Raylib.GetShaderLocation(litShader, "shadowSoftness")
@@ -127,7 +146,9 @@ type LightContext2D
     this.UniformsDirty <- true
 
   /// <summary>Current ambient light color.</summary>
-  member _.Ambient with get() = ambientColor and set(v) = ambientColor <- v
+  member _.Ambient
+    with get () = ambientColor
+    and set (v) = ambientColor <- v
 
   /// <summary>Directional lights accumulated this frame.</summary>
   member _.DirLights = dirLights
@@ -149,38 +170,140 @@ type LightContext2D
   member this.UploadUniforms() =
     cacheLocations()
 
-    Raylib.SetShaderValue(litShader, locAmbientColor, colorToVec3 ambientColor, ShaderUniformDataType.Vec3)
+    Raylib.SetShaderValue(
+      litShader,
+      locAmbientColor,
+      colorToVec3 ambientColor,
+      ShaderUniformDataType.Vec3
+    )
 
     let dirCount = min dirLights.Count maxDir
-    Raylib.SetShaderValue(litShader, locDirCount, dirCount, ShaderUniformDataType.Int)
+
+    Raylib.SetShaderValue(
+      litShader,
+      locDirCount,
+      dirCount,
+      ShaderUniformDataType.Int
+    )
+
     for i = 0 to dirCount - 1 do
       let l = dirLights[i]
-      Raylib.SetShaderValue(litShader, locDirDirs[i], l.Direction, ShaderUniformDataType.Vec2)
-      Raylib.SetShaderValue(litShader, locDirColors[i], colorToVec3 l.Color, ShaderUniformDataType.Vec3)
-      Raylib.SetShaderValue(litShader, locDirIntensities[i], l.Intensity, ShaderUniformDataType.Float)
-      Raylib.SetShaderValue(litShader, locDirShadowIdx[i], (if l.CastsShadows then 0 else -1), ShaderUniformDataType.Int)
+
+      Raylib.SetShaderValue(
+        litShader,
+        locDirDirs[i],
+        l.Direction,
+        ShaderUniformDataType.Vec2
+      )
+
+      Raylib.SetShaderValue(
+        litShader,
+        locDirColors[i],
+        colorToVec3 l.Color,
+        ShaderUniformDataType.Vec3
+      )
+
+      Raylib.SetShaderValue(
+        litShader,
+        locDirIntensities[i],
+        l.Intensity,
+        ShaderUniformDataType.Float
+      )
+
+      Raylib.SetShaderValue(
+        litShader,
+        locDirShadowIdx[i],
+        (if l.CastsShadows then 0 else -1),
+        ShaderUniformDataType.Int
+      )
 
     let ptCount = min pointLights.Count maxPoint
-    Raylib.SetShaderValue(litShader, locPointCount, ptCount, ShaderUniformDataType.Int)
+
+    Raylib.SetShaderValue(
+      litShader,
+      locPointCount,
+      ptCount,
+      ShaderUniformDataType.Int
+    )
+
     for i = 0 to ptCount - 1 do
       let l = pointLights[i]
-      Raylib.SetShaderValue(litShader, locPointPos[i], l.Position, ShaderUniformDataType.Vec2)
-      Raylib.SetShaderValue(litShader, locPointColors[i], colorToVec3 l.Color, ShaderUniformDataType.Vec3)
-      Raylib.SetShaderValue(litShader, locPointIntensities[i], l.Intensity, ShaderUniformDataType.Float)
-      Raylib.SetShaderValue(litShader, locPointRadii[i], l.Radius, ShaderUniformDataType.Float)
-      Raylib.SetShaderValue(litShader, locPointFalloffs[i], l.Falloff, ShaderUniformDataType.Float)
-      Raylib.SetShaderValue(litShader, locPointShadowIdx[i], (if l.CastsShadows then 0 else -1), ShaderUniformDataType.Int)
+
+      Raylib.SetShaderValue(
+        litShader,
+        locPointPos[i],
+        l.Position,
+        ShaderUniformDataType.Vec2
+      )
+
+      Raylib.SetShaderValue(
+        litShader,
+        locPointColors[i],
+        colorToVec3 l.Color,
+        ShaderUniformDataType.Vec3
+      )
+
+      Raylib.SetShaderValue(
+        litShader,
+        locPointIntensities[i],
+        l.Intensity,
+        ShaderUniformDataType.Float
+      )
+
+      Raylib.SetShaderValue(
+        litShader,
+        locPointRadii[i],
+        l.Radius,
+        ShaderUniformDataType.Float
+      )
+
+      Raylib.SetShaderValue(
+        litShader,
+        locPointFalloffs[i],
+        l.Falloff,
+        ShaderUniformDataType.Float
+      )
+
+      Raylib.SetShaderValue(
+        litShader,
+        locPointShadowIdx[i],
+        (if l.CastsShadows then 0 else -1),
+        ShaderUniformDataType.Int
+      )
 
     // Occluder segments for SDF shadow raymarching
     let ocCount = min occluders.Count maxOccluders
-    Raylib.SetShaderValue(litShader, locOccluderCount, ocCount, ShaderUniformDataType.Int)
+
+    Raylib.SetShaderValue(
+      litShader,
+      locOccluderCount,
+      ocCount,
+      ShaderUniformDataType.Int
+    )
+
     for i = 0 to ocCount - 1 do
       let o = occluders[i]
-      Raylib.SetShaderValue(litShader, locOccluders[i], Vector4(o.P1.X, o.P1.Y, o.P2.X, o.P2.Y), ShaderUniformDataType.Vec4)
 
-    Raylib.SetShaderValue(litShader, locSoftness, shadowSoftness, ShaderUniformDataType.Float)
-    Raylib.SetShaderValue(litShader, locMaxDist, shadowMaxDist, ShaderUniformDataType.Float)
+      Raylib.SetShaderValue(
+        litShader,
+        locOccluders[i],
+        Vector4(o.P1.X, o.P1.Y, o.P2.X, o.P2.Y),
+        ShaderUniformDataType.Vec4
+      )
+
+    Raylib.SetShaderValue(
+      litShader,
+      locSoftness,
+      shadowSoftness,
+      ShaderUniformDataType.Float
+    )
+
+    Raylib.SetShaderValue(
+      litShader,
+      locMaxDist,
+      shadowMaxDist,
+      ShaderUniformDataType.Float
+    )
 
   interface IDisposable with
-    member _.Dispose() =
-      Raylib.UnloadShader(litShader)
+    member _.Dispose() = Raylib.UnloadShader(litShader)

@@ -113,12 +113,8 @@ type Batch3DRenderer<'Model>
       ShaderUniformDataType.Float
     )
 
-  let colorToVec3 (c: Color) =
-    Vector3(
-      float32 c.R / 255.0f,
-      float32 c.G / 255.0f,
-      float32 c.B / 255.0f
-    )
+  let colorToVec3(c: Color) =
+    Vector3(float32 c.R / 255.0f, float32 c.G / 255.0f, float32 c.B / 255.0f)
 
   let uploadLights
     (shader: Shader)
@@ -187,12 +183,7 @@ type Batch3DRenderer<'Model>
     let locCount = Raylib.GetShaderLocation(shader, "pointLightCount")
 
     if locCount >= 0 then
-      Raylib.SetShaderValue(
-        shader,
-        locCount,
-        count,
-        ShaderUniformDataType.Int
-      )
+      Raylib.SetShaderValue(shader, locCount, count, ShaderUniformDataType.Int)
 
     for i = 0 to count - 1 do
       let pl = pointLights[i]
@@ -250,24 +241,19 @@ type Batch3DRenderer<'Model>
         if inShader then
           Raylib.EndShaderMode()
           inShader <- false
-      | _, DrawCube(pos, w, h, l, color) ->
-        Raylib.DrawCube(pos, w, h, l, color)
-      | _, DrawSphere(pos, r, color) ->
-        Raylib.DrawSphere(pos, r, color)
-      | _, DrawGrid(slices, spacing) ->
-        Raylib.DrawGrid(slices, spacing)
+      | _, DrawCube(pos, w, h, l, color) -> Raylib.DrawCube(pos, w, h, l, color)
+      | _, DrawSphere(pos, r, color) -> Raylib.DrawSphere(pos, r, color)
+      | _, DrawGrid(slices, spacing) -> Raylib.DrawGrid(slices, spacing)
       | _, DrawModel(model, pos, scale, tint) ->
         Raylib.DrawModel(model, pos, scale, tint)
       | _, DrawModelEx(model, pos, axis, angle, scale, tint) ->
         Raylib.DrawModelEx(model, pos, axis, angle, scale, tint)
       | _, DrawLine3D(start, finish, color) ->
         Raylib.DrawLine3D(start, finish, color)
-      | _, SetBackground3D color ->
-        Raylib.ClearBackground(color)
+      | _, SetBackground3D color -> Raylib.ClearBackground(color)
       | _, SetAmbient3D _
       | _, AddDirectionalLight3D _
-      | _, AddPointLight3D _ ->
-        ()
+      | _, AddPointLight3D _ -> ()
 
     if inShader then
       Raylib.EndShaderMode()

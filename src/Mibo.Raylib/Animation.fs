@@ -11,8 +11,8 @@ open Mibo.Elmish
 type Point = {
   X: int
   Y: int
-}
-with
+} with
+
   static member Zero = { X = 0; Y = 0 }
 
 /// <summary>
@@ -202,7 +202,10 @@ module SpriteSheet =
 
     let frameSize =
       if frames.Length > 0 then
-        { X = int frames.[0].Width; Y = int frames.[0].Height }
+        {
+          X = int frames.[0].Width
+          Y = int frames.[0].Height
+        }
       else
         { X = 0; Y = 0 }
 

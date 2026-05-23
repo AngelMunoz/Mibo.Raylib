@@ -18,36 +18,29 @@ open PlatformerSample.WorldGen
 // -------------------------------------------------------------
 
 let nearbyPlatforms = ResizeArray<Rectangle>(256)
-let keysToRemove = ResizeArray<struct(int*int)>(32)
-
-// -------------------------------------------------------------
-// System: Chunk Management
-// -------------------------------------------------------------
-
-let chunkSystem (dt: float32) (model: Model) : struct(Model * Cmd<Msg>) =
-  let pos = model.PlayerPosition
-  loadChunks pos model.Chunks model.Seed
-  evictDistantChunks pos model.Chunks
-  model, Cmd.none
+let keysToRemove = ResizeArray<struct (int * int)>(32)
 
 // -------------------------------------------------------------
 // System: Input -> Movement Intent
 // -------------------------------------------------------------
 
-let inputSystem (dt: float32) (model: Model) : struct(Model * Cmd<Msg>) =
+let inputSystem (dt: float32) (model: Model) : struct (Model * Cmd<Msg>) =
   let moveDir =
-    if model.Actions.Held.Contains(GameAction.MoveLeft) then -1.0f
-    elif model.Actions.Held.Contains(GameAction.MoveRight) then 1.0f
-    else 0.0f
+    if model.Actions.Held.Contains(GameAction.MoveLeft) then
+      -1.0f
+    elif model.Actions.Held.Contains(GameAction.MoveRight) then
+      1.0f
+    else
+      0.0f
 
   model.PlayerVelocity <- Vector2(moveDir * moveSpeed, model.PlayerVelocity.Y)
   model, Cmd.none
 
 // -------------------------------------------------------------
-// System: Physics (gravity + collision)
+// System: Physics (gravity + collision + camera follow)
 // -------------------------------------------------------------
 
-let physicsSystem (dt: float32) (model: Model) : struct(Model * Cmd<Msg>) =
+let physicsSystem (dt: float32) (model: Model) : struct (Model * Cmd<Msg>) =
   let canJump = model.IsGrounded
   let jumpPressed = model.Actions.Started.Contains(GameAction.Jump)
 
@@ -61,18 +54,19 @@ let physicsSystem (dt: float32) (model: Model) : struct(Model * Cmd<Msg>) =
   let prevPos = model.PlayerPosition
   let newPos = prevPos + velocity * dt
 
-  // Collect platforms from nearby chunks only
+  // Collect platforms from nearby chunks only (reuse pre-allocated buffer)
   nearbyPlatforms.Clear()
   let pcx = int(Math.Floor(float newPos.X / float chunkWorldSize))
   let pcy = int(Math.Floor(float newPos.Y / float chunkWorldSize))
+
   for KeyValue(key, chunk) in model.Chunks do
-    let struct(cx, cy) = key
-    if abs (cx - pcx) <= chunkLoadRadius && abs (cy - pcy) <= chunkLoadRadius then
+    let struct (cx, cy) = key
+
+    if abs(cx - pcx) <= chunkLoadRadius && abs(cy - pcy) <= chunkLoadRadius then
       nearbyPlatforms.AddRange(chunk.Platforms)
-  let platforms = nearbyPlatforms.ToArray()
 
   let struct (finalPos, finalVel, isGrounded) =
-    resolvePlatformCollision prevPos newPos velocity platforms
+    resolvePlatformCollision prevPos newPos velocity nearbyPlatforms
 
   let mutable finalPos = finalPos
   let mutable finalVel = finalVel
@@ -100,28 +94,44 @@ let physicsSystem (dt: float32) (model: Model) : struct(Model * Cmd<Msg>) =
 
   // Update facing
   let moveDir =
-    if model.Actions.Held.Contains(GameAction.MoveLeft) then -1.0f
-    elif model.Actions.Held.Contains(GameAction.MoveRight) then 1.0f
-    else 0.0f
+    if model.Actions.Held.Contains(GameAction.MoveLeft) then
+      -1.0f
+    elif model.Actions.Held.Contains(GameAction.MoveRight) then
+      1.0f
+    else
+      0.0f
+
   let newFacing =
     if moveDir < 0.0f then -1.0f
     elif moveDir > 0.0f then 1.0f
     else model.PlayerFacing
+
   model.PlayerFacing <- newFacing
 
-  // Smooth camera follow
-  let targetX = finalPos.X
-  let targetY = finalPos.Y
-  let smoothX = model.CameraPos.X + (targetX - model.CameraPos.X) * 0.1f
-  let smoothY = model.CameraPos.Y + (targetY - model.CameraPos.Y) * 0.1f
-  model.CameraPos <- Vector2(
-    Math.Max(0.0f, smoothX),
-    Math.Clamp(smoothY, -500.0f, 2000.0f)
-  )
+  // Smooth camera follow (mutates raylib Camera2D in place)
+  let mutable cam = model.Camera
+  Camera2D.smoothFollow &cam finalPos 0.1f
+  Camera2D.clampTarget &cam 0.0f -500.0f 999999.0f 2000.0f
+  model.Camera <- cam
 
   // Track chunk coordinate
-  let currentChunk = struct(pcx, pcy)
-  model.PlayerChunk <- currentChunk
+  model.PlayerChunk <- struct (pcx, pcy)
+
+  model, Cmd.none
+
+// -------------------------------------------------------------
+// System: Chunk Management (only runs when player changes chunk)
+// -------------------------------------------------------------
+
+let chunkSystem (dt: float32) (model: Model) : struct (Model * Cmd<Msg>) =
+  let pos = model.PlayerPosition
+  let pcx = int(Math.Floor(float pos.X / float chunkWorldSize))
+  let pcy = int(Math.Floor(float pos.Y / float chunkWorldSize))
+  let currentChunk = struct (pcx, pcy)
+
+  if currentChunk <> model.PlayerChunk then
+    loadChunks pos model.Chunks model.Seed
+    evictDistantChunks pos model.Chunks keysToRemove
 
   model, Cmd.none
 
@@ -129,7 +139,7 @@ let physicsSystem (dt: float32) (model: Model) : struct(Model * Cmd<Msg>) =
 // System: Animation
 // -------------------------------------------------------------
 
-let animationSystem (dt: float32) (model: Model) : struct(Model * Cmd<Msg>) =
+let animationSystem (dt: float32) (model: Model) : struct (Model * Cmd<Msg>) =
   let animState = getAnimationState model.PlayerVelocity model.IsGrounded
 
   let playerSprite =
@@ -140,6 +150,7 @@ let animationSystem (dt: float32) (model: Model) : struct(Model * Cmd<Msg>) =
     | Fall -> AnimatedSprite.playIfNot "fall" model.PlayerSprite
 
   let updatedSprite = AnimatedSprite.update dt playerSprite
+
   let flippedSprite =
     if model.PlayerFacing < 0.0f then
       AnimatedSprite.facingLeft updatedSprite
@@ -148,8 +159,6 @@ let animationSystem (dt: float32) (model: Model) : struct(Model * Cmd<Msg>) =
 
   model.PlayerSprite <- flippedSprite
   model.AnimationState <- animState
-
-  // Torch animation (single shared sprite for all torches)
   model.TorchSprite <- AnimatedSprite.update dt model.TorchSprite
 
   model, Cmd.none
@@ -158,7 +167,7 @@ let animationSystem (dt: float32) (model: Model) : struct(Model * Cmd<Msg>) =
 // System: Particles
 // -------------------------------------------------------------
 
-let particleSystem (dt: float32) (model: Model) : struct(Model * Cmd<Msg>) =
+let particleSystem (dt: float32) (model: Model) : struct (Model * Cmd<Msg>) =
   let mutable playedJumpSound =
     model.Actions.Started.Contains(GameAction.Jump) && model.IsGrounded
 
@@ -168,20 +177,25 @@ let particleSystem (dt: float32) (model: Model) : struct(Model * Cmd<Msg>) =
 
   // Spawn burst on jump
   if playedJumpSound then
-    let rng = Random()
+    let rng = System.Random.Shared
+
     for i = 0 to 11 do
       if particleCount < particles.Length then
         particles[particleCount] <- {
-          Position = model.PlayerPosition + Vector2(playerWidth / 2.0f, playerHeight)
+          Position =
+            model.PlayerPosition + Vector2(playerWidth / 2.0f, playerHeight)
           Size = Vector2(8.0f, 8.0f)
           Rotation = float32(rng.NextDouble() * Math.PI * 2.0)
           SourceRect = Rectangle(0.0f, 0.0f, 1.0f, 1.0f)
           Color = Color(255uy, 255uy, 0uy, 255uy)
         }
-        particleVelocities[particleCount] <- Vector2(
-          float32(rng.NextDouble() * 200.0 - 100.0),
-          float32(rng.NextDouble() * -150.0 - 50.0)
-        )
+
+        particleVelocities[particleCount] <-
+          Vector2(
+            float32(rng.NextDouble() * 200.0 - 100.0),
+            float32(rng.NextDouble() * -150.0 - 50.0)
+          )
+
         particleCount <- particleCount + 1
 
   // Update existing particles
@@ -189,6 +203,7 @@ let particleSystem (dt: float32) (model: Model) : struct(Model * Cmd<Msg>) =
     let vel = particleVelocities[i]
     let newVel = Vector2(vel.X, vel.Y + gravity * dt * 0.3f)
     particleVelocities[i] <- newVel
+
     particles[i] <- {
       particles[i] with
           Position = particles[i].Position + newVel * dt
@@ -206,8 +221,10 @@ let particleSystem (dt: float32) (model: Model) : struct(Model * Cmd<Msg>) =
 // System: Day / Night
 // -------------------------------------------------------------
 
-let dayNightSystem (dt: float32) (model: Model) : struct(Model * Cmd<Msg>) =
-  let newTime = (model.DayNightTimeOfDay + dt * (24.0f / model.DayNightDuration)) % 24.0f
+let dayNightSystem (dt: float32) (model: Model) : struct (Model * Cmd<Msg>) =
+  let newTime =
+    (model.DayNightTimeOfDay + dt * (24.0f / model.DayNightDuration)) % 24.0f
+
   model.DayNightTimeOfDay <- newTime
   model.TotalTime <- model.TotalTime + dt
   model, Cmd.none
@@ -216,7 +233,7 @@ let dayNightSystem (dt: float32) (model: Model) : struct(Model * Cmd<Msg>) =
 // Combined Update Pipeline (Level 3 — explicit phase ordering)
 // -------------------------------------------------------------
 
-let update (msg: Msg) (model: Model) : struct(Model * Cmd<Msg>) =
+let update (msg: Msg) (model: Model) : struct (Model * Cmd<Msg>) =
   match msg with
   | InputMapped actions ->
     model.Actions <- actions
@@ -225,12 +242,12 @@ let update (msg: Msg) (model: Model) : struct(Model * Cmd<Msg>) =
   | Tick gt ->
     let dt = float32 gt.ElapsedGameTime.TotalSeconds
 
-    // Phase 1: Mutable systems (physics, particles, chunks)
+    // Phase ordering: input → physics → chunk → animation → particles → day/night
     System.start model
-    |> System.pipeMutable (chunkSystem dt)
-    |> System.pipeMutable (inputSystem dt)
-    |> System.pipeMutable (physicsSystem dt)
-    |> System.pipeMutable (animationSystem dt)
-    |> System.pipeMutable (particleSystem dt)
-    |> System.pipeMutable (dayNightSystem dt)
+    |> System.pipeMutable(inputSystem dt)
+    |> System.pipeMutable(physicsSystem dt)
+    |> System.pipeMutable(chunkSystem dt)
+    |> System.pipeMutable(animationSystem dt)
+    |> System.pipeMutable(particleSystem dt)
+    |> System.pipeMutable(dayNightSystem dt)
     |> System.finish id

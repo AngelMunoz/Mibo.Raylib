@@ -19,9 +19,8 @@ open System.Collections.Generic
 /// </remarks>
 type RenderBuffer2D
   (
-    /// <summary>Initial capacity. Defaults to 1024 if not specified.</summary>
-    ?capacity: int
-  ) =
+  /// <summary>Initial capacity. Defaults to 1024 if not specified.</summary>
+  ?capacity: int) =
 
   let mutable items =
     ArrayPool<IRenderCommand2D>.Shared.Rent(defaultArg capacity 1024)
@@ -30,16 +29,14 @@ type RenderBuffer2D
 
   let layerComparer =
     { new IComparer<IRenderCommand2D> with
-        member _.Compare(a, b) =
-          int a.Layer - int b.Layer
+        member _.Compare(a, b) = int a.Layer - int b.Layer
     }
 
   let ensureCapacity(needed: int) =
     if count + needed > items.Length then
       let newSize = max (items.Length * 2) (count + needed)
 
-      let newArr =
-        ArrayPool<IRenderCommand2D>.Shared.Rent(newSize)
+      let newArr = ArrayPool<IRenderCommand2D>.Shared.Rent(newSize)
 
       Array.Copy(items, newArr, count)
       ArrayPool<IRenderCommand2D>.Shared.Return(items)

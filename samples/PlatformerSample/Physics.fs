@@ -9,23 +9,28 @@ open PlatformerSample.Types
 // Player Bounds & Collision
 // -------------------------------------------------------------
 
-let playerBounds(pos: Vector2) =
+let inline playerBounds(pos: Vector2) =
   Rectangle(pos.X, pos.Y, playerWidth, playerHeight)
 
 let inline checkCollision (a: Rectangle) (b: Rectangle) =
-  a.X < b.X + b.Width && a.X + a.Width > b.X && a.Y < b.Y + b.Height && a.Y + a.Height > b.Y
+  a.X < b.X + b.Width
+  && a.X + a.Width > b.X
+  && a.Y < b.Y + b.Height
+  && a.Y + a.Height > b.Y
 
 let resolvePlatformCollision
   (prevPos: Vector2)
   (newPos: Vector2)
   (velocity: Vector2)
-  (platforms: Rectangle[])
+  (platforms: ResizeArray<Rectangle>)
   : struct (Vector2 * Vector2 * bool) =
   let mutable pos = newPos
   let mutable vel = velocity
   let mutable grounded = false
 
-  for pb in platforms do
+  for i = 0 to platforms.Count - 1 do
+    let pb = platforms[i]
+
     if checkCollision (playerBounds pos) pb then
       let prevFeetY = prevPos.Y + playerHeight
       let currFeetY = pos.Y + playerHeight
@@ -54,7 +59,10 @@ let resolvePlatformCollision
 
 let getAnimationState (velocity: Vector2) (isGrounded: bool) =
   if not isGrounded then
-    if velocity.Y > 0.0f then AnimationState.Fall else AnimationState.Jump
+    if velocity.Y > 0.0f then
+      AnimationState.Fall
+    else
+      AnimationState.Jump
   elif abs velocity.X > 1.0f then
     AnimationState.Walk
   else

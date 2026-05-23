@@ -27,17 +27,16 @@ let view (ctx: GameContext) (model: Model) (buffer: RenderBuffer2D) =
   let playerCenterX = model.PlayerPosition.X + playerWidth / 2.0f
   let playerCenterY = model.PlayerPosition.Y + playerHeight / 2.0f
 
-  let camera =
-    Camera2D(
-      Vector2(float32 ctx.WindowWidth / 2.0f, float32 ctx.WindowHeight / 2.0f),
-      Vector2(model.CameraPos.X, model.CameraPos.Y),
-      0.0f,
-      1.0f
-    )
+  let camera = model.Camera
 
   // Sky background and day/night ambient
   let time = model.DayNightTimeOfDay
-  let dayNight = { TimeOfDay = model.DayNightTimeOfDay; DayDuration = model.DayNightDuration }
+
+  let dayNight = {
+    TimeOfDay = model.DayNightTimeOfDay
+    DayDuration = model.DayNightDuration
+  }
+
   let skyTop, skyBot = DayNight.getSkyColors time
   let ambient = DayNight.getAmbientColor time
   let sunIntensity = DayNight.getSunIntensity time
@@ -45,7 +44,7 @@ let view (ctx: GameContext) (model: Model) (buffer: RenderBuffer2D) =
   let sunPos, moonPos = DayNight.orbitalPositions playerCenterX dayNight
 
   let viewBounds =
-    Camera2D.viewportBoundsFromRaylib
+    Camera2D.viewportBounds
       camera
       (float32 ctx.WindowWidth)
       (float32 ctx.WindowHeight)
@@ -62,8 +61,9 @@ let view (ctx: GameContext) (model: Model) (buffer: RenderBuffer2D) =
   if sunIntensity > 0.0f then
     let sunDir =
       Vector2.Normalize(Vector2(playerCenterX, groundLevel - 200.0f) - sunPos)
+
     buffer
-    |> LightDraw.addDirectionalLight model.Lighting (6<RenderLayer>) {
+    |> LightDraw.addDirectionalLight model.Lighting 6<RenderLayer> {
       Direction = sunDir
       Color = Color(255uy, 245uy, 220uy)
       Intensity = sunIntensity * 1.5f
@@ -75,8 +75,9 @@ let view (ctx: GameContext) (model: Model) (buffer: RenderBuffer2D) =
   if moonIntensity > 0.0f then
     let moonDir =
       Vector2.Normalize(Vector2(playerCenterX, groundLevel - 200.0f) - moonPos)
+
     buffer
-    |> LightDraw.addDirectionalLight model.Lighting (6<RenderLayer>) {
+    |> LightDraw.addDirectionalLight model.Lighting 6<RenderLayer> {
       Direction = moonDir
       Color = Color(180uy, 200uy, 255uy)
       Intensity = moonIntensity * 0.8f
@@ -88,40 +89,43 @@ let view (ctx: GameContext) (model: Model) (buffer: RenderBuffer2D) =
   let pcx = int(Math.Floor(float model.PlayerPosition.X / float chunkWorldSize))
   let pcy = int(Math.Floor(float model.PlayerPosition.Y / float chunkWorldSize))
 
-  let mutable nearbyOccluders = []
-  let mutable nearbyTorches = []
+  let nearbyOccluders = ResizeArray()
+  let nearbyTorches = ResizeArray()
 
   for KeyValue(key, chunk) in model.Chunks do
-    let struct(cx, cy) = key
-    if abs (cx - pcx) <= chunkLoadRadius && abs (cy - pcy) <= chunkLoadRadius then
-      nearbyOccluders <- chunk.Occluders |> Array.toList |> List.append nearbyOccluders
-      nearbyTorches <- chunk.Torches |> Array.toList |> List.append nearbyTorches
+    let struct (cx, cy) = key
+
+    if abs(cx - pcx) <= chunkLoadRadius && abs(cy - pcy) <= chunkLoadRadius then
+      nearbyOccluders.AddRange chunk.Occluders
+      nearbyTorches.AddRange chunk.Torches
 
   // Sort by distance to player and take nearest N
   let playerPos = model.PlayerPosition
+
   let occludersSorted =
     nearbyOccluders
-    |> List.sortBy (fun o ->
+    |> Seq.sortBy(fun o ->
       let mx = (o.P1.X + o.P2.X) * 0.5f
       let my = (o.P1.Y + o.P2.Y) * 0.5f
-      (mx - playerPos.X) * (mx - playerPos.X) + (my - playerPos.Y) * (my - playerPos.Y)
-    )
-    |> List.truncate maxOccluders
+
+      (mx - playerPos.X) * (mx - playerPos.X)
+      + (my - playerPos.Y) * (my - playerPos.Y))
+    |> Seq.truncate maxOccluders
 
   let torchesSorted =
     nearbyTorches
-    |> List.sortBy (fun t ->
+    |> Seq.sortBy(fun t ->
       let dx = t.Position.X - playerPos.X
       let dy = t.Position.Y - playerPos.Y
-      dx * dx + dy * dy
-    )
-    |> List.truncate maxTorchLights
+      dx * dx + dy * dy)
+    |> Seq.truncate maxTorchLights
 
   // Add torches as point lights and draw sprites
   let torchSrc = AnimatedSprite.currentSource model.TorchSprite
+
   for torch in torchesSorted do
     buffer
-    |> LightDraw.addPointLight model.Lighting (7<RenderLayer>) {
+    |> LightDraw.addPointLight model.Lighting 7<RenderLayer> {
       Position = torch.Position
       Color = torch.Color
       Intensity = 1.2f
@@ -131,7 +135,9 @@ let view (ctx: GameContext) (model: Model) (buffer: RenderBuffer2D) =
     }
     |> Draw.drop
 
-    let torchDest = r (int torch.Position.X - 16) (int torch.Position.Y - 32) 32 32
+    let torchDest =
+      r (int torch.Position.X - 16) (int torch.Position.Y - 32) 32 32
+
     buffer
     |> LightDraw.litSprite model.Lighting {
       Texture = model.Assets.TorchSheet.Texture
@@ -147,26 +153,28 @@ let view (ctx: GameContext) (model: Model) (buffer: RenderBuffer2D) =
   // Add occluders
   for occluder in occludersSorted do
     buffer
-    |> LightDraw.addOccluder model.Lighting (8<RenderLayer>) occluder
+    |> LightDraw.addOccluder model.Lighting 8<RenderLayer> occluder
     |> Draw.drop
 
   // Render visible tiles from nearby chunks only
   let tileSrc = r 260 585 64 64
 
   for KeyValue(key, chunk) in model.Chunks do
-    let struct(cx, cy) = key
-    if abs (cx - pcx) <= chunkLoadRadius && abs (cy - pcy) <= chunkLoadRadius then
+    let struct (cx, cy) = key
+
+    if abs(cx - pcx) <= chunkLoadRadius && abs(cy - pcy) <= chunkLoadRadius then
       if Culling.isVisible2D viewBounds chunk.Bounds then
         CellGrid2D.iterVisible
           (int viewBounds.X)
           (int viewBounds.Y)
-          (int (viewBounds.X + viewBounds.Width))
-          (int (viewBounds.Y + viewBounds.Height))
+          (int(viewBounds.X + viewBounds.Width))
+          (int(viewBounds.Y + viewBounds.Height))
           (fun x y tile ->
             if tile <> TileType.Empty then
               let wx = chunk.Grid.Origin.X + float32 x * tileSize
               let wy = chunk.Grid.Origin.Y + float32 y * tileSize
               let dest = Rectangle(wx, wy, tileSize, tileSize)
+
               buffer
               |> LightDraw.litSprite model.Lighting {
                 Texture = model.Assets.TileTexture
@@ -177,21 +185,25 @@ let view (ctx: GameContext) (model: Model) (buffer: RenderBuffer2D) =
                 Color = Color.White
                 Layer = 10<RenderLayer>
               }
-              |> Draw.drop
-          )
+              |> Draw.drop)
           chunk.Grid
 
   // Lit player sprite
   let playerSrc = AnimatedSprite.currentSource model.PlayerSprite
   let mutable playerSrcMut = playerSrc
+
   if model.PlayerSprite.FlipX then
-    playerSrcMut <- Rectangle(
-      playerSrcMut.X, playerSrcMut.Y,
-      -playerSrcMut.Width, playerSrcMut.Height
-    )
+    playerSrcMut <-
+      Rectangle(
+        playerSrcMut.X,
+        playerSrcMut.Y,
+        -playerSrcMut.Width,
+        playerSrcMut.Height
+      )
 
   let playerDrawY = int(model.PlayerPosition.Y + playerHeight - 64.0f)
   let playerDest = r (int model.PlayerPosition.X) playerDrawY 64 64
+
   buffer
   |> LightDraw.litSprite model.Lighting {
     Texture = model.Assets.PlayerSheet.Texture

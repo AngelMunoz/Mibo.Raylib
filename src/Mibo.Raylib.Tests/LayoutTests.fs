@@ -314,9 +314,7 @@ let tests =
         let grid =
           CellGrid2D.create 10 10 (Vector2(32f, 32f)) Vector2.Zero
           |> Layout.run(fun section ->
-            section
-            |> Layout.fill 0 0 10 10 1
-            |> Platformer.pit 3 5)
+            section |> Layout.fill 0 0 10 10 1 |> Platformer.pit 3 5)
 
         for x in 0..2 do
           for y in 0..4 do

@@ -106,7 +106,10 @@ type Renderer2D<'Model>
 
         member _.BeginCamera(c) =
           Rlgl.DrawRenderBatchActive()
-          if _camera.IsSome then Raylib.EndMode2D()
+
+          if _camera.IsSome then
+            Raylib.EndMode2D()
+
           Raylib.BeginMode2D(c)
           _camera <- ValueSome c
 
@@ -272,8 +275,7 @@ module Renderer2D =
   let create
     (view: GameContext -> 'Model -> RenderBuffer2D -> unit)
     : IRenderer<'Model> =
-    new Renderer2D<'Model>(view, Renderer2DConfig.defaults)
-    :> IRenderer<'Model>
+    new Renderer2D<'Model>(view, Renderer2DConfig.defaults) :> IRenderer<'Model>
 
   /// <summary>
   /// Creates a renderer with the specified configuration.

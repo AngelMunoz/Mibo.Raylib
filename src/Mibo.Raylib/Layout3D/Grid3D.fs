@@ -4,10 +4,7 @@ open System.Numerics
 
 /// A simple axis-aligned bounding box struct for volume queries.
 [<Struct>]
-type BoundingBox = {
-  Min: Vector3
-  Max: Vector3
-}
+type BoundingBox = { Min: Vector3; Max: Vector3 }
 
 [<Struct>]
 type CellGrid3D<'T> = {

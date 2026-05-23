@@ -14,30 +14,34 @@ open Mibo.Animation
 // -------------------------------------------------------------
 // Domain Types
 // -------------------------------------------------------------
-
+[<Struct>]
 type GameAction =
   | MoveLeft
   | MoveRight
   | Jump
   | Respawn
 
+[<Struct>]
 type AnimationState =
   | Idle
   | Walk
   | Jump
   | Fall
 
+[<Struct>]
 type TileType =
   | Empty
   | Ground
   | Platform
 
+[<Struct>]
 type TorchLight = {
   Position: Vector2
   Color: Color
   Radius: float32
 }
 
+[<Struct>]
 type Chunk = {
   Grid: Mibo.Layout.CellGrid2D<TileType>
   Platforms: Rectangle[]
@@ -46,6 +50,7 @@ type Chunk = {
   Bounds: Rectangle
 }
 
+[<Struct>]
 type SpriteAssets = {
   PlayerSheet: SpriteSheet
   TileTexture: Texture2D
@@ -64,7 +69,7 @@ type Model() as self =
   member val PlayerVelocity = Vector2.Zero with get, set
   member val PlayerFacing = 1.0f with get, set
   member val IsGrounded = true with get, set
-  member val CameraPos = Vector2(200.0f, 0.0f) with get, set
+  member val Camera: Camera2D = Unchecked.defaultof<_> with get, set
   member val Actions: ActionState<GameAction> = ActionState.empty with get, set
   member val InputMap: InputMap<GameAction> = InputMap.empty with get, set
   member val Assets: SpriteAssets = Unchecked.defaultof<_> with get, set
@@ -72,8 +77,8 @@ type Model() as self =
   member val AnimationState = Idle with get, set
   member val PlayerSprite: AnimatedSprite = Unchecked.defaultof<_> with get, set
   member val TorchSprite: AnimatedSprite = Unchecked.defaultof<_> with get, set
-  member val PlayerChunk = struct(0, 0) with get, set
-  member val Chunks = Dictionary<struct(int*int), Chunk>() with get, set
+  member val PlayerChunk = struct (0, 0) with get, set
+  member val Chunks = Dictionary<struct (int * int), Chunk>() with get, set
   member val Seed = 0 with get, set
   member val DayNightTimeOfDay = 12.0f with get, set
   member val DayNightDuration = 60.0f with get, set
@@ -91,6 +96,7 @@ type Model() as self =
 // Struct Messages (Level 2.5 — zero-allocation dispatch)
 // -------------------------------------------------------------
 
+[<Struct>]
 type Msg =
-  | Tick of GameTime
-  | InputMapped of ActionState<GameAction>
+  | Tick of tick: GameTime
+  | InputMapped of inputs: ActionState<GameAction>

@@ -398,11 +398,13 @@ module Layout3D =
       setLocal fx (y + h - 1) z content section
       setLocal fx y (z + d - 1) content section
       setLocal fx (y + h - 1) (z + d - 1) content section
+
     for fy in y .. y + h - 1 do
       setLocal x fy z content section
       setLocal (x + w - 1) fy z content section
       setLocal x fy (z + d - 1) content section
       setLocal (x + w - 1) fy (z + d - 1) content section
+
     for fz in z .. z + d - 1 do
       setLocal x y fz content section
       setLocal (x + w - 1) y fz content section
@@ -632,9 +634,7 @@ module Layout3D =
           if filled then
             if d2 <= r2 then
               setLocal (cx + x) (cy + y) (cz + z) content section
-          else if
-            d2 <= r2 && d2 >= (radius - 1) * (radius - 1)
-          then
+          else if d2 <= r2 && d2 >= (radius - 1) * (radius - 1) then
             setLocal (cx + x) (cy + y) (cz + z) content section
 
     section
@@ -659,9 +659,7 @@ module Layout3D =
           if filled then
             if d2 <= r2 then
               setLocal (cx + fx) fy (cz + fz) content section
-          else if
-            d2 <= r2 && d2 >= (radius - 1) * (radius - 1)
-          then
+          else if d2 <= r2 && d2 >= (radius - 1) * (radius - 1) then
             setLocal (cx + fx) fy (cz + fz) content section
 
     section

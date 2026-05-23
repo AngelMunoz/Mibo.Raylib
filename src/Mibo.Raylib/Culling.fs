@@ -15,10 +15,7 @@ type ContainmentType =
 /// Represents a bounding sphere in 3D space.
 /// </summary>
 [<Struct>]
-type BoundingSphere = {
-  Center: Vector3
-  Radius: float32
-}
+type BoundingSphere = { Center: Vector3; Radius: float32 }
 
 /// <summary>
 /// Represents a view frustum defined by six planes extracted from a View*Projection matrix.
@@ -31,75 +28,73 @@ type Frustum(viewProjection: Matrix4x4) =
 
   // Gribb/Hartmann plane extraction for row-major matrices
   // Each plane: (normal.x, normal.y, normal.z, d) where d is the signed distance
-  let normalizePlane (p: Vector4) =
-    let len = float32 (sqrt (double (p.X * p.X + p.Y * p.Y + p.Z * p.Z)))
+  let normalizePlane(p: Vector4) =
+    let len = float32(sqrt(double(p.X * p.X + p.Y * p.Y + p.Z * p.Z)))
 
     if len > 0.0001f then
       Vector4(p.X / len, p.Y / len, p.Z / len, p.W / len)
     else
       p
 
-  let planes =
-    [|
-      // Left:   row4 + row1
-      normalizePlane (
-        Vector4(
-          viewProjection.M41 + viewProjection.M11,
-          viewProjection.M42 + viewProjection.M12,
-          viewProjection.M43 + viewProjection.M13,
-          viewProjection.M44 + viewProjection.M14
-        )
+  let planes = [|
+    // Left:   row4 + row1
+    normalizePlane(
+      Vector4(
+        viewProjection.M41 + viewProjection.M11,
+        viewProjection.M42 + viewProjection.M12,
+        viewProjection.M43 + viewProjection.M13,
+        viewProjection.M44 + viewProjection.M14
       )
-      // Right:  row4 - row1
-      normalizePlane (
-        Vector4(
-          viewProjection.M41 - viewProjection.M11,
-          viewProjection.M42 - viewProjection.M12,
-          viewProjection.M43 - viewProjection.M13,
-          viewProjection.M44 - viewProjection.M14
-        )
+    )
+    // Right:  row4 - row1
+    normalizePlane(
+      Vector4(
+        viewProjection.M41 - viewProjection.M11,
+        viewProjection.M42 - viewProjection.M12,
+        viewProjection.M43 - viewProjection.M13,
+        viewProjection.M44 - viewProjection.M14
       )
-      // Bottom: row4 + row2
-      normalizePlane (
-        Vector4(
-          viewProjection.M41 + viewProjection.M21,
-          viewProjection.M42 + viewProjection.M22,
-          viewProjection.M43 + viewProjection.M23,
-          viewProjection.M44 + viewProjection.M24
-        )
+    )
+    // Bottom: row4 + row2
+    normalizePlane(
+      Vector4(
+        viewProjection.M41 + viewProjection.M21,
+        viewProjection.M42 + viewProjection.M22,
+        viewProjection.M43 + viewProjection.M23,
+        viewProjection.M44 + viewProjection.M24
       )
-      // Top:    row4 - row2
-      normalizePlane (
-        Vector4(
-          viewProjection.M41 - viewProjection.M21,
-          viewProjection.M42 - viewProjection.M22,
-          viewProjection.M43 - viewProjection.M23,
-          viewProjection.M44 - viewProjection.M24
-        )
+    )
+    // Top:    row4 - row2
+    normalizePlane(
+      Vector4(
+        viewProjection.M41 - viewProjection.M21,
+        viewProjection.M42 - viewProjection.M22,
+        viewProjection.M43 - viewProjection.M23,
+        viewProjection.M44 - viewProjection.M24
       )
-      // Near:   row4 + row3
-      normalizePlane (
-        Vector4(
-          viewProjection.M41 + viewProjection.M31,
-          viewProjection.M42 + viewProjection.M32,
-          viewProjection.M43 + viewProjection.M33,
-          viewProjection.M44 + viewProjection.M34
-        )
+    )
+    // Near:   row4 + row3
+    normalizePlane(
+      Vector4(
+        viewProjection.M41 + viewProjection.M31,
+        viewProjection.M42 + viewProjection.M32,
+        viewProjection.M43 + viewProjection.M33,
+        viewProjection.M44 + viewProjection.M34
       )
-      // Far:    row4 - row3
-      normalizePlane (
-        Vector4(
-          viewProjection.M41 - viewProjection.M31,
-          viewProjection.M42 - viewProjection.M32,
-          viewProjection.M43 - viewProjection.M33,
-          viewProjection.M44 - viewProjection.M34
-        )
+    )
+    // Far:    row4 - row3
+    normalizePlane(
+      Vector4(
+        viewProjection.M41 - viewProjection.M31,
+        viewProjection.M42 - viewProjection.M32,
+        viewProjection.M43 - viewProjection.M33,
+        viewProjection.M44 - viewProjection.M34
       )
-    |]
+    )
+  |]
 
   // Signed distance from point to plane: dot(normal.xyz, point) + d
-  let dot4 (p: Vector4) (v: Vector3) =
-    p.X * v.X + p.Y * v.Y + p.Z * v.Z + p.W
+  let dot4 (p: Vector4) (v: Vector3) = p.X * v.X + p.Y * v.Y + p.Z * v.Z + p.W
 
   /// <summary>Tests whether the given <see cref="T:Mibo.Elmish.BoundingSphere"/> is contained within the frustum.</summary>
   member _.Contains(sphere: BoundingSphere) =
@@ -172,7 +167,10 @@ module Culling =
   ///     // Render sprite
   /// </code>
   /// </example>
-  let inline isVisible2D (viewBounds: Raylib_cs.Rectangle) (itemBounds: Raylib_cs.Rectangle) =
+  let inline isVisible2D
+    (viewBounds: Raylib_cs.Rectangle)
+    (itemBounds: Raylib_cs.Rectangle)
+    =
     viewBounds.X < itemBounds.X + itemBounds.Width
     && viewBounds.X + viewBounds.Width > itemBounds.X
     && viewBounds.Y < itemBounds.Y + itemBounds.Height

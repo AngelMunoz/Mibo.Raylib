@@ -41,11 +41,18 @@ module DayNight =
     DayDuration: float32
   }
 
-  let initial = { TimeOfDay = 12.0f; DayDuration = 30.0f }
+  let initial = {
+    TimeOfDay = 12.0f
+    DayDuration = 30.0f
+  }
 
   let update dt state =
     let hoursPerSecond = 24.0f / state.DayDuration
-    { state with TimeOfDay = (state.TimeOfDay + dt * hoursPerSecond) % 24.0f }
+
+    {
+      state with
+          TimeOfDay = (state.TimeOfDay + dt * hoursPerSecond) % 24.0f
+    }
 
   let getAmbient time : Color * float32 =
     if time < 5.0f || time > 19.0f then
@@ -137,6 +144,7 @@ let generateLevel
     let localBounds = getLocalBounds modelPath
     let worldMin = localBounds.Min + position
     let worldMax = localBounds.Max + position
+
     {
       Position = position
       LocalBounds = localBounds
@@ -153,6 +161,7 @@ let generateLevel
     for iz = 0 to 11 do
       let px = float32 ix * 4.0f + 2.0f
       let pz = float32 iz * 4.0f + 2.0f
+
       platforms.Add(
         create
           (Vector3(px, 0.0f, pz))
@@ -177,11 +186,7 @@ let generateLevel
   ]
 
   for pos in elevated do
-    platforms.Add(
-      create
-        pos
-        "assets/Models/Platform/platform_2x2x1_blue.obj"
-    )
+    platforms.Add(create pos "assets/Models/Platform/platform_2x2x1_blue.obj")
 
     // Always add a torch on elevated platforms
     torches.Add {
@@ -237,11 +242,7 @@ let computeCameraRelativeMove
   : Vector3 =
 
   let forward =
-    Vector3(
-      cameraTarget.X - cameraPos.X,
-      0.0f,
-      cameraTarget.Z - cameraPos.Z
-    )
+    Vector3(cameraTarget.X - cameraPos.X, 0.0f, cameraTarget.Z - cameraPos.Z)
 
   let forward =
     if forward.LengthSquared() > 0.001f then
@@ -253,10 +254,17 @@ let computeCameraRelativeMove
 
   let mutable dir = Vector3.Zero
 
-  if actions.Held.Contains(MoveForward) then dir <- dir + forward
-  if actions.Held.Contains(MoveBackward) then dir <- dir - forward
-  if actions.Held.Contains(MoveRight) then dir <- dir + right
-  if actions.Held.Contains(MoveLeft) then dir <- dir - right
+  if actions.Held.Contains(MoveForward) then
+    dir <- dir + forward
+
+  if actions.Held.Contains(MoveBackward) then
+    dir <- dir - forward
+
+  if actions.Held.Contains(MoveRight) then
+    dir <- dir + right
+
+  if actions.Held.Contains(MoveLeft) then
+    dir <- dir - right
 
   if dir.LengthSquared() > 0.0f then
     Vector3.Normalize(dir)
@@ -278,8 +286,7 @@ let applyMovement
 
   let newHorizontalVel =
     if hasInput then
-      let targetVel =
-        Vector2(moveDir.X * moveSpeed, moveDir.Z * moveSpeed)
+      let targetVel = Vector2(moveDir.X * moveSpeed, moveDir.Z * moveSpeed)
 
       let diff = targetVel - horizontalVel
       let accel = acceleration * dt
@@ -342,9 +349,7 @@ let resolveCollision
       let prevHeadY = prevPos.Y + playerRadius
 
       if
-        vel.Y > 0.0f
-        && prevHeadY <= cellBottom + 0.1f
-        && headY > cellBottom
+        vel.Y > 0.0f && prevHeadY <= cellBottom + 0.1f && headY > cellBottom
       then
         pos <- Vector3(pos.X, cellBottom - playerRadius, pos.Z)
         vel <- Vector3(vel.X, 0.0f, vel.Z)
@@ -382,34 +387,30 @@ let drawPlatformGrid
     let endZ = MathF.Ceiling(bmax.Z + padding)
 
     let mutable z = startZ
+
     while z <= endZ + 0.001f do
       buffer.Add(
         2<RenderLayer3D>,
-        DrawLine3D(
-          Vector3(startX, y, z),
-          Vector3(endX, y, z),
-          color
-        )
+        DrawLine3D(Vector3(startX, y, z), Vector3(endX, y, z), color)
       )
+
       z <- z + 1.0f
 
     let mutable x = startX
+
     while x <= endX + 0.001f do
       buffer.Add(
         2<RenderLayer3D>,
-        DrawLine3D(
-          Vector3(x, y, startZ),
-          Vector3(x, y, endZ),
-          color
-        )
+        DrawLine3D(Vector3(x, y, startZ), Vector3(x, y, endZ), color)
       )
+
       x <- x + 1.0f
 
 // -------------------------------------------------------------
 // Quaternion to Axis-Angle
 // -------------------------------------------------------------
 
-let quatToAxisAngle (q: Quaternion) : Vector3 * float32 =
+let quatToAxisAngle(q: Quaternion) : Vector3 * float32 =
   let q = Quaternion.Normalize(q)
   let qW = MathF.Max(-1.0f, MathF.Min(1.0f, q.W))
   let angle = 2.0f * MathF.Acos(qW)
@@ -453,7 +454,7 @@ type Msg =
 // Init
 // -------------------------------------------------------------
 
-let init (ctx: GameContext) =
+let init(ctx: GameContext) =
   let inputMap =
     InputMap.empty
     |> InputMap.key MoveLeft KeyboardKey.A
@@ -467,24 +468,30 @@ let init (ctx: GameContext) =
     |> InputMap.key Jump KeyboardKey.Space
 
   // Pre-load all models and cache their local bounds
-  let localBoundsCache = System.Collections.Generic.Dictionary<string, BoundingBox>()
+  let localBoundsCache =
+    System.Collections.Generic.Dictionary<string, BoundingBox>()
+
   let modelCache = System.Collections.Generic.Dictionary<string, Model>()
 
   let getModel path =
-    if not (modelCache.ContainsKey(path)) then
+    if not(modelCache.ContainsKey(path)) then
       modelCache[path] <- ctx.Assets.Model(path)
+
     modelCache[path]
 
   let getLocalBounds path =
-    if not (localBoundsCache.ContainsKey(path)) then
+    if not(localBoundsCache.ContainsKey(path)) then
       let model = getModel path
       localBoundsCache[path] <- Raylib.GetModelBoundingBox(model)
+
     localBoundsCache[path]
 
   let playerModel = getModel "assets/Models/Platform/ball_blue.obj"
   let playerLocalBounds = getLocalBounds "assets/Models/Platform/ball_blue.obj"
   let playerRadius = (playerLocalBounds.Max.Y - playerLocalBounds.Min.Y) * 0.5f
-  let playerCenterOffset = (playerLocalBounds.Min + playerLocalBounds.Max) * 0.5f
+
+  let playerCenterOffset =
+    (playerLocalBounds.Min + playerLocalBounds.Max) * 0.5f
 
   let platforms, torches = generateLevel getLocalBounds
   let phongShader = loadPhong3DShader()
@@ -495,9 +502,7 @@ let init (ctx: GameContext) =
   ModelHelper.setMaterialShader playerModel phongShader
 
   let uniqueModelPaths =
-    platforms
-    |> List.map (fun p -> p.ModelPath)
-    |> List.distinct
+    platforms |> List.map(fun p -> p.ModelPath) |> List.distinct
 
   for path in uniqueModelPaths do
     let m = getModel path
@@ -506,7 +511,8 @@ let init (ctx: GameContext) =
   // Debug: verify patching worked
   let mutable testMat = NativePtr.read playerModel.Materials
 
-  printfn "DEBUG: Phong shader ID = %d, Player material shader ID = %d"
+  printfn
+    "DEBUG: Phong shader ID = %d, Player material shader ID = %d"
     phongShader.Id
     testMat.Shader.Id
 
@@ -514,25 +520,25 @@ let init (ctx: GameContext) =
   let cameraOffset = Vector3(12.0f, 12.0f, 12.0f)
 
   struct ({
-             PlayerPosition = startPos
-             PlayerVelocity = Vector3.Zero
-             TotalRollX = 0.0f
-             TotalRollZ = 0.0f
-             IsGrounded = false
-             CameraPosition = startPos + cameraOffset
-             CameraTarget = startPos
-             Actions = ActionState.empty
-             InputMap = inputMap
-             Platforms = platforms
-             Torches = torches
-             TotalTime = 0.0f
-             DayNight = DayNight.initial
-             PlayerModel = playerModel
-             PlayerRadius = playerRadius
-             PlayerCenterOffset = playerCenterOffset
-             PhongShader = phongShader
-           },
-           Cmd.none)
+            PlayerPosition = startPos
+            PlayerVelocity = Vector3.Zero
+            TotalRollX = 0.0f
+            TotalRollZ = 0.0f
+            IsGrounded = false
+            CameraPosition = startPos + cameraOffset
+            CameraTarget = startPos
+            Actions = ActionState.empty
+            InputMap = inputMap
+            Platforms = platforms
+            Torches = torches
+            TotalTime = 0.0f
+            DayNight = DayNight.initial
+            PlayerModel = playerModel
+            PlayerRadius = playerRadius
+            PlayerCenterOffset = playerCenterOffset
+            PhongShader = phongShader
+          },
+          Cmd.none)
 
 // -------------------------------------------------------------
 // Update
@@ -540,8 +546,7 @@ let init (ctx: GameContext) =
 
 let update (msg: Msg) (state: GameState) =
   match msg with
-  | InputMapped actions ->
-    struct ({ state with Actions = actions }, Cmd.none)
+  | InputMapped actions -> struct ({ state with Actions = actions }, Cmd.none)
   | Tick gameTime ->
     let dt = float32 gameTime.ElapsedGameTime.TotalSeconds
     let actions = Keyboard.poll state.InputMap state.Actions
@@ -554,15 +559,11 @@ let update (msg: Msg) (state: GameState) =
         state.PlayerVelocity
 
     // Gravity
-    let velocity =
-      Vector3(velocity.X, velocity.Y + gravity * dt, velocity.Z)
+    let velocity = Vector3(velocity.X, velocity.Y + gravity * dt, velocity.Z)
 
     // Camera-relative movement
     let moveDir =
-      computeCameraRelativeMove
-        actions
-        state.CameraPosition
-        state.CameraTarget
+      computeCameraRelativeMove actions state.CameraPosition state.CameraTarget
 
     let velocity = applyMovement dt moveDir velocity
 
@@ -572,7 +573,12 @@ let update (msg: Msg) (state: GameState) =
 
     // Resolve collision
     let struct (finalPos, finalVel, grounded) =
-      resolveCollision prevPos newPos velocity state.PlayerRadius state.Platforms
+      resolveCollision
+        prevPos
+        newPos
+        velocity
+        state.PlayerRadius
+        state.Platforms
 
     // Fall limit / respawn
     let mutable finalPos = finalPos
@@ -589,7 +595,9 @@ let update (msg: Msg) (state: GameState) =
     let targetCamTarget = finalPos
     let lerpFactor = 1.0f - MathF.Exp(-dt * 5.0f)
     let newCamPos = Vector3.Lerp(state.CameraPosition, targetCamPos, lerpFactor)
-    let newCamTarget = Vector3.Lerp(state.CameraTarget, targetCamTarget, lerpFactor)
+
+    let newCamTarget =
+      Vector3.Lerp(state.CameraTarget, targetCamTarget, lerpFactor)
 
     // Ball roll
     let totalRollX = state.TotalRollX + finalVel.Z * dt * rollSpeed
@@ -599,19 +607,19 @@ let update (msg: Msg) (state: GameState) =
     let dayNight = DayNight.update dt state.DayNight
 
     struct ({
-               state with
-                   PlayerPosition = finalPos
-                   PlayerVelocity = finalVel
-                   TotalRollX = totalRollX
-                   TotalRollZ = totalRollZ
-                   IsGrounded = grounded
-                   CameraPosition = newCamPos
-                   CameraTarget = newCamTarget
-                   Actions = actions
-                   TotalTime = state.TotalTime + dt
-                   DayNight = dayNight
-             },
-             Cmd.none)
+              state with
+                  PlayerPosition = finalPos
+                  PlayerVelocity = finalVel
+                  TotalRollX = totalRollX
+                  TotalRollZ = totalRollZ
+                  IsGrounded = grounded
+                  CameraPosition = newCamPos
+                  CameraTarget = newCamTarget
+                  Actions = actions
+                  TotalTime = state.TotalTime + dt
+                  DayNight = dayNight
+            },
+            Cmd.none)
 
 // -------------------------------------------------------------
 // View
@@ -647,11 +655,15 @@ let view (ctx: GameContext) (state: GameState) (buffer: RenderBuffer3D) =
 
   buffer.Add(
     6<RenderLayer3D>,
-    SetAmbient3D { Color = ambientColor; Intensity = ambientIntensity }
+    SetAmbient3D {
+      Color = ambientColor
+      Intensity = ambientIntensity
+    }
   )
 
   // Directional light (sun) — arcs across sky, shadows move
   let sunIntensity = DayNight.getSunIntensity time
+
   if sunIntensity > 0.01f then
     buffer.Add(
       7<RenderLayer3D>,
@@ -664,6 +676,7 @@ let view (ctx: GameContext) (state: GameState) (buffer: RenderBuffer3D) =
 
   // Directional light (moon) — cool blue, much weaker
   let moonIntensity = DayNight.getMoonIntensity time
+
   if moonIntensity > 0.01f then
     buffer.Add(
       7<RenderLayer3D>,
@@ -696,7 +709,10 @@ let view (ctx: GameContext) (state: GameState) (buffer: RenderBuffer3D) =
 
   // Player ball
   let drawPos = state.PlayerPosition - state.PlayerCenterOffset
-  let rollQ = Quaternion.CreateFromYawPitchRoll(0.0f, state.TotalRollX, state.TotalRollZ)
+
+  let rollQ =
+    Quaternion.CreateFromYawPitchRoll(0.0f, state.TotalRollX, state.TotalRollZ)
+
   let axis, angle = quatToAxisAngle rollQ
 
   buffer.Add(

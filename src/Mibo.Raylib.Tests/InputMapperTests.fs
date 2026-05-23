@@ -57,9 +57,7 @@ let tests =
     testCase "ActionState.update handles multiple triggers for same action"
     <| fun _ ->
       let map =
-        emptyMap
-        |> InputMap.key Jump KeyboardKey.Space
-        |> InputMap.mouse Jump 0
+        emptyMap |> InputMap.key Jump KeyboardKey.Space |> InputMap.mouse Jump 0
 
       let state = ActionState.empty
       // Press Space

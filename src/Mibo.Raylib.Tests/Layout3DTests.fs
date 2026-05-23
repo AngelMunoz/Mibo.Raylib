@@ -49,8 +49,7 @@ let tests =
 
       testCase "set out of bounds is ignored"
       <| fun _ ->
-        let grid =
-          CellGrid3D.create 5 5 5 (Vector3(32f, 32f, 32f)) Vector3.Zero
+        let grid = CellGrid3D.create 5 5 5 (Vector3(32f, 32f, 32f)) Vector3.Zero
 
         CellGrid3D.set -1 0 0 1 grid
         CellGrid3D.set 0 -1 0 1 grid
@@ -61,8 +60,7 @@ let tests =
 
       testCase "get out of bounds returns ValueNone"
       <| fun _ ->
-        let grid =
-          CellGrid3D.create 5 5 5 (Vector3(32f, 32f, 32f)) Vector3.Zero
+        let grid = CellGrid3D.create 5 5 5 (Vector3(32f, 32f, 32f)) Vector3.Zero
 
         Expect.equal (CellGrid3D.get -1 0 0 grid) ValueNone "Negative X"
         Expect.equal (CellGrid3D.get 0 -1 0 grid) ValueNone "Negative Y"
@@ -73,17 +71,13 @@ let tests =
 
       testCase "clear removes cell content"
       <| fun _ ->
-        let grid =
-          CellGrid3D.create 5 5 5 (Vector3(32f, 32f, 32f)) Vector3.Zero
+        let grid = CellGrid3D.create 5 5 5 (Vector3(32f, 32f, 32f)) Vector3.Zero
 
         CellGrid3D.set 2 2 2 42 grid
         Expect.equal (CellGrid3D.get 2 2 2 grid) (ValueSome 42) "Should be set"
 
         CellGrid3D.clear 2 2 2 grid
-        Expect.equal
-          (CellGrid3D.get 2 2 2 grid)
-          ValueNone
-          "Should be cleared"
+        Expect.equal (CellGrid3D.get 2 2 2 grid) ValueNone "Should be cleared"
 
       testCase "getWorldPos calculates correct position"
       <| fun _ ->
@@ -103,8 +97,7 @@ let tests =
 
       testCase "iter visits all populated cells"
       <| fun _ ->
-        let grid =
-          CellGrid3D.create 5 5 5 (Vector3(32f, 32f, 32f)) Vector3.Zero
+        let grid = CellGrid3D.create 5 5 5 (Vector3(32f, 32f, 32f)) Vector3.Zero
         CellGrid3D.set 1 1 1 10 grid
         CellGrid3D.set 3 2 4 20 grid
 
@@ -127,14 +120,17 @@ let tests =
       <| fun _ ->
         let grid =
           CellGrid3D.create 10 10 10 (Vector3(32f, 32f, 32f)) Vector3.Zero
+
         for x in 0..9 do
           for y in 0..9 do
             for z in 0..9 do
               CellGrid3D.set x y z (x * 100 + y * 10 + z) grid
 
-        let bounds =
-          { Min = Vector3(64f, 32f, 0f)
-            Max = Vector3(96f, 64f, 32f) }
+        let bounds = {
+          Min = Vector3(64f, 32f, 0f)
+          Max = Vector3(96f, 64f, 32f)
+        }
+
         let visited = ResizeArray<struct (int * int * int * int)>()
 
         grid
@@ -200,8 +196,7 @@ let tests =
           CellGrid3D.create 10 10 10 (Vector3(32f, 32f, 32f)) Vector3.Zero
           |> Layout3D.run(fun section ->
             section
-            |> Layout3D.padding 2 (fun inner ->
-              inner |> Layout3D.set 0 0 0 42))
+            |> Layout3D.padding 2 (fun inner -> inner |> Layout3D.set 0 0 0 42))
 
         Expect.equal
           (CellGrid3D.get 2 2 2 grid)
@@ -423,7 +418,11 @@ let tests =
           CellGrid3D.create 20 20 20 (Vector3(32f, 32f, 32f)) Vector3.Zero
           |> Layout3D.run(Layout3D.sphere 10 10 10 3 true 1)
 
-        Expect.equal (CellGrid3D.get 10 10 10 grid) (ValueSome 1) "Center filled"
+        Expect.equal
+          (CellGrid3D.get 10 10 10 grid)
+          (ValueSome 1)
+          "Center filled"
+
         Expect.equal (CellGrid3D.get 9 10 10 grid) (ValueSome 1) "Near center"
         Expect.equal (CellGrid3D.get 10 9 10 grid) (ValueSome 1) "Near center"
         Expect.equal (CellGrid3D.get 13 10 10 grid) (ValueSome 1) "At radius"
@@ -436,6 +435,7 @@ let tests =
           |> Layout3D.run(Layout3D.sphere 10 10 10 3 false 1)
 
         Expect.equal (CellGrid3D.get 10 10 10 grid) ValueNone "Center empty"
+
         Expect.equal
           (CellGrid3D.get 13 10 10 grid)
           (ValueSome 1)
@@ -941,8 +941,7 @@ let tests =
 
       testCase "render calculates correct world positions"
       <| fun _ ->
-        let grid =
-          CellGrid3D.create 5 5 5 (Vector3(32f, 16f, 8f)) Vector3.Zero
+        let grid = CellGrid3D.create 5 5 5 (Vector3(32f, 16f, 8f)) Vector3.Zero
         CellGrid3D.set 2 1 3 99 grid
 
         let mutable capturedPos = Vector3.Zero
@@ -958,9 +957,11 @@ let tests =
           CellGrid3D.create 10 10 10 (Vector3(32f, 32f, 32f)) Vector3.Zero
           |> Layout3D.run(Layout3D.fill 0 0 0 10 10 10 1)
 
-        let bounds =
-          { Min = Vector3(64f, 64f, 64f)
-            Max = Vector3(96f, 96f, 96f) }
+        let bounds = {
+          Min = Vector3(64f, 64f, 64f)
+          Max = Vector3(96f, 96f, 96f)
+        }
+
         let visited = ResizeArray<Vector3>()
 
         CellGridRenderer3D.renderVolume bounds grid (fun pos _ ->
@@ -970,8 +971,7 @@ let tests =
 
       testCase "renderWithIndices provides coordinates and position"
       <| fun _ ->
-        let grid =
-          CellGrid3D.create 5 5 5 (Vector3(32f, 32f, 32f)) Vector3.Zero
+        let grid = CellGrid3D.create 5 5 5 (Vector3(32f, 32f, 32f)) Vector3.Zero
         CellGrid3D.set 2 3 4 99 grid
 
         let mutable capturedX, capturedY, capturedZ = 0, 0, 0

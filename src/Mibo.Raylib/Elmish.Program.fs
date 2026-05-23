@@ -172,9 +172,7 @@ module Program =
   /// The assets service is automatically created by the runtime. Use
   /// <see cref="M:Mibo.Elmish.Program.withAssetsBasePath"/> to configure a base path.
   /// </remarks>
-  let withAssets
-    (program: Program<'Model, 'Msg>)
-    : Program<'Model, 'Msg> =
+  let withAssets(program: Program<'Model, 'Msg>) : Program<'Model, 'Msg> =
     program
 
   /// <summary>
@@ -192,8 +190,10 @@ module Program =
     (basePath: string)
     (program: Program<'Model, 'Msg>)
     : Program<'Model, 'Msg> =
-    { program with
-        AssetsBasePath = ValueSome basePath }
+    {
+      program with
+          AssetsBasePath = ValueSome basePath
+    }
 
   /// <summary>
   /// Enables the reactive input polling service.
@@ -212,10 +212,10 @@ module Program =
   /// Gamepad.listen GamepadInput ctx
   /// </code>
   /// </example>
-  let withInput
-    (program: Program<'Model, 'Msg>)
-    : Program<'Model, 'Msg> =
-    { program with HasInput = true }
+  let withInput(program: Program<'Model, 'Msg>) : Program<'Model, 'Msg> = {
+    program with
+        HasInput = true
+  }
 
   /// <summary>
   /// Configures the game to register an <see cref="T:Mibo.Input.IInputMapper`1"/> service.

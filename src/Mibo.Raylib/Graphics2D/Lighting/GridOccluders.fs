@@ -37,43 +37,55 @@ module GridOccluders =
             // Bottom edge
             match CellGrid2D.get x (y + 1) grid with
             | ValueNone ->
-              occluders.Add({
-                P1 = Vector2(wx, wy + cellH)
-                P2 = Vector2(wx + cellW, wy + cellH)
-              })
-            | ValueSome neighbor ->
-              if not (isSolid neighbor) then
-                occluders.Add({
+              occluders.Add(
+                {
                   P1 = Vector2(wx, wy + cellH)
                   P2 = Vector2(wx + cellW, wy + cellH)
-                })
+                }
+              )
+            | ValueSome neighbor ->
+              if not(isSolid neighbor) then
+                occluders.Add(
+                  {
+                    P1 = Vector2(wx, wy + cellH)
+                    P2 = Vector2(wx + cellW, wy + cellH)
+                  }
+                )
 
             // Left edge
             match CellGrid2D.get (x - 1) y grid with
             | ValueNone ->
-              occluders.Add({
-                P1 = Vector2(wx, wy)
-                P2 = Vector2(wx, wy + cellH)
-              })
-            | ValueSome neighbor ->
-              if not (isSolid neighbor) then
-                occluders.Add({
+              occluders.Add(
+                {
                   P1 = Vector2(wx, wy)
                   P2 = Vector2(wx, wy + cellH)
-                })
+                }
+              )
+            | ValueSome neighbor ->
+              if not(isSolid neighbor) then
+                occluders.Add(
+                  {
+                    P1 = Vector2(wx, wy)
+                    P2 = Vector2(wx, wy + cellH)
+                  }
+                )
 
             // Right edge
             match CellGrid2D.get (x + 1) y grid with
             | ValueNone ->
-              occluders.Add({
-                P1 = Vector2(wx + cellW, wy)
-                P2 = Vector2(wx + cellW, wy + cellH)
-              })
-            | ValueSome neighbor ->
-              if not (isSolid neighbor) then
-                occluders.Add({
+              occluders.Add(
+                {
                   P1 = Vector2(wx + cellW, wy)
                   P2 = Vector2(wx + cellW, wy + cellH)
-                })
+                }
+              )
+            | ValueSome neighbor ->
+              if not(isSolid neighbor) then
+                occluders.Add(
+                  {
+                    P1 = Vector2(wx + cellW, wy)
+                    P2 = Vector2(wx + cellW, wy + cellH)
+                  }
+                )
 
     occluders.ToArray()

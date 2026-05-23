@@ -41,8 +41,7 @@ let tests =
       let vpSize = Vector2(viewportWidth, viewportHeight)
       let cam = Camera2D.create pos zoom vpSize
 
-      let bounds =
-        Camera2D.viewportBounds cam viewportWidth viewportHeight
+      let bounds = Camera2D.viewportBounds cam viewportWidth viewportHeight
 
       Expect.equal bounds.X -400.0f "Viewport bounds X should be centered"
       Expect.equal bounds.Y -300.0f "Viewport bounds Y should be centered"
@@ -64,15 +63,41 @@ let tests =
       let vpSize = Vector2(viewportWidth, viewportHeight)
       let cam = Camera2D.create pos zoom vpSize
 
-      let bounds =
-        Camera2D.viewportBounds cam viewportWidth viewportHeight
+      let bounds = Camera2D.viewportBounds cam viewportWidth viewportHeight
 
-      Expect.equal bounds.Width 400.0f "Visible width should be halved at 2x zoom"
+      Expect.equal
+        bounds.Width
+        400.0f
+        "Visible width should be halved at 2x zoom"
 
       Expect.equal
         bounds.Height
         300.0f
         "Visible height should be halved at 2x zoom"
+
+    testCase "Camera2D smoothFollow mutates target"
+    <| fun _ ->
+      let pos = Vector2(0.0f, 0.0f)
+      let vpSize = Vector2(viewportWidth, viewportHeight)
+      let mutable cam = Camera2D.create pos 1.0f vpSize
+      Camera2D.smoothFollow &cam (Vector2(100.0f, 50.0f)) 0.5f
+      Expect.equal cam.Target.X 50.0f "Camera target X should lerp halfway"
+      Expect.equal cam.Target.Y 25.0f "Camera target Y should lerp halfway"
+
+    testCase "Camera2D clampTarget enforces bounds"
+    <| fun _ ->
+      let pos = Vector2(0.0f, 0.0f)
+      let vpSize = Vector2(viewportWidth, viewportHeight)
+      let mutable cam = Camera2D.create pos 1.0f vpSize
+      cam.Target <- Vector2(9999.0f, -9999.0f)
+      Camera2D.clampTarget &cam 0.0f 0.0f 100.0f 100.0f
+
+      Expect.equal
+        cam.Target.X
+        100.0f
+        "Camera target X should be clamped to max"
+
+      Expect.equal cam.Target.Y 0.0f "Camera target Y should be clamped to min"
 
     testCase "Camera3D screenPointToRay generates correct ray at center"
     <| fun _ ->
@@ -81,10 +106,10 @@ let tests =
       let up = Vector3.UnitY
       let fov = MathF.PI / 4.0f
       let aspect = viewportWidth / viewportHeight
-      let cam =
-        Camera3D.lookAt position target up fov aspect 0.1f 100.0f
+      let cam = Camera3D.lookAt position target up fov aspect 0.1f 100.0f
 
       let screenCenter = Vector2(viewportWidth * 0.5f, viewportHeight * 0.5f)
+
       let ray =
         Camera3D.screenPointToRay cam screenCenter viewportWidth viewportHeight
 

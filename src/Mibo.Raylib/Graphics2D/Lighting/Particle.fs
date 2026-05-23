@@ -38,6 +38,7 @@ type ParticleCommand
   ) =
   interface IRenderCommand2D with
     member _.Layer = cmdLayer
+
     member _.Render ctx =
       let tex = texture
       let ps = particles
@@ -82,13 +83,20 @@ type ParticleCommand
           let b = p.Color.B
           let a = p.Color.A
 
-          Rlgl.Color4ub(r, g, b, a); Rlgl.TexCoord2f(u0, v0); Rlgl.Vertex2f(tlX, tlY)
-          Rlgl.Color4ub(r, g, b, a); Rlgl.TexCoord2f(u1, v0); Rlgl.Vertex2f(trX, trY)
-          Rlgl.Color4ub(r, g, b, a); Rlgl.TexCoord2f(u1, v1); Rlgl.Vertex2f(brX, brY)
-          Rlgl.Color4ub(r, g, b, a); Rlgl.TexCoord2f(u0, v1); Rlgl.Vertex2f(blX, blY)
+          Rlgl.Color4ub(r, g, b, a)
+          Rlgl.TexCoord2f(u0, v0)
+          Rlgl.Vertex2f(tlX, tlY)
+          Rlgl.Color4ub(r, g, b, a)
+          Rlgl.TexCoord2f(u1, v0)
+          Rlgl.Vertex2f(trX, trY)
+          Rlgl.Color4ub(r, g, b, a)
+          Rlgl.TexCoord2f(u1, v1)
+          Rlgl.Vertex2f(brX, brY)
+          Rlgl.Color4ub(r, g, b, a)
+          Rlgl.TexCoord2f(u0, v1)
+          Rlgl.Vertex2f(blX, blY)
 
-        Rlgl.End()
-      )
+        Rlgl.End())
 
 /// <summary>Factory functions for particle render commands.</summary>
 module ParticleCommands =
@@ -152,6 +160,7 @@ module ParticleSimulation =
     for readIdx = 0 to count - 1 do
       let p = particles[readIdx]
       let newAlpha = MathF.Max(0.0f, float32 p.Color.A - fadeAmount)
+
       if newAlpha > 0.0f then
         let newColor = Color(p.Color.R, p.Color.G, p.Color.B, byte newAlpha)
         particles[writeIdx] <- { p with Color = newColor }

@@ -54,10 +54,9 @@ type IAssets =
 /// Implementation of <see cref="T:Mibo.Elmish.IAssets"/> with dictionary-based caches.
 /// </summary>
 /// <param name="baseAssetPath">Optional base path prepended to all relative asset paths.</param>
-type AssetsService
-  (baseAssetPath: string voption) =
+type AssetsService(baseAssetPath: string voption) =
 
-  let resolvePath (path: string) =
+  let resolvePath(path: string) =
     match baseAssetPath with
     | ValueSome bp -> Path.Combine(bp, path)
     | ValueNone -> path

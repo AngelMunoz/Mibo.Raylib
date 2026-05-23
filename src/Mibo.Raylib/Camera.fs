@@ -1,6 +1,8 @@
 namespace Mibo.Elmish
 
+open System
 open System.Numerics
+open Raylib_cs
 
 /// <summary>
 /// A universal Camera definition containing View and Projection matrices.
@@ -42,81 +44,75 @@ type Ray = {
 /// </remarks>
 module Camera2D =
 
-  /// <summary>Calculates the visible world bounds for the camera.</summary>
-  /// <param name="camera">The camera to compute bounds for.</param>
-  /// <param name="width">Viewport width in pixels.</param>
-  /// <param name="height">Viewport height in pixels.</param>
-  /// <remarks>Useful for 2D culling (QuadTree queries, sprite visibility checks). Returns a <c>Raylib_cs.Rectangle</c> in world coordinates covering the visible area.</remarks>
-  let viewportBounds (camera: Camera) (width: float32) (height: float32) : Raylib_cs.Rectangle =
-    let mutable inverseView = Matrix4x4()
-    Matrix4x4.Invert(camera.View, &inverseView) |> ignore
-    let tl = Vector2.Transform(Vector2.Zero, inverseView)
-    let br = Vector2.Transform(Vector2(width, height), inverseView)
-
-    // Handle rotation/scale making tl/br not min/max
-    let minX = min tl.X br.X
-    let maxX = max tl.X br.X
-    let minY = min tl.Y br.Y
-    let maxY = max tl.Y br.Y
-
-    Raylib_cs.Rectangle(minX, minY, maxX - minX, maxY - minY)
-
-  /// <summary>
-  /// Creates a standard 2D Camera centered on the position.
-  /// </summary>
-  /// <param name="position">Center of the camera in world units</param>
-  /// <param name="zoom">Scale factor (1.0 = pixel perfect, 2.0 = 2x zoom in)</param>
-  /// <param name="viewportSize">The size of the screen/viewport in pixels as Vector2(width, height)</param>
-  /// <example>
-  /// <code>
-  /// let camera = Camera2D.create playerPosition 1.0f (Vector2(800f, 600f))
-  /// </code>
-  /// </example>
-  let create
-    (position: Vector2)
-    (zoom: float32)
-    (viewportSize: Vector2)
-    : Camera =
-    let vpW = viewportSize.X
-    let vpH = viewportSize.Y
-
-    // Transform: Translate to origin (0,0) -> Scale -> Translate to Screen Center
-    let view =
-      Matrix4x4.CreateTranslation(-position.X, -position.Y, 0.0f)
-      * Matrix4x4.CreateScale(zoom, zoom, 1.0f)
-      * Matrix4x4.CreateTranslation(vpW * 0.5f, vpH * 0.5f, 0.0f)
-
-    let projection =
-      Matrix4x4.CreateOrthographicOffCenter(0.0f, vpW, vpH, 0.0f, 0.0f, 1.0f)
-
-    { View = view; Projection = projection }
-
-  /// Converts a screen position (pixels) to world position using the camera.
-  ///
-  /// Useful for mouse picking in 2D games.
-  let screenToWorld (camera: Camera) (screenPos: Vector2) : Vector2 =
-    let mutable invertedView = Matrix4x4()
-    Matrix4x4.Invert(camera.View, &invertedView) |> ignore
-    Vector2.Transform(screenPos, invertedView)
-
-  /// Converts a world position to screen position (pixels).
-  let worldToScreen (camera: Camera) (worldPos: Vector2) : Vector2 =
-    Vector2.Transform(worldPos, camera.View)
-
-  /// <summary>
-  /// Calculates visible world bounds from a raylib Camera2D.
-  /// </summary>
-  /// <remarks>
-  /// Useful when you are using raylib's built-in <c>Camera2D</c> directly
-  /// (e.g. via <c>Draw.beginCamera</c>) and need the viewport rectangle
-  /// for 2D culling with <see cref="M:Mibo.Elmish.Culling.isVisible2D"/>.
-  /// </remarks>
-  let viewportBoundsFromRaylib (camera: Raylib_cs.Camera2D) (width: float32) (height: float32) : Raylib_cs.Rectangle =
+  /// <summary>Calculates the visible world bounds for a raylib Camera2D.</summary>
+  let viewportBounds
+    (camera: Raylib_cs.Camera2D)
+    (width: float32)
+    (height: float32)
+    : Raylib_cs.Rectangle =
     let visibleW = width / camera.Zoom
     let visibleH = height / camera.Zoom
     let halfW = visibleW * 0.5f
     let halfH = visibleH * 0.5f
-    Raylib_cs.Rectangle(camera.Target.X - halfW, camera.Target.Y - halfH, visibleW, visibleH)
+
+    Raylib_cs.Rectangle(
+      camera.Target.X - halfW,
+      camera.Target.Y - halfH,
+      visibleW,
+      visibleH
+    )
+
+  /// <summary>
+  /// Creates a raylib <c>Camera2D</c> centered on the given position.
+  /// </summary>
+  let create
+    (position: Vector2)
+    (zoom: float32)
+    (viewportSize: Vector2)
+    : Raylib_cs.Camera2D =
+    Raylib_cs.Camera2D(
+      Vector2(viewportSize.X * 0.5f, viewportSize.Y * 0.5f),
+      position,
+      0.0f,
+      zoom
+    )
+
+  /// <summary>Converts a screen position (pixels) to world position.</summary>
+  let screenToWorld
+    (camera: Raylib_cs.Camera2D)
+    (screenPos: Vector2)
+    : Vector2 =
+    Raylib.GetScreenToWorld2D(screenPos, camera)
+
+  /// <summary>Converts a world position to screen position (pixels).</summary>
+  let worldToScreen (camera: Raylib_cs.Camera2D) (worldPos: Vector2) : Vector2 =
+    Raylib.GetWorldToScreen2D(worldPos, camera)
+
+  /// <summary>
+  /// Smoothly interpolate the camera target toward a world position.
+  /// </summary>
+  /// <param name="camera">Passed by reference so mutations are visible to the caller.</param>
+  let inline smoothFollow
+    (camera: byref<Raylib_cs.Camera2D>)
+    (target: Vector2)
+    (speed: float32)
+    =
+    camera.Target.X <- camera.Target.X + (target.X - camera.Target.X) * speed
+    camera.Target.Y <- camera.Target.Y + (target.Y - camera.Target.Y) * speed
+
+  /// <summary>
+  /// Clamp the camera target to a world bounds rectangle.
+  /// </summary>
+  /// <param name="camera">Passed by reference so mutations are visible to the caller.</param>
+  let inline clampTarget
+    (camera: byref<Raylib_cs.Camera2D>)
+    (minX: float32)
+    (minY: float32)
+    (maxX: float32)
+    (maxY: float32)
+    =
+    camera.Target.X <- MathF.Max(minX, MathF.Min(camera.Target.X, maxX))
+    camera.Target.Y <- MathF.Max(minY, MathF.Min(camera.Target.Y, maxY))
 
 
 /// <summary>
@@ -221,6 +217,7 @@ module Camera3D =
     (viewportHeight: float32)
     : Ray =
     let mutable invertedViewProj = Matrix4x4()
+
     Matrix4x4.Invert(camera.View * camera.Projection, &invertedViewProj)
     |> ignore
 
@@ -233,10 +230,12 @@ module Camera3D =
     let nearWorld = Vector4.Transform(nearClip, invertedViewProj)
     let farWorld = Vector4.Transform(farClip, invertedViewProj)
 
-    let nearPos =
-      Vector3(nearWorld.X, nearWorld.Y, nearWorld.Z) / nearWorld.W
-    let farPos =
-      Vector3(farWorld.X, farWorld.Y, farWorld.Z) / farWorld.W
+    let nearPos = Vector3(nearWorld.X, nearWorld.Y, nearWorld.Z) / nearWorld.W
+    let farPos = Vector3(farWorld.X, farWorld.Y, farWorld.Z) / farWorld.W
 
     let direction = Vector3.Normalize(farPos - nearPos)
-    { Position = nearPos; Direction = direction }
+
+    {
+      Position = nearPos
+      Direction = direction
+    }

@@ -69,14 +69,13 @@ module CellGrid2D =
     : unit =
     let startX = max 0 ((left - int grid.Origin.X) / int grid.CellSize.X)
     let startY = max 0 ((top - int grid.Origin.Y) / int grid.CellSize.Y)
+
     let endX =
-      min
-        (grid.Width - 1)
-        ((right - int grid.Origin.X) / int grid.CellSize.X)
+      min (grid.Width - 1) ((right - int grid.Origin.X) / int grid.CellSize.X)
+
     let endY =
-      min
-        (grid.Height - 1)
-        ((bottom - int grid.Origin.Y) / int grid.CellSize.Y)
+      min (grid.Height - 1) ((bottom - int grid.Origin.Y) / int grid.CellSize.Y)
+
     let w = grid.Width
 
     for y in startY..endY do
