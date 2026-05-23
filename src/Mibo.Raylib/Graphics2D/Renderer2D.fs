@@ -5,6 +5,16 @@ open System.Numerics
 open Raylib_cs
 open Mibo.Elmish
 
+/// <summary>Configuration for a single-pass tint post-processing effect. Used by the legacy 3D renderer.</summary>
+type PostProcessConfig = {
+  /// <summary>Shader applied to the scene render texture.</summary>
+  Shader: Shader
+  /// <summary>Color tint mixed with the scene.</summary>
+  TintColor: Color
+  /// <summary>Blend amount between the scene and the tint color. 0 = scene only, 1 = tint only.</summary>
+  TintAmount: float32
+}
+
 /// <summary>A single post-processing pass applied to the rendered scene.</summary>
 [<Struct>]
 type PostProcessPass = {
@@ -92,18 +102,13 @@ type Renderer2D<'Model>
   let internalRenderContext =
     { new IRenderContext with
         member _.GameContext = _ctx
+        member _.CurrentCamera = _camera
 
         member _.BeginCamera(c) =
-          match _camera with
-          | ValueSome cur when cur.Target = c.Target && cur.Zoom = c.Zoom -> ()
-          | _ ->
-            Rlgl.DrawRenderBatchActive()
-
-            if _camera.IsSome then
-              Raylib.EndMode2D()
-
-            Raylib.BeginMode2D(c)
-            _camera <- ValueSome c
+          Rlgl.DrawRenderBatchActive()
+          if _camera.IsSome then Raylib.EndMode2D()
+          Raylib.BeginMode2D(c)
+          _camera <- ValueSome c
 
         member _.EndCamera() =
           if _camera.IsSome then

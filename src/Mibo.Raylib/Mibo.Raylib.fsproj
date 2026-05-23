@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFrameworks>net10.0;net8.0</TargetFrameworks>
     <OutputType>Library</OutputType>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -26,7 +26,6 @@
     <Compile Include="Elmish.Program.fs" />
     <Compile Include="Elmish.Runtime.fs" />
     <Compile Include="DefaultShaders.fs" />
-    <Compile Include="Graphics2D.fs" />
     <Compile Include="Graphics2D/RenderContext.fs" />
     <Compile Include="Graphics2D/RenderCommand.fs" />
     <Compile Include="Graphics2D/RenderBuffer.fs" />
@@ -34,6 +33,11 @@
     <Compile Include="Graphics2D/RenderTargetPool.fs" />
     <Compile Include="Graphics2D/Renderer2D.fs" />
     <Compile Include="Graphics2D/Draw.fs" />
+    <Compile Include="Graphics2D/Lighting/LightTypes.fs" />
+    <Compile Include="Graphics2D/Lighting/LitShader.fs" />
+    <Compile Include="Graphics2D/Lighting/LightContext.fs" />
+    <Compile Include="Graphics2D/Lighting/LightCommands.fs" />
+    <Compile Include="Graphics2D/Lighting/Particle.fs" />
     <Compile Include="Animation.fs" />
     <Compile Include="Graphics3D.fs" />
     <Compile Include="Layout3D/Grid3D.fs" />

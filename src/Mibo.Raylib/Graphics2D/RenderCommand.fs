@@ -1,7 +1,7 @@
 namespace Mibo.Elmish.Graphics2D
 
 /// <summary>
-/// A single 2D render command executed by the <see cref="T:Mibo.Elmish.Graphics2D.LegacyBatch2DRenderer`1"/>.
+/// A single 2D render command executed by the <see cref="T:Mibo.Elmish.Graphics2D.Renderer2D`1"/>.
 /// </summary>
 /// <remarks>
 /// Implement this interface to create custom draw commands, lighting passes,

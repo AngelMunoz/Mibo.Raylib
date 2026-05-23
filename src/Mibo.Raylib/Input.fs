@@ -331,7 +331,10 @@ module Input =
     let prevConnected = Array.create 4 false
 
     // Enable requested gestures (bitwise OR of flags)
-    let gestureFlags = gestures |> List.reduce(fun acc g -> acc ||| g)
+    let gestureFlags =
+      match gestures with
+      | [] -> Gesture.None
+      | _ -> gestures |> List.reduce(fun acc g -> acc ||| g)
 
     if gestures.Length > 0 then
       Raylib.SetGesturesEnabled(gestureFlags)

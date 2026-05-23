@@ -14,7 +14,7 @@ open Mibo.Input
 /// <code>
 /// Program.mkProgram init update
 /// |&gt; Program.withSubscription subscribe
-/// |&gt; Program.withRenderer (fun () -&gt; LegacyBatch2DRenderer.create view)
+/// |&gt; Program.withRenderer (fun () -&gt; Renderer2D.create view)
 /// |&gt; Program.withTick Tick
 /// |&gt; Program.withAssets
 /// |&gt; Program.withInput
@@ -84,7 +84,7 @@ module Program =
   /// </remarks>
   /// <example>
   /// <code>
-  /// program |&gt; Program.withRenderer (fun () -&gt; LegacyBatch2DRenderer.create view)
+  /// program |&gt; Program.withRenderer (fun () -&gt; Renderer2D.create view)
   /// </code>
   /// </example>
   let withRenderer

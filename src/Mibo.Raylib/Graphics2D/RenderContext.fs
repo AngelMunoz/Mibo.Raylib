@@ -4,19 +4,27 @@ open System.Numerics
 open Raylib_cs
 open Mibo.Elmish
 
+/// <summary>Unit of measure for 2D render layer ordering.</summary>
+/// <remarks>Lower values draw first (background), higher values draw last (foreground).</remarks>
+[<Measure>]
+type RenderLayer
+
 /// <summary>
 /// Provides controlled access to raylib's 2D rendering state for render commands.
 /// Tracks active camera and shader modes to prevent conflicting Begin/End calls,
 /// and provides a safe escape hatch for direct rlgl operations.
 /// </summary>
 /// <remarks>
-/// The implementation is internal to <see cref="T:Mibo.Elmish.Graphics2D.LegacyBatch2DRenderer`1"/>.
+/// The implementation is internal to <see cref="T:Mibo.Elmish.Graphics2D.Renderer2D`1"/>.
 /// Commands receive this context via <see cref="M:Mibo.Elmish.Graphics2D.IRenderCommand2D.Render"/>.
 /// </remarks>
 type IRenderContext =
 
   /// <summary>The game context for the current frame.</summary>
   abstract GameContext: GameContext
+
+  /// <summary>The currently active 2D camera, if any.</summary>
+  abstract CurrentCamera: Camera2D voption
 
   /// <summary>
   /// Begins a 2D camera transform. If a different camera is already active,

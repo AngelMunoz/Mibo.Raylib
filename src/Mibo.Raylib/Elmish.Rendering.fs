@@ -12,23 +12,20 @@ open System.Collections.Generic
 /// the Elmish architecture. Use <see cref="M:Mibo.Elmish.GameContext.getService"/> or the typed accessor
 /// conveniences to retrieve registered services.
 /// </remarks>
-type GameContext = {
-  /// Current window width in pixels.
-  WindowWidth: int
-  /// Current window height in pixels.
-  WindowHeight: int
+type GameContext internal (width: int, height: int) =
+  let services = Dictionary<Type, obj>()
 
-} with
+  member val internal Services = services
 
-  /// Internal service registry. Use <see cref="M:Mibo.Elmish.GameContext.getService"/> for type-safe access.
-  member internal _.Services: Dictionary<Type, obj> = Dictionary()
+  /// <summary>Current window width in pixels.</summary>
+  member _.WindowWidth = width
+
+  /// <summary>Current window height in pixels.</summary>
+  member _.WindowHeight = height
 
 /// Functions for accessing and managing services in the GameContext.
 module GameContext =
-  let internal create(width: int, height: int) = {
-    WindowWidth = width
-    WindowHeight = height
-  }
+  let internal create(width: int, height: int) = GameContext(width, height)
 
   let internal register<'T> (svc: 'T) (ctx: GameContext) =
     ctx.Services[typeof<'T>] <- box svc

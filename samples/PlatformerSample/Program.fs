@@ -5,9 +5,8 @@ open System.Numerics
 open Raylib_cs
 open Mibo.Elmish
 open Mibo.Elmish.Graphics2D
-
-[<Measure>]
-type EntityId
+open Mibo.Elmish.Graphics2D.Lighting
+open Mibo.Input
 
 // -------------------------------------------------------------
 // Game Actions
@@ -54,7 +53,7 @@ module DayNight =
     DayDuration = 60.0f
   }
 
-  let update dt state =
+  let inline update dt state =
     let hoursPerSecond = 24.0f / state.DayDuration
 
     {
@@ -62,14 +61,15 @@ module DayNight =
           TimeOfDay = (state.TimeOfDay + dt * hoursPerSecond) % 24.0f
     }
 
-  let lerpColor (a: Color) (b: Color) (t: float32) : Color =
-    let clamp01 x = Math.Clamp(x, 0.0f, 1.0f)
-    let t = clamp01 t
-    let r = byte(int(float32 a.R + t * (float32 b.R - float32 a.R)))
-    let g = byte(int(float32 a.G + t * (float32 b.G - float32 a.G)))
-    let bl = byte(int(float32 a.B + t * (float32 b.B - float32 a.B)))
-    let al = byte(int(float32 a.A + t * (float32 b.A - float32 a.A)))
-    Color(r, g, bl, al)
+  let inline lerpColor (a: Color) (b: Color) (t: float32) =
+    let t = Math.Clamp(t, 0.0f, 1.0f)
+
+    Color(
+      byte(float32 a.R + t * (float32 b.R - float32 a.R)),
+      byte(float32 a.G + t * (float32 b.G - float32 a.G)),
+      byte(float32 a.B + t * (float32 b.B - float32 a.B)),
+      255uy
+    )
 
   let getSkyColors time : Color * Color =
     let midnightTop = Color(10uy, 10uy, 30uy)
@@ -104,10 +104,13 @@ module DayNight =
       |> float32
 
     let intensity = MathF.Max(avg / 255.0f, 0.12f)
-    let r = byte(int(intensity * 255.0f))
-    let g = byte(int(intensity * 245.0f))
-    let b = byte(int(intensity * 230.0f))
-    Color(r, g, b, 255uy)
+
+    Color(
+      byte(intensity * 255.0f),
+      byte(intensity * 245.0f),
+      byte(intensity * 230.0f),
+      255uy
+    )
 
   let getSunIntensity time : float32 =
     if time < 6.0f || time > 18.0f then 0.0f
@@ -121,6 +124,20 @@ module DayNight =
     elif time < 16.0f then 0.0f
     elif time < 18.0f then (time - 16.0f) / 2.0f
     else 1.0f
+
+  let worldCenterX = (groundLevel / tileSize) * tileSize * 0.5f * 3.0f // ~2500, midpoint of generated terrain
+
+  let orbitalPositions (centerX: float32) (state: State) =
+    let centerY = groundLevel - 200.0f
+    let radiusX = 500.0f
+    let radiusY = 200.0f
+    let sunAngle = (state.TimeOfDay - 18.0f) / 24.0f * MathF.PI * 2.0f
+    let moonAngle = sunAngle + MathF.PI
+    let sunX = centerX + radiusX * MathF.Cos(sunAngle)
+    let sunY = centerY + radiusY * MathF.Sin(sunAngle)
+    let moonX = centerX + radiusX * MathF.Cos(moonAngle)
+    let moonY = centerY + radiusY * MathF.Sin(moonAngle)
+    Vector2(sunX, sunY), Vector2(moonX, moonY)
 
 // -------------------------------------------------------------
 // Terrain
@@ -150,19 +167,19 @@ let generateTerrain
     let rect = Raylib_cs.Rectangle(x, py, segmentLength, tileSize)
     platforms <- { Bounds = rect } :: platforms
 
-    // Top edge occluder
     occluders <-
       {
         P1 = Vector2(x, py)
         P2 = Vector2(x + segmentLength, py)
+
       }
       :: occluders
 
-    // Left and right side occluders (for sideways shadows)
     occluders <-
       {
         P1 = Vector2(x, py)
         P2 = Vector2(x, py + tileSize)
+
       }
       :: occluders
 
@@ -170,10 +187,10 @@ let generateTerrain
       {
         P1 = Vector2(x + segmentLength, py)
         P2 = Vector2(x + segmentLength, py + tileSize)
+
       }
       :: occluders
 
-    // Add torches every few tiles
     let torchCount = segmentLength / tileSize / 3.0f |> int
 
     for i = 1 to torchCount do
@@ -201,11 +218,11 @@ let generateTerrain
       }
       :: platforms
 
-    // Top, bottom, left, right edges for elevated platforms
     occluders <-
       {
         P1 = Vector2(px, py)
         P2 = Vector2(px + pw, py)
+
       }
       :: occluders
 
@@ -213,6 +230,7 @@ let generateTerrain
       {
         P1 = Vector2(px, py + tileSize)
         P2 = Vector2(px + pw, py + tileSize)
+
       }
       :: occluders
 
@@ -220,6 +238,7 @@ let generateTerrain
       {
         P1 = Vector2(px, py)
         P2 = Vector2(px, py + tileSize)
+
       }
       :: occluders
 
@@ -227,10 +246,10 @@ let generateTerrain
       {
         P1 = Vector2(px + pw, py)
         P2 = Vector2(px + pw, py + tileSize)
+
       }
       :: occluders
 
-    // Elevated platform torch
     if rng.NextDouble() > 0.5 then
       torches <-
         {
@@ -270,6 +289,9 @@ type Model = {
   Occluders: Occluder2D list
   Seed: int
   DayNight: DayNight.State
+  Lighting: LightContext2D
+  Particles: Particle2D[]
+  ParticleCount: int
 }
 
 // -------------------------------------------------------------
@@ -284,10 +306,10 @@ type Msg =
 // Helpers
 // -------------------------------------------------------------
 
-let r (x: int) (y: int) (w: int) (h: int) : Raylib_cs.Rectangle =
+let inline r (x: int) (y: int) (w: int) (h: int) =
   Raylib_cs.Rectangle(float32 x, float32 y, float32 w, float32 h)
 
-let getAnimationState (velocity: Vector2) (isGrounded: bool) : AnimationState =
+let getAnimationState (velocity: Vector2) (isGrounded: bool) =
   if not isGrounded then
     if velocity.Y > 0.0f then Fall else Jump
   elif abs velocity.X > 1.0f then
@@ -295,10 +317,7 @@ let getAnimationState (velocity: Vector2) (isGrounded: bool) : AnimationState =
   else
     Idle
 
-let getPlayerSrcRect
-  (totalTime: float32)
-  (state: AnimationState)
-  : Raylib_cs.Rectangle =
+let getPlayerSrcRect (totalTime: float32) (state: AnimationState) =
   match state with
   | Idle -> r 645 0 128 128
   | Walk ->
@@ -311,7 +330,7 @@ let getPlayerSrcRect
 // Collision
 // -------------------------------------------------------------
 
-let playerBounds(pos: Vector2) : Raylib_cs.Rectangle =
+let playerBounds(pos: Vector2) =
   Raylib_cs.Rectangle(pos.X, pos.Y, playerWidth, playerHeight)
 
 let resolvePlatformCollision
@@ -320,18 +339,14 @@ let resolvePlatformCollision
   (velocity: Vector2)
   (platforms: Platform list)
   : struct (Vector2 * Vector2 * bool) =
-
   let mutable pos = newPos
   let mutable vel = velocity
   let mutable grounded = false
 
-  let prevBounds = playerBounds prevPos
-  let newBounds = playerBounds pos
-
   for platform in platforms do
     let pb = platform.Bounds
 
-    if Raylib.CheckCollisionRecs(newBounds, pb).AsBool() then
+    if Raylib.CheckCollisionRecs(playerBounds pos, pb).AsBool() then
       let prevFeetY = prevPos.Y + playerHeight
       let currFeetY = pos.Y + playerHeight
       let platformTop = pb.Y
@@ -362,21 +377,22 @@ let resolvePlatformCollision
 // -------------------------------------------------------------
 
 let init(ctx: GameContext) =
+  let assets = GameContext.getService<IAssets> ctx
+
   let playerTex =
-    ctx.Assets.Texture(
+    assets.Texture(
       "assets/kenney_platformer/Spritesheets/spritesheet-characters-default.png"
     )
 
   let tileTex =
-    ctx.Assets.Texture(
+    assets.Texture(
       "assets/kenney_platformer/Spritesheets/spritesheet-tiles-default.png"
     )
 
-  let font = ctx.Assets.Font("assets/Fonts/monogram.ttf")
-  let jumpSound = ctx.Assets.Sound("assets/sfx_jump.ogg")
+  let font = assets.Font("assets/Fonts/monogram.ttf")
+  let jumpSound = assets.Sound("assets/sfx_jump.ogg")
 
   let shadowImg = Raylib.GenImageColor(1, 1, Color(0uy, 0uy, 0uy, 200uy))
-
   let shadowTex = Raylib.LoadTextureFromImage(shadowImg)
   Raylib.UnloadImage(shadowImg)
 
@@ -389,7 +405,7 @@ let init(ctx: GameContext) =
     |> InputMap.key GameAction.Jump KeyboardKey.Space
     |> InputMap.key Respawn KeyboardKey.R
 
-  let assets = {
+  let assetsRec = {
     PlayerTexture = playerTex
     TileTexture = tileTex
     ShadowTexture = shadowTex
@@ -401,6 +417,9 @@ let init(ctx: GameContext) =
   let platforms, torches, occluders = generateTerrain seed
   let spawnY = groundSurface - playerHeight
 
+  let lighting =
+    new LightContext2D(softness = 0.05f, maxShadowDistance = 2000.0f)
+
   struct ({
             PlayerPosition = Vector2(200.0f, spawnY)
             PlayerVelocity = Vector2.Zero
@@ -409,7 +428,7 @@ let init(ctx: GameContext) =
             CameraX = 0.0f
             Actions = ActionState.empty
             InputMap = inputMap
-            Assets = assets
+            Assets = assetsRec
             TotalTime = 0.0f
             AnimationState = Idle
             Platforms = platforms
@@ -417,6 +436,9 @@ let init(ctx: GameContext) =
             Occluders = occluders
             Seed = seed
             DayNight = DayNight.initial
+            Lighting = lighting
+            Particles = Array.zeroCreate 512
+            ParticleCount = 0
           },
           Cmd.none)
 
@@ -429,20 +451,15 @@ let update (msg: Msg) (model: Model) =
   | InputMapped actions -> struct ({ model with Actions = actions }, Cmd.none)
   | Tick gameTime ->
     let dt = float32 gameTime.ElapsedGameTime.TotalSeconds
+    let actions = model.Actions
 
-    // -- Input polling --
-    let actions = Keyboard.poll model.InputMap model.Actions
-
-    // -- Horizontal movement --
     let moveDir =
       if actions.Held.Contains(MoveLeft) then -1.0f
       elif actions.Held.Contains(MoveRight) then 1.0f
       else 0.0f
 
-    // -- Jump --
     let canJump = model.IsGrounded
     let jumpPressed = actions.Started.Contains(GameAction.Jump)
-
     let mutable playedJumpSound = false
 
     let velocityY =
@@ -455,15 +472,12 @@ let update (msg: Msg) (model: Model) =
     let velocityX = moveDir * moveSpeed
     let velocity = Vector2(velocityX, velocityY)
 
-    // -- Integrate position --
     let prevPos = model.PlayerPosition
     let newPos = prevPos + velocity * dt
 
-    // -- Platform collision --
     let struct (finalPos, finalVel, isGrounded) =
       resolvePlatformCollision prevPos newPos velocity model.Platforms
 
-    // -- Fall off world --
     let mutable finalPos = finalPos
     let mutable finalVel = finalVel
     let mutable isGrounded = isGrounded
@@ -473,34 +487,47 @@ let update (msg: Msg) (model: Model) =
       finalVel <- Vector2.Zero
       isGrounded <- true
 
-    // -- Respawn --
     if actions.Started.Contains(Respawn) then
       finalPos <- Vector2(200.0f, groundSurface - playerHeight)
       finalVel <- Vector2.Zero
       isGrounded <- true
 
-    // -- Constrain to left edge --
     if finalPos.X < 0.0f then
       finalPos <- Vector2(0.0f, finalPos.Y)
 
-    // -- Facing --
     let newFacing =
       if moveDir < 0.0f then -1.0f
       elif moveDir > 0.0f then 1.0f
       else model.PlayerFacing
 
-    // -- Camera follow --
     let viewportWidth = 1280.0f
     let targetCameraX = finalPos.X - viewportWidth * 0.3f
     let cameraX = Math.Max(0.0f, targetCameraX)
 
-    // -- Animation state --
     let animState = getAnimationState finalVel isGrounded
-
-    // -- Day/Night --
     let dayNight = DayNight.update dt model.DayNight
 
-    // -- Play sound --
+    // Particle burst on jump
+    let mutable particleCount = model.ParticleCount
+    let particles = model.Particles
+
+    if playedJumpSound then
+      let rng = Random()
+
+      for i = 0 to 11 do
+        if particleCount < particles.Length then
+          particles[particleCount] <- {
+            Position = finalPos + Vector2(playerWidth / 2.0f, playerHeight)
+            Size = Vector2(8.0f, 8.0f)
+            Rotation = float32(rng.NextDouble() * Math.PI * 2.0)
+            SourceRect = Raylib_cs.Rectangle(0.0f, 0.0f, 1.0f, 1.0f)
+            Color = Color(255uy, 255uy, 0uy, 255uy)
+          }
+
+          particleCount <- particleCount + 1
+
+    ParticleSimulation.fadeAndCompact particles &particleCount 255.0f dt
+
     if playedJumpSound then
       Raylib.PlaySound(model.Assets.JumpSound)
 
@@ -515,6 +542,7 @@ let update (msg: Msg) (model: Model) =
                   TotalTime = model.TotalTime + dt
                   AnimationState = animState
                   DayNight = dayNight
+                  ParticleCount = particleCount
             },
             Cmd.none)
 
@@ -522,104 +550,83 @@ let update (msg: Msg) (model: Model) =
 // View
 // -------------------------------------------------------------
 
-let view (ctx: GameContext) (model: Model) (buffer: RenderBuffer<RenderCmd2D>) =
+let view (ctx: GameContext) (model: Model) (buffer: RenderBuffer2D) =
+  model.Lighting.Reset()
+
+  let playerCenterX = model.PlayerPosition.X + playerWidth / 2.0f
+  let playerCenterY = model.PlayerPosition.Y + playerHeight / 2.0f
+
+  let cameraCenterX = playerCenterX
+  let cameraCenterY = playerCenterY
+
+  let camera =
+    Camera2D(
+      Vector2(float32 ctx.WindowWidth / 2.0f, float32 ctx.WindowHeight / 2.0f),
+      Vector2(cameraCenterX, cameraCenterY),
+      0.0f,
+      1.0f
+    )
+
+  // Sky background and day/night ambient
   let time = model.DayNight.TimeOfDay
-  let topColor, botColor = DayNight.getSkyColors time
+  let skyTop, skyBot = DayNight.getSkyColors time
   let ambient = DayNight.getAmbientColor time
   let sunIntensity = DayNight.getSunIntensity time
   let moonIntensity = DayNight.getMoonIntensity time
+  let sunPos, moonPos = DayNight.orbitalPositions playerCenterX model.DayNight
 
-  // Sky gradient (drawn before camera, layer -1000)
-  buffer.Add(
-    -1000<RenderLayer>,
-    DrawSkyGradient(topColor, botColor, -1000<RenderLayer>)
-  )
-
-  // World camera
-  let cameraCenterX = model.CameraX + float32 ctx.WindowWidth / 2.0f
-  let cameraCenterY = groundLevel - float32 ctx.WindowHeight / 2.0f
-
-  buffer.Add(
-    0<RenderLayer>,
-    SetCamera2D {
-      Position = Vector2(cameraCenterX, cameraCenterY)
-      Zoom = 1.0f
-      Layer = 0<RenderLayer>
-    }
-  )
-
-  // Ambient light
-  buffer.Add(5<RenderLayer>, SetLighting { Color = ambient })
+  buffer
+  |> Draw.rectGradientV
+    (-1000<RenderLayer>)
+    (0, 0, ctx.WindowWidth, ctx.WindowHeight, skyTop, skyBot)
+  |> Draw.beginCamera 0<RenderLayer> camera
+  |> LightDraw.setAmbient model.Lighting (5<RenderLayer>, { Color = ambient })
+  |> Draw.drop
 
   // Sun directional light
-  if sunIntensity > 0.01f then
-    buffer.Add(
-      6<RenderLayer>,
-      AddDirectionalLight {
-        Direction = Vector2(0.3f, -0.7f)
-        Color = Color(255uy, 240uy, 200uy)
-        Intensity = 0.8f * sunIntensity
-      }
-    )
+  if sunIntensity > 0.0f then
+    let sunDir = Vector2.Normalize(Vector2(playerCenterX, groundLevel - 200.0f) - sunPos)
+    buffer
+    |> LightDraw.addDirectionalLight model.Lighting (6<RenderLayer>) {
+      Direction = sunDir
+      Color = Color(255uy, 245uy, 220uy)
+      Intensity = sunIntensity * 3.0f
+      CastsShadows = true
+    }
+    |> Draw.drop
 
   // Moon directional light
-  if moonIntensity > 0.01f then
-    buffer.Add(
-      6<RenderLayer>,
-      AddDirectionalLight {
-        Direction = Vector2(-0.3f, -0.7f)
-        Color = Color(160uy, 180uy, 255uy)
-        Intensity = 0.4f * moonIntensity
-      }
-    )
+  if moonIntensity > 0.0f then
+    let moonDir = Vector2.Normalize(Vector2(playerCenterX, groundLevel - 200.0f) - moonPos)
+    buffer
+    |> LightDraw.addDirectionalLight model.Lighting (6<RenderLayer>) {
+      Direction = moonDir
+      Color = Color(180uy, 200uy, 255uy)
+      Intensity = moonIntensity * 1.5f
+      CastsShadows = true
+    }
+    |> Draw.drop
 
   // Torch point lights
   for torch in model.Torches do
-    buffer.Add(
-      7<RenderLayer>,
-      AddPointLight {
-        Position = torch.Position
-        Color = torch.Color
-        Intensity = 1.2f
-        Radius = torch.Radius
-        Falloff = 1.5f
-      }
-    )
+    buffer
+    |> LightDraw.addPointLight model.Lighting (7<RenderLayer>) {
+      Position = torch.Position
+      Color = torch.Color
+      Intensity = 1.2f
+      Radius = torch.Radius
+      Falloff = 1.5f
+      CastsShadows = false
+    }
+    |> Draw.drop
 
-  // Occluders for shadow volumes
+  // Occluders
   for occluder in model.Occluders do
-    buffer.Add(8<RenderLayer>, AddOccluder occluder)
+    buffer
+    |> LightDraw.addOccluder model.Lighting (8<RenderLayer>) occluder
+    |> Draw.drop
 
-  // Contact shadows (sprite-based, drawn before platforms)
-  let groundY = int groundLevel
-
-  for platform in model.Platforms do
-    let pb = platform.Bounds
-    let platformBottom = int(pb.Y + pb.Height)
-
-    let shadowBottom =
-      if pb.Y + pb.Height >= groundLevel - 1.0f then
-        platformBottom + 4
-      else
-        groundY
-
-    let shadowH = shadowBottom - platformBottom
-
-    if shadowH > 0 then
-      buffer.Add(
-        9<RenderLayer>,
-        DrawSprite {
-          Texture = model.Assets.ShadowTexture
-          Dest = r (int pb.X + 4) platformBottom (int pb.Width - 8) shadowH
-          Source = Raylib_cs.Rectangle(0.0f, 0.0f, 1.0f, 1.0f)
-          Origin = Vector2.Zero
-          Rotation = 0.0f
-          Color = Color(255uy, 255uy, 255uy, 140uy)
-          Layer = 9<RenderLayer>
-        }
-      )
-
-  // Platforms
+  // Lit terrain tiles
   let tileSrc = r 260 585 64 64
 
   for platform in model.Platforms do
@@ -629,25 +636,24 @@ let view (ctx: GameContext) (model: Model) (buffer: RenderBuffer<RenderCmd2D>) =
     for i = 0 to tileCount - 1 do
       let dest =
         r
-          (int(pb.X) + i * int tileSize)
+          (int pb.X + i * int tileSize)
           (int pb.Y)
           (int tileSize)
           (int tileSize)
 
-      buffer.Add(
-        10<RenderLayer>,
-        DrawSprite {
-          Texture = model.Assets.TileTexture
-          Dest = dest
-          Source = tileSrc
-          Origin = Vector2.Zero
-          Rotation = 0.0f
-          Color = Color.White
-          Layer = 10<RenderLayer>
-        }
-      )
+      buffer
+      |> LightDraw.litSprite model.Lighting {
+        Texture = model.Assets.TileTexture
+        Dest = dest
+        Source = tileSrc
+        Origin = Vector2.Zero
+        Rotation = 0.0f
+        Color = Color.White
+        Layer = 10<RenderLayer>
+      }
+      |> Draw.drop
 
-  // Player sprite
+  // Lit player sprite
   let playerSrc = getPlayerSrcRect model.TotalTime model.AnimationState
   let mutable playerSrcMut = playerSrc
 
@@ -663,55 +669,68 @@ let view (ctx: GameContext) (model: Model) (buffer: RenderBuffer<RenderCmd2D>) =
   let playerDrawY = int(model.PlayerPosition.Y + playerHeight - 64.0f)
   let playerDest = r (int model.PlayerPosition.X) playerDrawY 64 64
 
-  buffer.Add(
-    20<RenderLayer>,
-    DrawSprite {
-      Texture = model.Assets.PlayerTexture
-      Dest = playerDest
-      Source = playerSrcMut
-      Origin = Vector2.Zero
-      Rotation = 0.0f
-      Color = Color.White
-      Layer = 20<RenderLayer>
-    }
-  )
+  buffer
+  |> LightDraw.litSprite model.Lighting {
+    Texture = model.Assets.PlayerTexture
+    Dest = playerDest
+    Source = playerSrcMut
+    Origin = Vector2.Zero
+    Rotation = 0.0f
+    Color = Color.White
+    Layer = 20<RenderLayer>
+  }
+  |> Draw.drop
 
-  // UI camera
-  buffer.Add(1000<RenderLayer>, ResetCamera2D)
+  // Particles
+  buffer
+  |> ParticleDraw.particles
+    model.Assets.ShadowTexture
+    model.Particles
+    model.ParticleCount
+    3<RenderLayer>
 
-  let timeStr =
-    sprintf "Time: %.1fh | WASD/Arrows: Move | Space: Jump | R: Respawn" time
+  // End lighting
+  |> LightDraw.endLighting model.Lighting 999<RenderLayer>
 
-  buffer.Add(
-    1001<RenderLayer>,
-    DrawText {
-      Font = model.Assets.Font
-      Text = timeStr
-      Position = Vector2(10.0f, 10.0f)
-      FontSize = 20.0f
-      Spacing = 1.0f
-      Color = Color.White
-      Layer = 1001<RenderLayer>
-    }
-  )
+  // End camera
+  |> Draw.endCamera 1000<RenderLayer>
+
+  // UI + diagnostics
+  |> Draw.text {
+    Font = model.Assets.Font
+    Text =
+      $"Day/Night Cycle | Time: {model.DayNight.TimeOfDay:F1}h | Pos: %.1f{model.PlayerPosition.X},%.1f{model.PlayerPosition.Y} | Occluders: {model.Occluders.Length} | WASD/Arrows: Move | Space: Jump | R: Respawn"
+    Position = Vector2(10.0f, 10.0f)
+    FontSize = 20.0f
+    Spacing = 1.0f
+    Color = Color.White
+    Layer = 1001<RenderLayer>
+  }
+  |> Draw.drop
 
 // -------------------------------------------------------------
 // Entry Point
 // -------------------------------------------------------------
 
-let subscribe _ctx _model = Sub.none
+let subscribe (ctx: GameContext) (model: Model) =
+  Mibo.Input.InputMapper.subscribeStatic model.InputMap InputMapped ctx
 
 [<EntryPoint>]
 let main _ =
   let program =
     Program.mkProgram init update
-    |> Program.withConfig(fun cfg ->
-      cfg.Width <- 1280
-      cfg.Height <- 720
-      cfg.Title <- "Mibo Raylib MVP"
-      cfg.TargetFPS <- 60)
+    |> Program.withAssetsBasePath AppContext.BaseDirectory
+    |> Program.withConfig(fun cfg -> {
+      cfg with
+          Width = 1280
+          Height = 720
+          Title = "Mibo Raylib Platformer"
+          TargetFPS = 60
+    })
+    |> Program.withInput
+    |> Program.withSubscription subscribe
     |> Program.withTick Tick
-    |> Program.withRenderer(fun () -> LegacyBatch2DRenderer.create view)
+    |> Program.withRenderer(fun () -> Renderer2D.create view)
 
   let game = new RaylibGame<Model, Msg>(program)
   game.Run()
