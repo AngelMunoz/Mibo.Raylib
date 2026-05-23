@@ -34,6 +34,7 @@
     <Compile Include="Graphics2D/Renderer2D.fs" />
     <Compile Include="Graphics2D/Draw.fs" />
     <Compile Include="Graphics2D/Lighting/LightTypes.fs" />
+    <Compile Include="Graphics2D/Lighting/GridOccluders.fs" />
     <Compile Include="Graphics2D/Lighting/LitShader.fs" />
     <Compile Include="Graphics2D/Lighting/LightContext.fs" />
     <Compile Include="Graphics2D/Lighting/LightCommands.fs" />

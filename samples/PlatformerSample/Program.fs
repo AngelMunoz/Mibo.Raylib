@@ -1,12 +1,31 @@
 module PlatformerSample.Program
 
 open System
+open System.Collections.Generic
 open System.Numerics
 open Raylib_cs
 open Mibo.Elmish
 open Mibo.Elmish.Graphics2D
 open Mibo.Elmish.Graphics2D.Lighting
 open Mibo.Input
+open Mibo.Layout
+open Mibo.Animation
+
+// -------------------------------------------------------------
+// Constants
+// -------------------------------------------------------------
+
+let tileSize = 64.0f
+let chunkCells = 32
+let chunkWorldSize = float32 chunkCells * tileSize  // 2048
+let playerWidth = 40.0f
+let playerHeight = 54.0f
+let gravity = 1200.0f
+let moveSpeed = 300.0f
+let jumpSpeed = -700.0f
+let worldHeight = 12.0f
+let groundLevel = worldHeight * tileSize
+let groundSurface = groundLevel - tileSize
 
 // -------------------------------------------------------------
 // Game Actions
@@ -25,18 +44,26 @@ type AnimationState =
   | Fall
 
 // -------------------------------------------------------------
-// Physics Constants
+// Tile & Chunk Types
 // -------------------------------------------------------------
 
-let tileSize = 64.0f
-let worldHeight = 12.0f
-let groundLevel = worldHeight * tileSize
-let groundSurface = groundLevel - tileSize
-let playerWidth = 40.0f
-let playerHeight = 54.0f
-let gravity = 1200.0f
-let moveSpeed = 300.0f
-let jumpSpeed = -700.0f
+type TileType =
+  | Empty
+  | Solid
+
+type TorchLight = {
+  Position: Vector2
+  Color: Color
+  Radius: float32
+}
+
+type Chunk = {
+  Grid: CellGrid2D<TileType>
+  Platforms: Rectangle[]
+  Occluders: Occluder2D[]
+  Torches: TorchLight[]
+  Bounds: Rectangle
+}
 
 // -------------------------------------------------------------
 // Day / Night Cycle
@@ -125,8 +152,6 @@ module DayNight =
     elif time < 18.0f then (time - 16.0f) / 2.0f
     else 1.0f
 
-  let worldCenterX = (groundLevel / tileSize) * tileSize * 0.5f * 3.0f // ~2500, midpoint of generated terrain
-
   let orbitalPositions (centerX: float32) (state: State) =
     let centerY = groundLevel - 200.0f
     let radiusX = 500.0f
@@ -140,134 +165,142 @@ module DayNight =
     Vector2(sunX, sunY), Vector2(moonX, moonY)
 
 // -------------------------------------------------------------
-// Terrain
+// Chunk Generation
 // -------------------------------------------------------------
 
-[<Struct>]
-type Platform = { Bounds: Raylib_cs.Rectangle }
+let chunkSeed (cx: int) (cy: int) (worldSeed: int) =
+  cx * 73856093 + cy * 19349663 + worldSeed
 
-type TorchLight = {
-  Position: Vector2
-  Color: Color
-  Radius: float32
-}
+let extractPlatforms (grid: CellGrid2D<TileType>) : Rectangle[] =
+  let platforms = ResizeArray<Rectangle>()
+  let cellW = grid.CellSize.X
+  let cellH = grid.CellSize.Y
 
-let generateTerrain
-  (seed: int)
-  : Platform list * TorchLight list * Occluder2D list =
-  let rng = Random(seed)
-  let mutable platforms = []
-  let mutable torches = []
-  let mutable occluders = []
-  let mutable x = 0.0f
+  for y in 0 .. grid.Height - 1 do
+    let mutable x = 0
+    while x < grid.Width do
+      match CellGrid2D.get x y grid with
+      | ValueSome Solid ->
+        let startX = x
+        let mutable runLength = 1
+        let mutable more = true
+        while more && x + runLength < grid.Width do
+          match CellGrid2D.get (x + runLength) y grid with
+          | ValueSome Solid -> runLength <- runLength + 1
+          | _ -> more <- false
 
-  while x < 5000.0f do
-    let segmentLength = rng.Next(3, 8) |> float32 |> (*) tileSize
-    let py = groundSurface
-    let rect = Raylib_cs.Rectangle(x, py, segmentLength, tileSize)
-    platforms <- { Bounds = rect } :: platforms
+        let wx = grid.Origin.X + float32 startX * cellW
+        let wy = grid.Origin.Y + float32 y * cellH
+        platforms.Add(Rectangle(wx, wy, float32 runLength * cellW, cellH))
+        x <- x + runLength
+      | _ ->
+        x <- x + 1
 
-    occluders <-
-      {
-        P1 = Vector2(x, py)
-        P2 = Vector2(x + segmentLength, py)
+  platforms.ToArray()
 
-      }
-      :: occluders
+let extractTorches (grid: CellGrid2D<TileType>) (rng: Random) : TorchLight[] =
+  let torches = ResizeArray<TorchLight>()
+  let cellW = grid.CellSize.X
 
-    occluders <-
-      {
-        P1 = Vector2(x, py)
-        P2 = Vector2(x, py + tileSize)
+  for y in 0 .. grid.Height - 1 do
+    let mutable x = 0
+    while x < grid.Width do
+      match CellGrid2D.get x y grid with
+      | ValueSome Solid ->
+        match CellGrid2D.get x (y - 1) grid with
+        | ValueNone ->
+          if rng.NextDouble() > 0.92 then
+            let wx = grid.Origin.X + float32 x * cellW + cellW * 0.5f
+            let wy = grid.Origin.Y + float32 y * grid.CellSize.Y - 10.0f
+            torches.Add({
+              Position = Vector2(wx, wy)
+              Color = Color(255uy, 160uy, 60uy)
+              Radius = 100.0f + float32(rng.Next(-20, 20))
+            })
+        | _ -> ()
+        x <- x + 1
+      | _ ->
+        x <- x + 1
 
-      }
-      :: occluders
+  torches.ToArray()
 
-    occluders <-
-      {
-        P1 = Vector2(x + segmentLength, py)
-        P2 = Vector2(x + segmentLength, py + tileSize)
+let generateChunk (cx: int) (cy: int) (worldSeed: int) : Chunk =
+  let rng = Random(chunkSeed cx cy worldSeed)
+  let origin = Vector2(float32 cx * chunkWorldSize, float32 cy * chunkWorldSize)
+  let grid = CellGrid2D.create chunkCells chunkCells (Vector2(tileSize, tileSize)) origin
 
-      }
-      :: occluders
+  let groundY = int(worldHeight)  // 12
 
-    let torchCount = segmentLength / tileSize / 3.0f |> int
+  if cy = 0 then
+    // Ground chunk: floor with pits and floating platforms
+    Layout.run (fun section ->
+      section
+      |> Layout.section 0 groundY (fun groundSection ->
+        groundSection
+        |> Platformer.platform chunkCells Solid
+        |> ignore
 
-    for i = 1 to torchCount do
-      let tx = x + float32 i * 3.0f * tileSize
+        let pitCount = rng.Next(1, 4)
+        for _ in 1 .. pitCount do
+          let px = rng.Next(0, chunkCells - 5)
+          let pw = rng.Next(2, 5)
+          groundSection
+          |> Layout.section px 0 (Platformer.pit pw 1)
+          |> ignore
 
-      if tx < x + segmentLength - tileSize then
-        torches <-
-          {
-            Position = Vector2(tx + tileSize / 2.0f, py - 10.0f)
-            Color = Color(255uy, 160uy, 60uy)
-            Radius = 120.0f
-          }
-          :: torches
+        groundSection
+      )
+      |> ignore
 
-    x <- x + segmentLength + (rng.Next(2, 5) |> float32 |> (*) tileSize)
+      // Floating platforms above ground (reachable: need <= 204px jump)
+      // groundY=12, so rows 8-9 (y=512-576) need 128-192px jump, all reachable
+      let platCount = rng.Next(1, 4)
+      for _ in 1 .. platCount do
+        let px = rng.Next(0, chunkCells - 8)
+        let py = rng.Next(groundY - 4, groundY - 2)
+        let pw = rng.Next(3, 8)
+        section
+        |> Layout.section px py (Platformer.platform pw Solid)
+        |> ignore
 
-  for _ = 1 to 10 do
-    let px = rng.Next(200, 4800) |> float32
-    let pw = rng.Next(2, 5) |> float32 |> (*) tileSize
-    let py = groundSurface - (rng.Next(2, 5) |> float32 |> (*) tileSize)
+      section
+    ) grid
+    |> ignore
 
-    platforms <-
-      {
-        Bounds = Raylib_cs.Rectangle(px, py, pw, tileSize)
-      }
-      :: platforms
+  // Air chunks (cy < 0) are kept empty for now — reachable vertical
+  // traversal via stairs/ledges can be added later
 
-    occluders <-
-      {
-        P1 = Vector2(px, py)
-        P2 = Vector2(px + pw, py)
+  let platforms = extractPlatforms grid
+  let torches = extractTorches grid rng
+  let occluders = GridOccluders.fromCellGrid (fun t -> t = Solid) grid
 
-      }
-      :: occluders
+  {
+    Grid = grid
+    Platforms = platforms
+    Occluders = occluders
+    Torches = torches
+    Bounds = Rectangle(origin.X, origin.Y, chunkWorldSize, chunkWorldSize)
+  }
 
-    occluders <-
-      {
-        P1 = Vector2(px, py + tileSize)
-        P2 = Vector2(px + pw, py + tileSize)
+let loadChunks (playerPos: Vector2) (chunks: Dictionary<struct(int*int), Chunk>) (seed: int) =
+  let pcx = int(Math.Floor(float playerPos.X / float chunkWorldSize))
+  let pcy = int(Math.Floor(float playerPos.Y / float chunkWorldSize))
+  let radius = 2
 
-      }
-      :: occluders
-
-    occluders <-
-      {
-        P1 = Vector2(px, py)
-        P2 = Vector2(px, py + tileSize)
-
-      }
-      :: occluders
-
-    occluders <-
-      {
-        P1 = Vector2(px + pw, py)
-        P2 = Vector2(px + pw, py + tileSize)
-
-      }
-      :: occluders
-
-    if rng.NextDouble() > 0.5 then
-      torches <-
-        {
-          Position = Vector2(px + pw / 2.0f, py - 10.0f)
-          Color = Color(255uy, 160uy, 60uy)
-          Radius = 100.0f
-        }
-        :: torches
-
-  platforms |> List.rev, torches |> List.rev, occluders |> List.rev
+  for x in pcx - radius .. pcx + radius do
+    for y in pcy - radius .. pcy + radius do
+      let key = struct(x, y)
+      if not (chunks.ContainsKey(key)) then
+        chunks[key] <- generateChunk x y seed
 
 // -------------------------------------------------------------
 // Model
 // -------------------------------------------------------------
 
 type SpriteAssets = {
-  PlayerTexture: Texture2D
+  PlayerSheet: SpriteSheet
   TileTexture: Texture2D
+  TorchSheet: SpriteSheet
   ShadowTexture: Texture2D
   Font: Font
   JumpSound: Sound
@@ -278,19 +311,21 @@ type Model = {
   PlayerVelocity: Vector2
   PlayerFacing: float32
   IsGrounded: bool
-  CameraX: float32
+  CameraPos: Vector2
   Actions: ActionState<GameAction>
   InputMap: InputMap<GameAction>
   Assets: SpriteAssets
   TotalTime: float32
   AnimationState: AnimationState
-  Platforms: Platform list
-  Torches: TorchLight list
-  Occluders: Occluder2D list
+  PlayerSprite: AnimatedSprite
+  TorchSprite: AnimatedSprite
+  PlayerChunk: struct(int*int)
+  Chunks: Dictionary<struct(int*int), Chunk>
   Seed: int
   DayNight: DayNight.State
   Lighting: LightContext2D
   Particles: Particle2D[]
+  ParticleVelocities: Vector2[]
   ParticleCount: int
 }
 
@@ -317,19 +352,6 @@ let getAnimationState (velocity: Vector2) (isGrounded: bool) =
   else
     Idle
 
-let getPlayerSrcRect (totalTime: float32) (state: AnimationState) =
-  match state with
-  | Idle -> r 645 0 128 128
-  | Walk ->
-    let frame = int(totalTime * 10.0f) % 2
-    if frame = 0 then r 0 129 128 128 else r 129 129 128 128
-  | Jump -> r 774 0 128 128
-  | Fall -> r 774 0 128 128
-
-// -------------------------------------------------------------
-// Collision
-// -------------------------------------------------------------
-
 let playerBounds(pos: Vector2) =
   Raylib_cs.Rectangle(pos.X, pos.Y, playerWidth, playerHeight)
 
@@ -337,15 +359,13 @@ let resolvePlatformCollision
   (prevPos: Vector2)
   (newPos: Vector2)
   (velocity: Vector2)
-  (platforms: Platform list)
+  (platforms: Rectangle[])
   : struct (Vector2 * Vector2 * bool) =
   let mutable pos = newPos
   let mutable vel = velocity
   let mutable grounded = false
 
-  for platform in platforms do
-    let pb = platform.Bounds
-
+  for pb in platforms do
     if Raylib.CheckCollisionRecs(playerBounds pos, pb).AsBool() then
       let prevFeetY = prevPos.Y + playerHeight
       let currFeetY = pos.Y + playerHeight
@@ -389,6 +409,11 @@ let init(ctx: GameContext) =
       "assets/kenney_platformer/Spritesheets/spritesheet-tiles-default.png"
     )
 
+  let torchTex =
+    assets.Texture(
+      "assets/kenney_platformer/Spritesheets/spritesheet-tiles-default.png"
+    )
+
   let font = assets.Font("assets/Fonts/monogram.ttf")
   let jumpSound = assets.Sound("assets/sfx_jump.ogg")
 
@@ -405,39 +430,74 @@ let init(ctx: GameContext) =
     |> InputMap.key GameAction.Jump KeyboardKey.Space
     |> InputMap.key Respawn KeyboardKey.R
 
+  let playerSheet =
+    SpriteSheet.fromFrames
+      playerTex
+      (Vector2(64.0f, 64.0f))
+      [|
+        struct ("idle", { Frames = [| r 645 0 128 128 |]; FrameDuration = 1.0f; Loop = false })
+        struct ("walk", { Frames = [| r 0 129 128 128; r 129 129 128 128 |]; FrameDuration = 0.1f; Loop = true })
+        struct ("jump", { Frames = [| r 774 0 128 128 |]; FrameDuration = 1.0f; Loop = false })
+        struct ("fall", { Frames = [| r 774 0 128 128 |]; FrameDuration = 1.0f; Loop = false })
+      |]
+
+  let playerSprite = AnimatedSprite.create playerSheet "idle"
+
+  // torch_on_a (65,1105) and torch_on_b (130,1105) — 64x64 each
+  let torchSheet =
+    SpriteSheet.fromFrames
+      torchTex
+      (Vector2(32.0f, 32.0f))
+      [|
+        struct ("lit", { Frames = [| r 65 1105 64 64; r 130 1105 64 64 |]; FrameDuration = 0.15f; Loop = true })
+      |]
+
+  let torchSprite = AnimatedSprite.create torchSheet "lit"
+
+  let seed = Random().Next()
+  let spawnY = groundSurface - playerHeight
+
+  let chunks = Dictionary<struct(int*int), Chunk>()
+  let spawnChunkX = 0
+  let spawnChunkY = 0
+  let loadRadius = 2
+
+  for x in spawnChunkX - loadRadius .. spawnChunkX + loadRadius do
+    for y in spawnChunkY - loadRadius .. spawnChunkY + loadRadius do
+      chunks[struct(x, y)] <- generateChunk x y seed
+
+  let lighting =
+    new LightContext2D(softness = 0.05f, maxShadowDistance = 2000.0f)
+
   let assetsRec = {
-    PlayerTexture = playerTex
+    PlayerSheet = playerSheet
     TileTexture = tileTex
+    TorchSheet = torchSheet
     ShadowTexture = shadowTex
     Font = font
     JumpSound = jumpSound
   }
-
-  let seed = Random().Next()
-  let platforms, torches, occluders = generateTerrain seed
-  let spawnY = groundSurface - playerHeight
-
-  let lighting =
-    new LightContext2D(softness = 0.05f, maxShadowDistance = 2000.0f)
 
   struct ({
             PlayerPosition = Vector2(200.0f, spawnY)
             PlayerVelocity = Vector2.Zero
             PlayerFacing = 1.0f
             IsGrounded = true
-            CameraX = 0.0f
+            CameraPos = Vector2(200.0f, spawnY)
             Actions = ActionState.empty
             InputMap = inputMap
             Assets = assetsRec
             TotalTime = 0.0f
             AnimationState = Idle
-            Platforms = platforms
-            Torches = torches
-            Occluders = occluders
+            PlayerSprite = playerSprite
+            TorchSprite = torchSprite
+            PlayerChunk = struct(0, 0)
+            Chunks = chunks
             Seed = seed
             DayNight = DayNight.initial
             Lighting = lighting
             Particles = Array.zeroCreate 512
+            ParticleVelocities = Array.zeroCreate 512
             ParticleCount = 0
           },
           Cmd.none)
@@ -475,14 +535,42 @@ let update (msg: Msg) (model: Model) =
     let prevPos = model.PlayerPosition
     let newPos = prevPos + velocity * dt
 
+    // Only load/evict chunks when player enters a new chunk
+    let pcx = int(Math.Floor(float newPos.X / float chunkWorldSize))
+    let pcy = int(Math.Floor(float newPos.Y / float chunkWorldSize))
+    let currentChunk = struct(pcx, pcy)
+
+    if currentChunk <> model.PlayerChunk then
+      loadChunks newPos model.Chunks model.Seed
+
+      // Evict distant chunks
+      let evictRadius = 4
+      let keysToRemove = ResizeArray<struct(int*int)>()
+      for KeyValue(key, _) in model.Chunks do
+        let struct(cx, cy) = key
+        if abs (cx - pcx) > evictRadius || abs (cy - pcy) > evictRadius then
+          keysToRemove.Add(key)
+      for key in keysToRemove do
+        model.Chunks.Remove(key) |> ignore
+
+    // Collect platforms from nearby chunks only
+    let nearbyPlatforms = ResizeArray<Rectangle>()
+    let collisionRadius = 2
+    for KeyValue(key, chunk) in model.Chunks do
+      let struct(cx, cy) = key
+      if abs (cx - pcx) <= collisionRadius && abs (cy - pcy) <= collisionRadius then
+        nearbyPlatforms.AddRange(chunk.Platforms)
+    let platforms = nearbyPlatforms.ToArray()
+
     let struct (finalPos, finalVel, isGrounded) =
-      resolvePlatformCollision prevPos newPos velocity model.Platforms
+      resolvePlatformCollision prevPos newPos velocity platforms
 
     let mutable finalPos = finalPos
     let mutable finalVel = finalVel
     let mutable isGrounded = isGrounded
 
-    if finalPos.Y > groundLevel + 200.0f then
+    // Respawn if fallen too far
+    if finalPos.Y > groundLevel + 500.0f then
       finalPos <- Vector2(200.0f, groundSurface - playerHeight)
       finalVel <- Vector2.Zero
       isGrounded <- true
@@ -500,20 +588,40 @@ let update (msg: Msg) (model: Model) =
       elif moveDir > 0.0f then 1.0f
       else model.PlayerFacing
 
+    // Smooth camera follow
     let viewportWidth = 1280.0f
-    let targetCameraX = finalPos.X - viewportWidth * 0.3f
-    let cameraX = Math.Max(0.0f, targetCameraX)
+    let viewportHeight = 720.0f
+    let targetCameraX = finalPos.X
+    let targetCameraY = finalPos.Y
+    let smoothX = model.CameraPos.X + (targetCameraX - model.CameraPos.X) * 0.1f
+    let smoothY = model.CameraPos.Y + (targetCameraY - model.CameraPos.Y) * 0.1f
+    let cameraX = Math.Max(0.0f, smoothX)
+    let cameraY = Math.Clamp(smoothY, -500.0f, 2000.0f)
 
     let animState = getAnimationState finalVel isGrounded
     let dayNight = DayNight.update dt model.DayNight
 
-    // Particle burst on jump
-    let mutable particleCount = model.ParticleCount
+    // Animation update
+    let playerSprite =
+      match animState with
+      | Idle -> AnimatedSprite.playIfNot "idle" model.PlayerSprite
+      | Walk -> AnimatedSprite.playIfNot "walk" model.PlayerSprite
+      | Jump -> AnimatedSprite.playIfNot "jump" model.PlayerSprite
+      | Fall -> AnimatedSprite.playIfNot "fall" model.PlayerSprite
+    let updatedSprite = AnimatedSprite.update dt playerSprite
+    let flippedSprite =
+      if newFacing < 0.0f then
+        AnimatedSprite.facingLeft updatedSprite
+      else
+        AnimatedSprite.facingRight updatedSprite
+
+    // Particle physics
     let particles = model.Particles
+    let particleVelocities = model.ParticleVelocities
+    let mutable particleCount = model.ParticleCount
 
     if playedJumpSound then
       let rng = Random()
-
       for i = 0 to 11 do
         if particleCount < particles.Length then
           particles[particleCount] <- {
@@ -523,13 +631,28 @@ let update (msg: Msg) (model: Model) =
             SourceRect = Raylib_cs.Rectangle(0.0f, 0.0f, 1.0f, 1.0f)
             Color = Color(255uy, 255uy, 0uy, 255uy)
           }
-
+          particleVelocities[particleCount] <- Vector2(
+            float32(rng.NextDouble() * 200.0 - 100.0),
+            float32(rng.NextDouble() * -150.0 - 50.0)
+          )
           particleCount <- particleCount + 1
+
+    for i = 0 to particleCount - 1 do
+      let vel = particleVelocities[i]
+      let newVel = Vector2(vel.X, vel.Y + gravity * dt * 0.3f)
+      particleVelocities[i] <- newVel
+      particles[i] <- {
+        particles[i] with
+            Position = particles[i].Position + newVel * dt
+      }
 
     ParticleSimulation.fadeAndCompact particles &particleCount 255.0f dt
 
     if playedJumpSound then
       Raylib.PlaySound(model.Assets.JumpSound)
+
+    // Update torch animation
+    let torchSprite = AnimatedSprite.update dt model.TorchSprite
 
     struct ({
               model with
@@ -537,11 +660,14 @@ let update (msg: Msg) (model: Model) =
                   PlayerVelocity = finalVel
                   PlayerFacing = newFacing
                   IsGrounded = isGrounded
-                  CameraX = cameraX
+                  CameraPos = Vector2(cameraX, cameraY)
                   Actions = actions
                   TotalTime = model.TotalTime + dt
                   AnimationState = animState
                   DayNight = dayNight
+                  PlayerSprite = flippedSprite
+                  TorchSprite = torchSprite
+                  PlayerChunk = currentChunk
                   ParticleCount = particleCount
             },
             Cmd.none)
@@ -556,13 +682,10 @@ let view (ctx: GameContext) (model: Model) (buffer: RenderBuffer2D) =
   let playerCenterX = model.PlayerPosition.X + playerWidth / 2.0f
   let playerCenterY = model.PlayerPosition.Y + playerHeight / 2.0f
 
-  let cameraCenterX = playerCenterX
-  let cameraCenterY = playerCenterY
-
   let camera =
     Camera2D(
       Vector2(float32 ctx.WindowWidth / 2.0f, float32 ctx.WindowHeight / 2.0f),
-      Vector2(cameraCenterX, cameraCenterY),
+      Vector2(model.CameraPos.X, model.CameraPos.Y),
       0.0f,
       1.0f
     )
@@ -575,6 +698,12 @@ let view (ctx: GameContext) (model: Model) (buffer: RenderBuffer2D) =
   let moonIntensity = DayNight.getMoonIntensity time
   let sunPos, moonPos = DayNight.orbitalPositions playerCenterX model.DayNight
 
+  let viewBounds =
+    Camera2D.viewportBoundsFromRaylib
+      camera
+      (float32 ctx.WindowWidth)
+      (float32 ctx.WindowHeight)
+
   buffer
   |> Draw.rectGradientV
     (-1000<RenderLayer>)
@@ -583,32 +712,73 @@ let view (ctx: GameContext) (model: Model) (buffer: RenderBuffer2D) =
   |> LightDraw.setAmbient model.Lighting (5<RenderLayer>, { Color = ambient })
   |> Draw.drop
 
-  // Sun directional light
+      // Sun directional light
   if sunIntensity > 0.0f then
-    let sunDir = Vector2.Normalize(Vector2(playerCenterX, groundLevel - 200.0f) - sunPos)
+    let sunDir =
+      Vector2.Normalize(Vector2(playerCenterX, groundLevel - 200.0f) - sunPos)
+
     buffer
     |> LightDraw.addDirectionalLight model.Lighting (6<RenderLayer>) {
       Direction = sunDir
       Color = Color(255uy, 245uy, 220uy)
-      Intensity = sunIntensity * 3.0f
+      Intensity = sunIntensity * 1.5f
       CastsShadows = true
     }
     |> Draw.drop
 
   // Moon directional light
   if moonIntensity > 0.0f then
-    let moonDir = Vector2.Normalize(Vector2(playerCenterX, groundLevel - 200.0f) - moonPos)
+    let moonDir =
+      Vector2.Normalize(Vector2(playerCenterX, groundLevel - 200.0f) - moonPos)
+
     buffer
     |> LightDraw.addDirectionalLight model.Lighting (6<RenderLayer>) {
       Direction = moonDir
       Color = Color(180uy, 200uy, 255uy)
-      Intensity = moonIntensity * 1.5f
+      Intensity = moonIntensity * 0.8f
       CastsShadows = true
     }
     |> Draw.drop
 
-  // Torch point lights
-  for torch in model.Torches do
+  // Collect occluders and torches from chunks near player, sorted by distance
+  let pcx = int(Math.Floor(float model.PlayerPosition.X / float chunkWorldSize))
+  let pcy = int(Math.Floor(float model.PlayerPosition.Y / float chunkWorldSize))
+  let radius = 2
+
+  let mutable nearbyOccluders = []
+  let mutable nearbyTorches = []
+
+  for KeyValue(key, chunk) in model.Chunks do
+    let struct(cx, cy) = key
+    if abs (cx - pcx) <= radius && abs (cy - pcy) <= radius then
+      nearbyOccluders <- chunk.Occluders |> Array.toList |> List.append nearbyOccluders
+      nearbyTorches <- chunk.Torches |> Array.toList |> List.append nearbyTorches
+
+  // Sort occluders by distance to player and take nearest 128
+  let playerPos = model.PlayerPosition
+  let occludersSorted =
+    nearbyOccluders
+    |> List.sortBy (fun o ->
+      let mx = (o.P1.X + o.P2.X) * 0.5f
+      let my = (o.P1.Y + o.P2.Y) * 0.5f
+      (mx - playerPos.X) * (mx - playerPos.X) + (my - playerPos.Y) * (my - playerPos.Y)
+    )
+    |> List.truncate 128
+
+  // Sort torches by distance and take nearest 16
+  let torchesSorted =
+    nearbyTorches
+    |> List.sortBy (fun t ->
+      let dx = t.Position.X - playerPos.X
+      let dy = t.Position.Y - playerPos.Y
+      dx * dx + dy * dy
+    )
+    |> List.truncate 16
+
+  // Add torches as point lights and draw animated sprites
+  let torchSrc = AnimatedSprite.currentSource model.TorchSprite
+
+  for torch in torchesSorted do
     buffer
     |> LightDraw.addPointLight model.Lighting (7<RenderLayer>) {
       Position = torch.Position
@@ -620,44 +790,63 @@ let view (ctx: GameContext) (model: Model) (buffer: RenderBuffer2D) =
     }
     |> Draw.drop
 
-  // Occluders
-  for occluder in model.Occluders do
+    // Draw torch sprite
+    let torchDest = r (int torch.Position.X - 16) (int torch.Position.Y - 32) 32 32
+    buffer
+    |> LightDraw.litSprite model.Lighting {
+      Texture = model.Assets.TorchSheet.Texture
+      Dest = torchDest
+      Source = torchSrc
+      Origin = Vector2.Zero
+      Rotation = 0.0f
+      Color = Color.White
+      Layer = 7<RenderLayer>
+    }
+    |> Draw.drop
+
+  // Add occluders
+  for occluder in occludersSorted do
     buffer
     |> LightDraw.addOccluder model.Lighting (8<RenderLayer>) occluder
     |> Draw.drop
 
-  // Lit terrain tiles
+  // Render visible tiles only from nearby chunks
   let tileSrc = r 260 585 64 64
 
-  for platform in model.Platforms do
-    let pb = platform.Bounds
-    let tileCount = int(pb.Width / tileSize)
+  for KeyValue(key, chunk) in model.Chunks do
+    let struct(cx, cy) = key
+    if abs (cx - pcx) <= radius && abs (cy - pcy) <= radius then
+      if Culling.isVisible2D viewBounds chunk.Bounds then
+        CellGrid2D.iterVisible
+          (int viewBounds.X)
+          (int viewBounds.Y)
+          (int (viewBounds.X + viewBounds.Width))
+          (int (viewBounds.Y + viewBounds.Height))
+          (fun x y tile ->
+            if tile = Solid then
+              let wx = chunk.Grid.Origin.X + float32 x * tileSize
+              let wy = chunk.Grid.Origin.Y + float32 y * tileSize
+              let dest = Rectangle(wx, wy, tileSize, tileSize)
 
-    for i = 0 to tileCount - 1 do
-      let dest =
-        r
-          (int pb.X + i * int tileSize)
-          (int pb.Y)
-          (int tileSize)
-          (int tileSize)
-
-      buffer
-      |> LightDraw.litSprite model.Lighting {
-        Texture = model.Assets.TileTexture
-        Dest = dest
-        Source = tileSrc
-        Origin = Vector2.Zero
-        Rotation = 0.0f
-        Color = Color.White
-        Layer = 10<RenderLayer>
-      }
-      |> Draw.drop
+              buffer
+              |> LightDraw.litSprite model.Lighting {
+                Texture = model.Assets.TileTexture
+                Dest = dest
+                Source = tileSrc
+                Origin = Vector2.Zero
+                Rotation = 0.0f
+                Color = Color.White
+                Layer = 10<RenderLayer>
+              }
+              |> Draw.drop
+          )
+          chunk.Grid
 
   // Lit player sprite
-  let playerSrc = getPlayerSrcRect model.TotalTime model.AnimationState
+  let playerSrc = AnimatedSprite.currentSource model.PlayerSprite
   let mutable playerSrcMut = playerSrc
 
-  if model.PlayerFacing < 0.0f then
+  if model.PlayerSprite.FlipX then
     playerSrcMut <-
       Raylib_cs.Rectangle(
         playerSrcMut.X,
@@ -671,7 +860,7 @@ let view (ctx: GameContext) (model: Model) (buffer: RenderBuffer2D) =
 
   buffer
   |> LightDraw.litSprite model.Lighting {
-    Texture = model.Assets.PlayerTexture
+    Texture = model.Assets.PlayerSheet.Texture
     Dest = playerDest
     Source = playerSrcMut
     Origin = Vector2.Zero
@@ -699,7 +888,7 @@ let view (ctx: GameContext) (model: Model) (buffer: RenderBuffer2D) =
   |> Draw.text {
     Font = model.Assets.Font
     Text =
-      $"Day/Night Cycle | Time: {model.DayNight.TimeOfDay:F1}h | Pos: %.1f{model.PlayerPosition.X},%.1f{model.PlayerPosition.Y} | Occluders: {model.Occluders.Length} | WASD/Arrows: Move | Space: Jump | R: Respawn"
+      $"Day/Night Cycle | Time: {model.DayNight.TimeOfDay:F1}h | Chunks: {model.Chunks.Count} | Pos: %.1f{model.PlayerPosition.X},%.1f{model.PlayerPosition.Y} | WASD/Arrows: Move | Space: Jump | R: Respawn"
     Position = Vector2(10.0f, 10.0f)
     FontSize = 20.0f
     Spacing = 1.0f

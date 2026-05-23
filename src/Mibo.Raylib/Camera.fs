@@ -103,6 +103,21 @@ module Camera2D =
   let worldToScreen (camera: Camera) (worldPos: Vector2) : Vector2 =
     Vector2.Transform(worldPos, camera.View)
 
+  /// <summary>
+  /// Calculates visible world bounds from a raylib Camera2D.
+  /// </summary>
+  /// <remarks>
+  /// Useful when you are using raylib's built-in <c>Camera2D</c> directly
+  /// (e.g. via <c>Draw.beginCamera</c>) and need the viewport rectangle
+  /// for 2D culling with <see cref="M:Mibo.Elmish.Culling.isVisible2D"/>.
+  /// </remarks>
+  let viewportBoundsFromRaylib (camera: Raylib_cs.Camera2D) (width: float32) (height: float32) : Raylib_cs.Rectangle =
+    let visibleW = width / camera.Zoom
+    let visibleH = height / camera.Zoom
+    let halfW = visibleW * 0.5f
+    let halfH = visibleH * 0.5f
+    Raylib_cs.Rectangle(camera.Target.X - halfW, camera.Target.Y - halfH, visibleW, visibleH)
+
 
 /// <summary>
 /// Helper functions for 3D Cameras (Perspective projection).
