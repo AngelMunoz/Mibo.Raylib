@@ -5,6 +5,13 @@
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="Types.fs" />
+    <Compile Include="Constants.fs" />
+    <Compile Include="DayNight.fs" />
+    <Compile Include="WorldGen.fs" />
+    <Compile Include="Physics.fs" />
+    <Compile Include="Systems.fs" />
+    <Compile Include="View.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
