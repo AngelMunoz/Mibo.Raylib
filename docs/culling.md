@@ -12,7 +12,7 @@ index: 14
 It operates on geometric primitives such as:
 
 - Bounding frustums (computed from camera matrices)
-- `BoundingSphere` / `BoundingBox` (from `System.Numerics`)
+- `BoundingSphere` / `BoundingBox` (defined in `Mibo.Elmish` / `System.Numerics`)
 - 2D `Rectangle` overlap
 
 ## 3D: frustum culling
@@ -40,7 +40,7 @@ if Culling.isGenericVisible frustum nodeBounds then
 Use `Camera2D.viewportBounds` with `Culling.isVisible2D`:
 
 ```fsharp
-let viewBounds = getViewportBounds camera viewportSize
+let viewBounds = Camera2D.viewportBounds camera viewportWidth viewportHeight
 
 if Culling.isVisible2D viewBounds spriteBounds then
     ()

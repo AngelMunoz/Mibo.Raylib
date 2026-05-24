@@ -12,7 +12,7 @@ Mibo.Raylib uses raylib's built-in camera types for both 2D and 3D rendering:
 - **2D rendering**: raylib's `Camera2D` mutable struct
 - **3D rendering**: raylib's `Camera3D` mutable struct
 
-Both 2D and 3D renderers consume cameras via render commands (`Draw.beginCamera` / `SetCamera3D`).
+The 2D renderer consumes cameras via `Draw.beginCamera`. The `Camera3D` module provides helpers that produce a renderer-agnostic `Camera` struct (view + projection matrices) for use with the 3D pipeline when available.
 
 ## 2D cameras (`Camera2D`)
 
@@ -46,96 +46,60 @@ The `Camera2D` module in `Mibo.Elmish` provides helpers:
 - `Camera2D.smoothFollow &camera target speed` — smooth camera tracking
 - `Camera2D.clampTarget &camera minX minY maxX maxY` — clamp within bounds
 
-## 3D cameras (`Camera3D`)
+## `Camera` (renderer-agnostic)
 
-Raylib's `Camera3D` is a mutable struct:
+The core library provides a `Camera` struct with precomputed view and projection matrices, plus helper modules to build them:
 
 ```fsharp
-type Camera3D = {
-    mutable Position: Vector3
-    mutable Target: Vector3
-    mutable Up: Vector3
-    mutable FovY: float32
-    mutable Projection: CameraProjection
+type Camera = {
+    View: Matrix4x4
+    Projection: Matrix4x4
 }
 ```
 
-Fields:
+### `Camera3D` module helpers
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `Position` | `Vector3` | Camera position in world space |
-| `Target` | `Vector3` | Point the camera is looking at |
-| `Up` | `Vector3` | Up vector (typically `Vector3.UnitY`) |
-| `FovY` | `float32` | Vertical field of view in degrees |
-| `Projection` | `CameraProjection` | `Perspective` or `Orthographic` |
-
-### Perspective camera
+> The 3D rendering pipeline is pending — these helpers are ready now and produce a `Camera` you can use with a custom renderer or store for later.
 
 ```fsharp
-let mutable cam = Camera3D()
-cam.Position <- Vector3(10f, 10f, 10f)
-cam.Target <- Vector3.Zero
-cam.Up <- Vector3.UnitY
-cam.FovY <- 45f
-cam.Projection <- CameraProjection.Perspective
+// Look-at camera
+let cam = Camera3D.lookAt
+    (Vector3(0f, 10f, 20f))  // position
+    Vector3.Zero              // target
+    Vector3.Up                // up
+    (MathF.PI / 4.0f)        // 45° FOV
+    (16f / 9f)                // aspect ratio
+    0.1f                      // near plane
+    1000f                     // far plane
 
-// In your 3D view:
-buffer.Add(0<RenderLayer3D>, SetCamera3D cam)
+// Orbit camera
+let orbiting = Camera3D.orbit target yaw pitch radius fov aspect near far
+
+// Screen-to-ray picking
+let ray = Camera3D.screenPointToRay camera mousePos screenWidth screenHeight
 ```
 
-### Orthographic camera
+### Camera2D module helpers
 
-```fsharp
-let mutable cam = Camera3D()
-cam.Position <- Vector3(10f, 10f, 10f)
-cam.Target <- Vector3.Zero
-cam.Up <- Vector3.UnitY
-cam.FovY <- 20f
-cam.Projection <- CameraProjection.Orthographic
-```
+The `Camera2D` module works with raylib's `Camera2D` struct and the 2D renderer:
 
-> The `Camera3D` module in `Mibo.Elmish` provides helpers:
-> - `Camera3D.lookAt position target up fov aspect near far` — create a look-at camera
-> - `Camera3D.orbit target yaw pitch radius fov aspect near far` — orbiting camera
-> - `Camera3D.screenPointToRay camera screenPos width height` — screen-to-ray picking
+- `Camera2D.create position zoom viewportSize`
+- `Camera2D.screenToWorld camera screenPos`
+- `Camera2D.worldToScreen camera worldPos`
+- `Camera2D.viewportBounds camera width height`
+- `Camera2D.smoothFollow &camera target speed`
+- `Camera2D.clampTarget &camera minX minY maxX maxY`
 
 ## Camera Movement Examples
 
-### Orbit camera
+### Smooth follow (2D)
 
 ```fsharp
-let mutable yaw = 0f
-let mutable pitch = 0.35f
-let mutable distance = 12f
+let mutable cam = Camera2D.create startPos 1.0f viewportSize
 
-let updateOrbit (cam: byref<Camera3D>) target =
-    let dir = Vector3(
-        MathF.Cos(yaw) * MathF.Cos(pitch),
-        MathF.Sin(pitch),
-        MathF.Sin(yaw) * MathF.Cos(pitch)
-    )
-    cam.Position <- target + dir * distance
-    cam.Target <- target
-```
-
-### Third-person follow camera
-
-```fsharp
-let updateFollow (cam: byref<Camera3D>) (playerPos: Vector3) (playerForward: Vector3) distance height =
-    let behind = -playerForward * distance
-    cam.Position <- playerPos + behind + Vector3(0f, height, 0f)
-    cam.Target <- playerPos
-```
-
-### Zoom with scroll wheel
-
-```fsharp
-let updateZoom (cam: byref<Camera3D>) (delta: float32) =
-    let dir = Vector3.Normalize(cam.Position - cam.Target)
-    let currentDist = Vector3.Distance(cam.Position, cam.Target)
-    let newDist = Math.Clamp(currentDist - delta * 2f, 1f, 100f)
-    cam.Position <- cam.Target + dir * newDist
+// Each frame:
+Camera2D.smoothFollow &cam targetPos 0.1f
+Camera2D.clampTarget &cam 0f 0f worldWidth worldHeight
 ```
 
 See also: [Culling](culling.html) and [Rendering overview](rendering.html).
