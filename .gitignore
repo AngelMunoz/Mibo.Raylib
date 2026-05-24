@@ -484,3 +484,5 @@ $RECYCLE.BIN/
 # fsdocs output
 output/
 .fsdocs/
+temp
+tmp
