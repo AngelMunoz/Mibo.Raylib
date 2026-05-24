@@ -92,7 +92,6 @@ Raylib.SetShaderValue(myShader, Raylib.GetShaderLocation(myShader, "world"), wor
 
 Shader binding contracts (what parameters each shader type expects) are documented in the rendering sections:
 
-- **2D rendering shaders**: See [Rendering 2D](rendering2d.html) for shader contracts
-- **3D rendering shaders**: See [3D Custom Shaders](3d-rendering/custom-shaders.html) for shader contracts
+- **2D rendering shaders**: See [Rendering 2D overview](graphics2d/overview.html) for shader contracts
 
 See also: [raylib shaders documentation](https://www.raylib.com/examples/shaders/loader.html?name=shaders_basic_lighting)

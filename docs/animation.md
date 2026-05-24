@@ -232,5 +232,5 @@ let loadHero (ctx: GameContext) =
 
 ## See Also
 
-- [Rendering 2D](rendering2d.html)
+- [Rendering 2D](graphics2d/overview.html)
 - [Rendering overview](rendering.html)

@@ -270,7 +270,7 @@ Profile first, optimize second. Start with idiomatic code and apply these patter
 
 **Goal:** support many subsystems without turning update into spaghetti.
 
-Mibo.Raylib provides a type-guided pipeline in `Mibo.Elmish.System` (currently planned, not yet ported):
+Mibo.Raylib provides a type-guided pipeline in `Mibo.Elmish.System`:
 
 - `System.pipeMutable` for mutation-heavy phases
 - `System.snapshot` to freeze a readonly view

@@ -48,7 +48,7 @@ game.Run()
 ## Amenities & Services
 
 ### `withAssets`
-Planned. Currently a no-op. Asset loading and caching are handled automatically through `IAssets` (via `ctx.Assets.Texture(...)`, `ctx.Assets.Font(...)`, etc.) without needing explicit opt-in.
+A no-op placeholder for API consistency. Asset loading and caching are handled automatically through `IAssets` (via `ctx.Assets.Texture(...)`, `ctx.Assets.Font(...)`, etc.) without needing explicit opt-in. Use `withAssetsBasePath` to configure a root path.
 
 ### `withInput`
 Registers the `IInput` service, enabling Keyboard, Mouse, Touch, Gamepad, and Gesture subscriptions.
@@ -103,11 +103,12 @@ Adds an `IRenderer` to the stack. Renderers run in the **order they are added**.
 |> Program.withRenderer (fun () -> Renderer2D.create view)
 ```
 
-### `withComponent`
-Does not exist yet. Planned for future release. Will serve as the "escape hatch" for integrating custom raylib subsystems.
-
-### `withComponentRef`
-Does not exist yet. Planned for future release. Will provide type-safe access to custom components without globals.
+<!--
+`withComponent` and `withComponentRef` are not applicable to raylib — 
+Mibo for MonoGame had an IGameComponent system that doesn't map to raylib.
+The `Draw.drawImmediate` escape hatch + custom `IRenderCommand2D` serve
+the same purpose.
+-->
 
 ---
 

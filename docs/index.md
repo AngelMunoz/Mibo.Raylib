@@ -79,8 +79,8 @@ Run one of the samples, then copy its program setup (composition root) into your
   - [Scaling Mibo.Raylib (Simple → Complex)](scaling.html)
 
  - Rendering
-   - [Rendering 2D](rendering2d.html)
-   - [Rendering 3D](3d-rendering/overview.html)
+   - [Rendering Overview](rendering.html)
+   - [2D Rendering](graphics2d/overview.html)
 
  - Input
    - [Input (raw + mapped)](input.html)
