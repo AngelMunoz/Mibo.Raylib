@@ -39,64 +39,22 @@ type ParticleCommand
   interface IRenderCommand2D with
     member _.Layer = cmdLayer
 
-    member _.Render ctx =
+    member _.Render _ =
       let tex = texture
       let ps = particles
       let c = count
-      let invW = 1.0f / float32 tex.Width
-      let invH = 1.0f / float32 tex.Height
 
-      ctx.DrawImmediate(fun () ->
-        Rlgl.SetTexture(tex.Id)
-        Rlgl.Begin(DrawMode.Quads)
-
-        for i = 0 to c - 1 do
-          let p = ps[i]
-
-          let src = p.SourceRect
-          let u0 = src.X * invW
-          let v0 = src.Y * invH
-          let u1 = (src.X + src.Width) * invW
-          let v1 = (src.Y + src.Height) * invH
-
-          let halfW = p.Size.X * 0.5f
-          let halfH = p.Size.Y * 0.5f
-
-          let radians = p.Rotation * MathF.PI / 180.0f
-          let cosA = MathF.Cos(radians)
-          let sinA = MathF.Sin(radians)
-
-          let rotX x y = cosA * x - sinA * y
-          let rotY x y = sinA * x + cosA * y
-
-          let tlX = p.Position.X + rotX -halfW -halfH
-          let tlY = p.Position.Y + rotY -halfW -halfH
-          let trX = p.Position.X + rotX halfW -halfH
-          let trY = p.Position.Y + rotY halfW -halfH
-          let brX = p.Position.X + rotX halfW halfH
-          let brY = p.Position.Y + rotY halfW halfH
-          let blX = p.Position.X + rotX -halfW halfH
-          let blY = p.Position.Y + rotY -halfW halfH
-
-          let r = p.Color.R
-          let g = p.Color.G
-          let b = p.Color.B
-          let a = p.Color.A
-
-          Rlgl.Color4ub(r, g, b, a)
-          Rlgl.TexCoord2f(u0, v0)
-          Rlgl.Vertex2f(tlX, tlY)
-          Rlgl.Color4ub(r, g, b, a)
-          Rlgl.TexCoord2f(u1, v0)
-          Rlgl.Vertex2f(trX, trY)
-          Rlgl.Color4ub(r, g, b, a)
-          Rlgl.TexCoord2f(u1, v1)
-          Rlgl.Vertex2f(brX, brY)
-          Rlgl.Color4ub(r, g, b, a)
-          Rlgl.TexCoord2f(u0, v1)
-          Rlgl.Vertex2f(blX, blY)
-
-        Rlgl.End())
+      for i = 0 to c - 1 do
+        let p = ps[i]
+        let halfW = p.Size.X * 0.5f
+        let halfH = p.Size.Y * 0.5f
+        let dest = Rectangle(
+          p.Position.X - halfW,
+          p.Position.Y - halfH,
+          p.Size.X,
+          p.Size.Y
+        )
+        Raylib.DrawTexturePro(tex, p.SourceRect, dest, Vector2.Zero, p.Rotation, p.Color)
 
 /// <summary>Factory functions for particle render commands.</summary>
 module ParticleCommands =

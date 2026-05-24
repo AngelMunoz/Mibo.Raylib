@@ -20,6 +20,16 @@ open PlatformerSample.WorldGen
 let nearbyPlatforms = ResizeArray<Rectangle>(256)
 let keysToRemove = ResizeArray<struct (int * int)>(32)
 
+let confettiColors =
+  [| Color(255uy, 50uy, 50uy, 255uy)
+     Color(50uy, 255uy, 50uy, 255uy)
+     Color(50uy, 50uy, 255uy, 255uy)
+     Color(255uy, 255uy, 50uy, 255uy)
+     Color(255uy, 50uy, 255uy, 255uy)
+     Color(50uy, 255uy, 255uy, 255uy)
+     Color(255uy, 150uy, 50uy, 255uy)
+     Color(255uy, 50uy, 150uy, 255uy) |]
+
 // -------------------------------------------------------------
 // System: Input -> Movement Intent
 // -------------------------------------------------------------
@@ -46,6 +56,35 @@ let physicsSystem (dt: float32) (model: Model) : struct (Model * Cmd<Msg>) =
 
   let velocityY =
     if jumpPressed && canJump then
+      // Spawn confetti burst
+      let rng = System.Random.Shared
+      let mutable pc = model.ParticleCount
+      let particles = model.Particles
+      let particleVelocities = model.ParticleVelocities
+      for i = 0 to 19 do
+        if pc < particles.Length then
+          let spawnPos =
+            model.PlayerPosition
+            + Vector2(
+                playerWidth / 2.0f + float32(rng.NextDouble() * 20.0 - 10.0),
+                playerHeight * 0.3f
+              )
+          particles[pc] <- {
+            Position = spawnPos
+            Size = Vector2(4.0f, 4.0f)
+            Rotation = float32(rng.NextDouble() * Math.PI * 2.0)
+            SourceRect = Rectangle(0.0f, 0.0f, 1.0f, 1.0f)
+            Color = confettiColors[rng.Next(confettiColors.Length)]
+          }
+          particleVelocities[pc] <-
+            Vector2(
+              float32(rng.NextDouble() * 300.0 - 150.0),
+              float32(rng.NextDouble() * -250.0 - 50.0)
+            )
+          pc <- pc + 1
+      model.ParticleCount <- pc
+      Raylib.PlaySound(model.Assets.JumpSound)
+
       jumpSpeed
     else
       model.PlayerVelocity.Y + gravity * dt
@@ -168,53 +207,21 @@ let animationSystem (dt: float32) (model: Model) : struct (Model * Cmd<Msg>) =
 // -------------------------------------------------------------
 
 let particleSystem (dt: float32) (model: Model) : struct (Model * Cmd<Msg>) =
-  let mutable playedJumpSound =
-    model.Actions.Started.Contains(GameAction.Jump) && model.IsGrounded
-
   let particles = model.Particles
   let particleVelocities = model.ParticleVelocities
   let mutable particleCount = model.ParticleCount
 
-  // Spawn burst on jump
-  if playedJumpSound then
-    let rng = System.Random.Shared
-
-    for i = 0 to 11 do
-      if particleCount < particles.Length then
-        particles[particleCount] <- {
-          Position =
-            model.PlayerPosition + Vector2(playerWidth / 2.0f, playerHeight)
-          Size = Vector2(8.0f, 8.0f)
-          Rotation = float32(rng.NextDouble() * Math.PI * 2.0)
-          SourceRect = Rectangle(0.0f, 0.0f, 1.0f, 1.0f)
-          Color = Color(255uy, 255uy, 0uy, 255uy)
-        }
-
-        particleVelocities[particleCount] <-
-          Vector2(
-            float32(rng.NextDouble() * 200.0 - 100.0),
-            float32(rng.NextDouble() * -150.0 - 50.0)
-          )
-
-        particleCount <- particleCount + 1
-
-  // Update existing particles
   for i = 0 to particleCount - 1 do
     let vel = particleVelocities[i]
-    let newVel = Vector2(vel.X, vel.Y + gravity * dt * 0.3f)
+    let newVel = Vector2(vel.X, vel.Y + gravity * dt * 0.05f)
     particleVelocities[i] <- newVel
-
     particles[i] <- {
       particles[i] with
           Position = particles[i].Position + newVel * dt
     }
 
-  ParticleSimulation.fadeAndCompact particles &particleCount 255.0f dt
+  ParticleSimulation.fadeAndCompact particles &particleCount 60.0f dt
   model.ParticleCount <- particleCount
-
-  if playedJumpSound then
-    Raylib.PlaySound(model.Assets.JumpSound)
-
   model, Cmd.none
 
 // -------------------------------------------------------------
