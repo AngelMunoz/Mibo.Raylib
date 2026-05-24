@@ -13,14 +13,8 @@ The particle system renders textured quads in bulk. It is independent of lightin
 
 Particle rendering is split into two layers:
 
-```
-Your simulation (velocities, lifetimes, physics)
-  → writes Particle2D render snapshots
-  → ParticleDraw.particles adds them to the buffer
-```
-
-**Simulation** (position updates, gravity, spin) lives in your update function.
-**Rendering** (`Particle2D` snapshots + texture) lives in your view.
+1. **Simulation** — your update function handles velocities, lifetimes, physics
+2. **Render** — writes `Particle2D` snapshots, `ParticleDraw.particles` adds them to the buffer
 
 ## Particle2D
 
