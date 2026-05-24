@@ -186,33 +186,12 @@ Point light shadows are bounded by the light's radius, so they're cheaper than d
 - The shadow raymarch loops up to 64 iterations per lit pixel per shadow-casting light.
 - Keep shadow-casting lights few (1–2 directional, 2–4 point) for good performance.
 
-## Particles
-
-The particle system is separate from lighting but integrates via the same render buffer:
-
-```fsharp
-// In your model:
-let particles = Array.zeroCreate<Particle2D> 256
-let mutable particleCount = 0
-
-// In your view:
-buffer |> ParticleDraw.particles particleTexture particles particleCount 10<RenderLayer>
-```
-
-`ParticleSimulation.fadeAndCompact` handles fading and dead-particle removal:
-
-```fsharp
-ParticleSimulation.fadeAndCompact particles &particleCount 60f dt
-```
-
-See the PlatformerSample for a complete particle setup with confetti effects.
-
 ## Unlit rendering
 
 Sprites drawn with `Draw.sprite` (instead of `LightDraw.litSprite`) render at full brightness, ignoring lighting. This is useful for UI, minimaps, or any element that shouldn't be affected by scene lighting.
 
 ## See Also
 
+- [Particles](particles.html) — Batched particle rendering
 - [Buffer & Commands](buffer-and-commands.html) — SpriteState reference
 - [Custom Commands](custom-commands.html) — Implementing custom lighting passes
-- [PlatformerSample](https://github.com/your-org/Mibo.Raylib/tree/main/samples/PlatformerSample) — Complete lighting setup

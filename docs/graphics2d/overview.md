@@ -76,6 +76,8 @@ See [Lighting & Shadows](lighting.html) for details.
 ## Next steps
 
 - [Buffer & Commands](buffer-and-commands.html) — How to build every type of draw command
+- [Lighting & Shadows](lighting.html) — Point, directional, ambient lights + SDF shadows
+- [Particles](particles.html) — Batched textured quads
 - [Custom Commands](custom-commands.html) — Implementing IRenderCommand2D
 - [Performance](performance.html) — Writing efficient rendering code
 - [Camera](../camera.html) — Cameras and coordinate transforms
