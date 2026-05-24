@@ -44,6 +44,7 @@ let init (ctx: GameContext) =
 ```
 
 Parameters:
+
 | Param | Default | Description |
 |-------|---------|-------------|
 | `litShader` | built-in | Custom GLSL shader (must match uniform layout) |
