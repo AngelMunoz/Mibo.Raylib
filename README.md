@@ -105,6 +105,13 @@ docs/                      # Documentation source (fsdocs)
 - **Zero-cost abstractions** — structs, arrays, `ArrayPool`, and `InlineIfLambda` where performance matters
 - **No Content Pipeline** — all assets loaded at runtime from loose files
 
+## Built on
+
+Mibo.Raylib is built on top of:
+
+- [raylib](https://github.com/raysan5/raylib) — the cross-platform graphics library that powers the rendering, input, and audio layers
+- [raylib-cs](https://github.com/raylib-cs/raylib-cs) — the C# bindings that make raylib accessible from .NET
+
 ## Feedback
 
 Issues and PRs are very welcome. If you're interested in using F# for game development beyond simple 2D games, Mibo.Raylib aims to be a practical, batteries-included framework that scales with your ambition.

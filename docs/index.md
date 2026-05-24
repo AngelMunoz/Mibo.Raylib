@@ -87,3 +87,10 @@ Run one of the samples, then copy its program setup (composition root) into your
 
  - Assets
    - [Assets (loading + caching)](assets.html)
+
+## Built on
+
+Mibo.Raylib is built on top of:
+
+- [raylib](https://github.com/raysan5/raylib) — the cross-platform graphics library that powers the rendering, input, and audio layers
+- [raylib-cs](https://github.com/raylib-cs/raylib-cs) — the C# bindings that make raylib accessible from .NET
