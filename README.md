@@ -105,6 +105,10 @@ docs/                      # Documentation source (fsdocs)
 - **Zero-cost abstractions** — structs, arrays, `ArrayPool`, and `InlineIfLambda` where performance matters
 - **No Content Pipeline** — all assets loaded at runtime from loose files
 
+## License
+
+Mibo.Raylib is distributed under the [zlib/libpng License](LICENSE).
+
 ## Built on
 
 Mibo.Raylib is built on top of:
