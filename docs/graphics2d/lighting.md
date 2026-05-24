@@ -22,13 +22,11 @@ Everything runs on the GPU via a custom lit-sprite shader. Light data is uploade
 
 ## Quick start
 
-```
-Create LightContext2D in init, store in model
-  → At start of view: ctx.Reset()
-  → Set ambient, add lights, add occluders
-  → Draw lit sprites via LightDraw.litSprite
-  → End lighting pass via LightDraw.endLighting
-```
+1. Create `LightContext2D` in `init`, store in your model
+2. Each frame: `ctx.Reset()` at the start of your view
+3. Set ambient light, add lights and occluders
+4. Draw lit sprites via `LightDraw.litSprite`
+5. End the lighting pass via `LightDraw.endLighting` (sprites after this are unlit)
 
 ## Setup
 
