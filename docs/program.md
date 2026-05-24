@@ -36,7 +36,7 @@ let program =
   |> Program.withTick Tick // Enqueue a message every frame
   // 3. Define the view
   |> Program.withRenderer (fun () -> Batch3DRenderer.create view3d)
-  |> Program.withRenderer (fun () -> Batch2DRenderer.create viewUi)
+  |> Program.withRenderer (fun () -> Renderer2D.create viewUi)
 
 // Run the game
 let game = new RaylibGame<Model, Msg>(program)
@@ -51,7 +51,7 @@ game.Run()
 Planned. Currently a no-op. Asset loading and caching are handled automatically through `IAssets` (via `ctx.Assets.Texture(...)`, `ctx.Assets.Font(...)`, etc.) without needing explicit opt-in.
 
 ### `withInput`
-Does not exist yet. Input is handled either via direct polling with `Keyboard.poll` in your `update` function, or through subscriptions (future release).
+Registers the `IInput` service, enabling Keyboard, Mouse, Touch, Gamepad, and Gesture subscriptions.
 
 ### `withSubscription`
 Connects your Elmish subscriptions to the runtime. The subscription function is re-evaluated every time your model changes, allowing you to dynamically start/stop listeners.
@@ -100,7 +100,7 @@ Controls when messages are processed.
 Adds an `IRenderer` to the stack. Renderers run in the **order they are added**. It is common to add a 3D renderer first, followed by a 2D UI renderer.
 
 ```fsharp
-|> Program.withRenderer (fun () -> Batch2DRenderer.create view)
+|> Program.withRenderer (fun () -> Renderer2D.create view)
 ```
 
 ### `withComponent`

@@ -7,11 +7,7 @@ index: 22
 
 # Animation (2D Sprite Animation)
 
-> **⚠️ PLANNED**
->
-> The `Mibo.Animation` module has not been ported to Mibo.Raylib yet. This page documents the planned API, which will closely follow the original Mibo animation system using raylib texture types.
-
-Mibo provides a format-agnostic 2D animation system in `Mibo.Animation`. It integrates directly with the existing `Graphics2D` rendering primitives.
+Mibo provides a format-agnostic 2D animation system in `Mibo.Animation`. It integrates with the existing `Draw.sprite` / `LightDraw.litSprite` rendering pipeline.
 
 ## Core Types
 
@@ -40,7 +36,12 @@ let sprite = AnimatedSprite.create sheet "idle"
 let updatedSprite = AnimatedSprite.update deltaTime sprite
 
 // 4. Draw (in your view)
-sprite |> AnimatedSprite.draw position layer buffer
+let src = AnimatedSprite.currentSource sprite
+buffer |> Draw.sprite {
+    Texture = sheet.Texture; Dest = r (int position.X) (int position.Y) 32 32
+    Source = src; Origin = Vector2.Zero; Rotation = 0f
+    Color = Color.White; Layer = 0<RenderLayer>
+}
 ```
 
 ## SpriteSheet Factory Functions
@@ -151,10 +152,19 @@ sprite
 
 ### Drawing
 
+`AnimatedSprite` does not provide its own draw functions. Instead, use `AnimatedSprite.currentSource` to get the current frame's source rectangle, then draw via the general `Draw.sprite` or `LightDraw.litSprite`:
+
 ```fsharp
-sprite |> AnimatedSprite.draw position layer buffer
-sprite |> AnimatedSprite.drawWithDepth position 0.5f layer buffer
-sprite |> AnimatedSprite.drawRect destRect layer buffer
+let src = AnimatedSprite.currentSource sprite
+buffer |> Draw.sprite {
+    Texture = sprite.Sheet.Texture
+    Dest = Rectangle(int position.X, int position.Y, int src.Width, int src.Height)
+    Source = src
+    Origin = Vector2.Zero
+    Rotation = sprite.Rotation
+    Color = sprite.Color
+    Layer = layer
+}
 ```
 
 ### Manual Frame Access
@@ -210,7 +220,7 @@ let sprite = oldSprite |> AnimatedSprite.playByIndex walkIndex
 
 Mibo is format-agnostic: a `SpriteSheet` is simply a **Texture** plus a set of **Source Rectangles**.
 
-When ported, textures will be `Raylib_cs.Texture2D` and rectangles will be `Raylib_cs.Rectangle`.
+Textures are `Raylib_cs.Texture2D` and rectangles are `Raylib_cs.Rectangle`.
 
 ```fsharp
 // Example: pseudo-code for a custom loader

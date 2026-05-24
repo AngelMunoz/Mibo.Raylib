@@ -61,7 +61,6 @@ Here is how the whole picture fits together in `Program.fs`.
 ```fsharp
 module MyGame.Program
 
-open Elmish
 open Mibo.Elmish
 open Mibo.Elmish.Graphics2D
 
@@ -122,7 +121,7 @@ let main _args =
             cfg.Height <- 720
             cfg.TargetFPS <- 60)
         |> Program.withAssets
-        |> Program.withRenderer (fun () -> Batch2DRenderer.create view)
+        |> Program.withRenderer (fun () -> Renderer2D.create view)
 
     // Run the game
     let game = new RaylibGame<Model, Msg>(program)

@@ -1,5 +1,3 @@
-> **⚠️ PLANNED:** The `Mibo.Layout` and `Mibo.Layout3D` modules are planned for porting and are not yet available in Mibo.Raylib. This documentation describes upcoming functionality.
-
 ---
 title: Level Design Overview
 category: Level Design

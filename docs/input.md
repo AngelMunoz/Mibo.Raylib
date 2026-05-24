@@ -7,9 +7,9 @@ index: 20
 
 # Input (raw + mapped)
 
-Mibo.Raylib supports input via **semantic input mapping** (hardware → actions) using `InputMap` + `Keyboard.poll`.
+Mibo.Raylib supports input via **semantic input mapping** (hardware → actions) using `InputMap` + `InputMapper.subscribe`.
 
-Raw keyboard polling (`Keyboard.poll`) is available now. Mouse, touch, and gamepad polling are planned.
+Subscription-based input is available for keyboard, mouse, touch, gamepad, and gestures. Direct polling is also available via `InputPolling`.
 
 ## Semantic input mapping (actions)
 
@@ -29,7 +29,7 @@ type Action =
 
 ```fsharp
 open Raylib_cs
-open Mibo.Elmish
+open Mibo.Input
 
 let map =
     InputMap.empty
@@ -38,29 +38,43 @@ let map =
     |> InputMap.key Jump KeyboardKey.Space
 ```
 
-### Poll and consume
+### Subscribe with `InputMapper.subscribe`
 
-Because Mibo.Raylib has no subscription-based input yet, you poll inside your `Tick` handler using `Keyboard.poll`. You pass the previous frame's `ActionState` to compute deltas (Started/Released).
+The recommended approach uses `InputMapper.subscribe` to wire your `InputMap` into an Elmish subscription:
+
+```fsharp
+open Mibo.Input
+
+type Msg =
+    | InputMapped of ActionState<Action>
+
+let subscribe (ctx: GameContext) (model: Model) : Sub<Msg> =
+    InputMapper.subscribeStatic map InputMapped ctx
+```
+
+Then in your program:
 
 ```fsharp
 open Mibo.Elmish
 
-type Msg =
-    | InputMapped of ActionState<Action>
-    | Tick of GameTime
+Program.mkProgram init update
+|> Program.withInput
+|> Program.withSubscription subscribe
+```
 
-let init (ctx: GameContext) =
-    struct ({ Actions = ActionState.empty }, Cmd.none)
+Each frame, the mapper dispatches `InputMapped` with the current action state:
 
+```fsharp
 let update msg model =
     match msg with
-    | Tick gt ->
-        let actions = Keyboard.poll map model.Actions
+    | InputMapped actions ->
         if actions.Started.Contains Jump then
             // do jump
             ()
         struct ({ model with Actions = actions }, Cmd.none)
 ```
+
+For a zero-subscription alternative, use `Program.withInputMapper` which registers an `IInputMapper<'Action>` service you can query inline.
 
 `ActionState` gives you three sets each frame:
 
@@ -69,31 +83,6 @@ let update msg model =
 | `Held`    | Actions whose keys are currently down |
 | `Started` | Actions pressed this frame            |
 | `Released`| Actions released this frame           |
-
-### Dynamic remapping
-
-You can swap the `InputMap` at runtime by passing a different map to `Keyboard.poll`.
-
-```fsharp
-let mapRef = ref map
-
-let update msg model =
-    match msg with
-    | Tick _ ->
-        let actions = Keyboard.poll mapRef.Value model.Actions
-        // ...
-```
-
-## Planned features
-
-The following input features are not yet implemented in Mibo.Raylib but are planned:
-
-- **Mouse polling** (`Mouse.poll` with position and button state)
-- **Gamepad polling** (`Gamepad.poll` for controller input)
-- **Touch input** (mobile touch events)
-- **`InputMapper` module** (subscription-based mapping with `IInputMapper` service)
-- **Input subscriptions** (`Keyboard.onPressed`, `Mouse.onMove`, etc.)
-- **`IInput` service** (raw delta observable pattern)
 
 ## See Also
 

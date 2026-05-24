@@ -1,5 +1,3 @@
-> **⚠️ PLANNED:** The `Mibo.Layout` module is planned for porting and is not yet available in Mibo.Raylib. This documentation describes upcoming functionality.
-
 ---
 title: Building Platformer Levels
 category: Level Design

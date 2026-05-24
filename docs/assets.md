@@ -17,6 +17,10 @@ type IAssets =
   abstract Font: path: string -> Font
   abstract Sound: path: string -> Sound
   abstract Model: path: string -> Model
+  abstract Get: key: string -> 'T voption
+  abstract Create: key: string * factory: (unit -> 'T) -> 'T
+  abstract GetOrCreate: key: string * factory: (unit -> 'T) -> 'T
+  abstract Clear: unit -> unit
   abstract Dispose: unit -> unit
 ```
 
@@ -41,12 +45,16 @@ let init (ctx: GameContext): struct(Model * Cmd<Msg>) =
 
 All these functions cache results automatically:
 
-| Method    | Returns          | Description         |
-|-----------|------------------|---------------------|
-| `Texture` | `Texture2D`      | 2D image asset      |
-| `Font`    | `Font`           | TrueType/bitmap font|
-| `Sound`   | `Sound`          | Audio effect        |
-| `Model`   | `Model`          | 3D model            |
+| Method       | Returns           | Description                     |
+|--------------|-------------------|---------------------------------|
+| `Texture`    | `Texture2D`       | 2D image asset                  |
+| `Font`       | `Font`            | TrueType/bitmap font            |
+| `Sound`      | `Sound`           | Audio effect                    |
+| `Model`      | `Model`           | 3D model                        |
+| `Get`        | `'T voption`      | Retrieve cached custom asset    |
+| `Create`     | `'T`              | Create and cache custom asset   |
+| `GetOrCreate`| `'T`              | Get cached or create + cache    |
+| `Clear`      | `unit`            | Clear custom asset caches       |
 
 ## Cache Behavior
 
@@ -72,10 +80,7 @@ For large games, consider chunked loading (per level/biome) with separate `IAsse
 
 ## Planned features
 
-The following are **not yet implemented** in Mibo.Raylib's asset system but are planned:
+The following are **not yet implemented** but are planned:
 
-- **Generic cache** (`getOrCreate`, `get`, `create` for custom types)
 - **JSON helpers** (JDeck integration for loading `.json` files)
 - **Custom file loaders** (`fromCustom`, `fromCustomCache`)
-- **`Assets.*` module-level functions** (only `IAssets` via `ctx.Assets` exists)
-- **`SafeSetParam`** for shader parameters

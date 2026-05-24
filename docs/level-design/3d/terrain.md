@@ -1,5 +1,3 @@
-> **⚠️ PLANNED:** The `Mibo.Layout3D` module is planned for porting and is not yet available in Mibo.Raylib. This documentation describes upcoming functionality.
-
 ---
 title: Building Outdoor Terrain
 category: Level Design

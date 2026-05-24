@@ -70,7 +70,7 @@ let view ctx model (buffer: RenderBuffer<RenderCmd2D>) =
 
 **Mibo.Raylib helpers you'll use:**
 
-- `InputMap` + `Keyboard.poll`
+- `InputMap` + `InputMapper.subscribe`
 - model field like `Actions: ActionState<_>` updated by an `InputMapped` message
 
 **Recommendation:** treat input as _data for the next simulation step_.

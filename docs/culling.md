@@ -9,8 +9,6 @@ index: 14
 
 `Mibo.Elmish.Culling` is a helper module that keeps _visibility math_ separate from your renderer and your spatial partitioning.
 
-`Mibo.Elmish.Culling` is a tiny helper module that keeps _visibility math_ separate from your renderer and your spatial partitioning.
-
 It operates on geometric primitives such as:
 
 - Bounding frustums (computed from camera matrices)
@@ -54,9 +52,5 @@ This module doesn't try to be your spatial index.
 
 - If you have many objects: use a grid / quadtree / BVH / octree.
 - Use these helpers at the edge: "is this node/object worth considering for rendering?"
-
-## Until ported
-
-Until `Mibo.Elmish.Culling` is available, implement visibility checks manually using `System.Numerics` primitives or a third-party spatial library.
 
 See also: [Camera](camera.html) and [Rendering overview](rendering.html).

@@ -12,7 +12,7 @@ Mibo.Raylib uses raylib's built-in camera types for both 2D and 3D rendering:
 - **2D rendering**: raylib's `Camera2D` mutable struct
 - **3D rendering**: raylib's `Camera3D` mutable struct
 
-Both 2D and 3D renderers consume cameras via render commands (`SetCamera2D` / `SetCamera3D`).
+Both 2D and 3D renderers consume cameras via render commands (`Draw.beginCamera` / `SetCamera3D`).
 
 ## 2D cameras (`Camera2D`)
 
@@ -26,22 +26,25 @@ cam.Rotation <- 0f                  // rotation in radians
 cam.Zoom <- 1.0f                    // zoom factor
 ```
 
-In the Mibo.Raylib 2D renderer, you use a `Camera2DState` record:
+In the Mibo.Raylib 2D renderer, you use `Draw.beginCamera` with raylib's `Camera2D` struct:
 
 ```fsharp
-buffer.Add(0<RenderLayer>, SetCamera2D {
-    Position = Vector2(400f, 300f)
-    Zoom = 1.0f
-    Layer = 0<RenderLayer>
-})
+let camera = Camera2D.create (Vector2(400f, 300f)) 1.0f viewportSize
+
+buffer
+|> Draw.beginCamera 0<RenderLayer> camera
+|> // ... draw world content ...
+|> Draw.endCamera 1000<RenderLayer>
 ```
 
-The renderer constructs the raylib `Camera2D` internally, centering the view on the given position using the window dimensions.
+The `Camera2D` module in `Mibo.Elmish` provides helpers:
 
-> **Planned:**
-> - `Camera2D.create` helper function
-> - `Camera2D.screenToWorld` / `worldToScreen`
-> - `Camera2D.viewportBounds` for culling
+- `Camera2D.create position zoom viewportSize` — create a camera centered on a position
+- `Camera2D.screenToWorld camera screenPos` — convert screen to world coordinates
+- `Camera2D.worldToScreen camera worldPos` — convert world to screen coordinates
+- `Camera2D.viewportBounds camera width height` — get visible world rectangle (for culling)
+- `Camera2D.smoothFollow &camera target speed` — smooth camera tracking
+- `Camera2D.clampTarget &camera minX minY maxX maxY` — clamp within bounds
 
 ## 3D cameras (`Camera3D`)
 
@@ -92,11 +95,10 @@ cam.FovY <- 20f
 cam.Projection <- CameraProjection.Orthographic
 ```
 
-> **Planned:**
-> - `Camera3D.lookAt`, `Camera3D.orbit`, `Camera3D.create` helper functions
-> - `Mibo.Rendering.Graphics3D.Camera` module with rich builder pattern and matrix caching
-> - Screen-to-ray picking helpers
-> - Bounding frustum computation for culling
+> The `Camera3D` module in `Mibo.Elmish` provides helpers:
+> - `Camera3D.lookAt position target up fov aspect near far` — create a look-at camera
+> - `Camera3D.orbit target yaw pitch radius fov aspect near far` — orbiting camera
+> - `Camera3D.screenPointToRay camera screenPos width height` — screen-to-ray picking
 
 ## Camera Movement Examples
 

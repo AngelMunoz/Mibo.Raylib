@@ -139,18 +139,20 @@ let subscribe model =
 
 ### Input Handling
 
-For continuous input (not events):
+For subscription-based input, use the built-in modules:
 
 ```fsharp
+open Mibo.Input
+
 let inputSub : Sub<Msg> =
-  SubId.ofString "input",
-  fun dispatch ->
-    // Poll-based input is handled via Keyboard.poll in update
-    // Subscription-based input helpers are planned
-    Sub.none
+  Sub.batch [
+    Keyboard.onPressed (fun k -> KeyPressed k) ctx
+    Mouse.onLeftClick (fun pos -> MouseClicked pos) ctx
+    Gamepad.listen (fun g -> GamepadInput g) ctx
+  ]
 ```
 
-> **Note:** Built-in input subscriptions are not yet implemented in Mibo.Raylib. See [Input](input.html) for the current polling-based approach.
+See [Input](input.html) for `InputMapper.subscribe` for semantic action mapping.
 
 ### Network Events
 
