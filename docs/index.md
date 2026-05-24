@@ -6,6 +6,10 @@ index: 0
 
 # Mibo.Raylib: A Functional Game Framework for F#
 
+> **NOTE for ADVENTURERS:** raylib is a programming library to enjoy videogames programming; no fancy interface, no visual helpers, no debug button... just coding in the most pure spartan-programmers way.
+
+Following that spirit, Mibo.Raylib keeps it lean — no editors, no pipelines, no wizards. Just F# and the Elmish loop, with a handful of commodities to get out of your way and let you enjoy the craft.
+
 Mibo.Raylib is a lightweight, Elmish-based game framework built on top of raylib. It brings the power of the **Model-View-Update (MVU)** architecture to game development, encouraging pure game logic and predictable state management.
 
 ## Getting Started
