@@ -60,16 +60,18 @@ Two ways to add commands to the buffer:
 
 ## Lighting
 
-The 2D lighting system (`Mibo.Elmish.Graphics2D.Lighting`) produces light commands that mix into the render buffer alongside draw commands. Wrap draw calls between light commands:
+The 2D lighting system (`Mibo.Elmish.Graphics2D.Lighting`) provides point lights, directional lights, ambient light, and SDF soft shadows — all GPU-driven with no extra render passes.
 
 ```fsharp
 buffer
-|> LightDraw.litSprite lightingCtx spriteState
-|> LightDraw.ambientLight lightingCtx color
-|> Draw.fillRect (10<RenderLayer>, Color.Red) rect
+|> LightDraw.setAmbient lightingCtx (5<RenderLayer>, { Color = gray })
+|> LightDraw.addDirectionalLight lightingCtx 6<RenderLayer> { Direction = sunDir; ... }
+|> LightDraw.addPointLight lightingCtx 7<RenderLayer> { Position = torchPos; ... }
+|> LightDraw.litSprite lightingCtx playerSprite
+|> LightDraw.endLighting lightingCtx 999<RenderLayer>
 ```
 
-See the PlatformerSample for a complete lighting setup.
+See [Lighting & Shadows](lighting.html) for details.
 
 ## Next steps
 

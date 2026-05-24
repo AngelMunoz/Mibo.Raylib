@@ -34,6 +34,7 @@ The 2D pipeline is built on `Renderer2D<'Model>` in the `Mibo.Elmish.Graphics2D`
 
 - [2D Rendering Overview](graphics2d/overview.html) — What, Why, When
 - [Buffer & Commands](graphics2d/buffer-and-commands.html) — Building and issuing draw commands
+- [Lighting & Shadows](graphics2d/lighting.html) — 2D lights, shadows, and particles
 - [Custom Commands](graphics2d/custom-commands.html) — `IRenderCommand2D` and escape hatches
 - [Performance](graphics2d/performance.html) — Writing performant 2D rendering code
 - [Camera](camera.html) — Cameras and coordinate systems
