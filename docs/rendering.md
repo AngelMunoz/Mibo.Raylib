@@ -11,15 +11,10 @@ Mibo.Raylib uses a **deferred, layer-sorted rendering pipeline**. Instead of cal
 
 ## The Pipeline
 
-```
-Your view function
-  → builds IRenderCommand2D commands
-  → adds them to a RenderBuffer2D
-→ Renderer sorts commands by Layer (ascending)
-→ Renderer executes commands in order
-  → raylib auto-batches GPU draw calls
-  → post-processing passes (optional)
-```
+1. Your view function builds `IRenderCommand2D` commands and adds them to a `RenderBuffer2D`
+2. The renderer sorts commands by `Layer` (ascending)
+3. The renderer executes commands in order
+4. raylib auto-batches GPU draw calls; optional post-processing passes run after
 
 ## Why Deferred Rendering?
 
