@@ -79,8 +79,12 @@ module Command3D =
 
   [<Struct>]
   type DrawMeshInstancedCommand
-    (mesh: Mesh, transforms: Matrix4x4[], material: Material3D, instanceCount: int)
-    =
+    (
+      mesh: Mesh,
+      transforms: Matrix4x4[],
+      material: Material3D,
+      instanceCount: int
+    ) =
     /// <summary>The mesh to render.</summary>
     member _.Mesh = mesh
     /// <summary>Per-instance world transform matrices.</summary>
@@ -96,8 +100,13 @@ module Command3D =
 
   [<Struct>]
   type DrawBillboardBatchCommand
-    (textures: Texture2D[], positions: Vector3[], sizes: Vector2[], colors: Color[], count: int)
-    =
+    (
+      textures: Texture2D[],
+      positions: Vector3[],
+      sizes: Vector2[],
+      colors: Color[],
+      count: int
+    ) =
     /// <summary>Textures for each billboard (one per billboard).</summary>
     member _.Textures = textures
     /// <summary>World-space positions for each billboard.</summary>

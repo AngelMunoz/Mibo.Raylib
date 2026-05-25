@@ -37,13 +37,16 @@ type IRenderContext3D =
   /// Draws a mesh with the given world transform and material.
   /// The pipeline binds the appropriate shader and uploads uniforms.
   /// </summary>
-  abstract DrawMesh: mesh: Mesh * transform: Matrix4x4 * material: Material3D -> unit
+  abstract DrawMesh:
+    mesh: Mesh * transform: Matrix4x4 * material: Material3D -> unit
 
   /// <summary>
   /// Draws a billboard (camera-facing quad) with the given texture.
   /// The pipeline handles the billboard matrix and shader binding.
   /// </summary>
-  abstract DrawBillboard: texture: Texture2D * position: Vector3 * size: Vector2 * color: Color -> unit
+  abstract DrawBillboard:
+    texture: Texture2D * position: Vector3 * size: Vector2 * color: Color ->
+      unit
 
   /// <summary>Draws a 3D line between two world-space points.</summary>
   abstract DrawLine3D: start: Vector3 * finish: Vector3 * color: Color -> unit
@@ -52,21 +55,37 @@ type IRenderContext3D =
   /// Draws a skinned mesh with bone matrix data.
   /// Pipelines that do not support GPU skinning may use a CPU fallback.
   /// </summary>
-  abstract DrawSkinnedMesh: mesh: Mesh * transform: Matrix4x4 * material: Material3D * boneMatrices: Matrix4x4[] -> unit
+  abstract DrawSkinnedMesh:
+    mesh: Mesh *
+    transform: Matrix4x4 *
+    material: Material3D *
+    boneMatrices: Matrix4x4[] ->
+      unit
 
   /// <summary>
   /// Draws multiple instances of the same mesh with different transforms.
   /// Prefer this over individual <see cref="M:Mibo.Elmish.Graphics3D.IRenderContext3D.DrawMesh"/>
   /// calls when rendering many copies of the same mesh (e.g. foliage, debris).
   /// </summary>
-  abstract DrawMeshInstanced: mesh: Mesh * transforms: Matrix4x4[] * material: Material3D * instanceCount: int -> unit
+  abstract DrawMeshInstanced:
+    mesh: Mesh *
+    transforms: Matrix4x4[] *
+    material: Material3D *
+    instanceCount: int ->
+      unit
 
   /// <summary>
   /// Draws multiple billboards in a single batch.
   /// Prefer this over individual <see cref="M:Mibo.Elmish.Graphics3D.IRenderContext3D.DrawBillboard"/>
   /// calls when rendering many sprites at once (e.g. particles).
   /// </summary>
-  abstract DrawBillboardBatch: textures: Texture2D[] * positions: Vector3[] * sizes: Vector2[] * colors: Color[] * count: int -> unit
+  abstract DrawBillboardBatch:
+    textures: Texture2D[] *
+    positions: Vector3[] *
+    sizes: Vector2[] *
+    colors: Color[] *
+    count: int ->
+      unit
 
   /// <summary>
   /// Adds a point light to the scene. Advisory — unsupported pipelines no-op.

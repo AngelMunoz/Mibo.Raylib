@@ -96,7 +96,10 @@ module Draw3D =
     (instanceCount: int)
     (buffer: RenderBuffer3D)
     =
-    buffer.Add(Command3D.drawMeshInstanced mesh transforms material instanceCount)
+    buffer.Add(
+      Command3D.drawMeshInstanced mesh transforms material instanceCount
+    )
+
     buffer
 
   /// <summary>
@@ -111,7 +114,10 @@ module Draw3D =
     (count: int)
     (buffer: RenderBuffer3D)
     =
-    buffer.Add(Command3D.drawBillboardBatch textures positions sizes colors count)
+    buffer.Add(
+      Command3D.drawBillboardBatch textures positions sizes colors count
+    )
+
     buffer
 
   // ──────────────────────────────────────────────
@@ -124,7 +130,7 @@ module Draw3D =
     buffer
 
   /// <summary>Ends the current 3D camera transform.</summary>
-  let inline endCamera (buffer: RenderBuffer3D) =
+  let inline endCamera(buffer: RenderBuffer3D) =
     buffer.Add(Command3D.endCamera())
     buffer
 
@@ -138,7 +144,10 @@ module Draw3D =
     buffer
 
   /// <summary>Adds a directional light to the scene.</summary>
-  let inline addDirectionalLight (light: DirectionalLight3D) (buffer: RenderBuffer3D) =
+  let inline addDirectionalLight
+    (light: DirectionalLight3D)
+    (buffer: RenderBuffer3D)
+    =
     buffer.Add(Command3D.addDirectionalLight light)
     buffer
 
@@ -198,11 +207,7 @@ module Draw3D =
     buffer
 
   /// <summary>Draws a ray visualization for debugging.</summary>
-  let inline drawRay
-    (ray: Ray)
-    (color: Color)
-    (buffer: RenderBuffer3D)
-    =
+  let inline drawRay (ray: Ray) (color: Color) (buffer: RenderBuffer3D) =
     buffer.Add(Command3D.drawRay ray color)
     buffer
 

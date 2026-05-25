@@ -28,7 +28,11 @@ module GridOccluders =
   /// <param name="isSolid">Predicate that returns true for solid/obstacle cell contents.</param>
   /// <param name="edges">Which cell edges may produce occluders (e.g. <c>Edge.Bottom ||| Edge.Left ||| Edge.Right</c> for platformers, <c>Edge.All</c> for top-down).</param>
   /// <param name="grid">The grid to scan.</param>
-  let fromCellGrid (isSolid: 'T -> bool) (edges: Edge) (grid: CellGrid2D<'T>) : Occluder2D[] =
+  let fromCellGrid
+    (isSolid: 'T -> bool)
+    (edges: Edge)
+    (grid: CellGrid2D<'T>)
+    : Occluder2D[] =
     let occluders = ResizeArray<Occluder2D>()
     let cellW = grid.CellSize.X
     let cellH = grid.CellSize.Y
@@ -53,7 +57,7 @@ module GridOccluders =
                   }
                 )
               | ValueSome neighbor ->
-                if not (isSolid neighbor) then
+                if not(isSolid neighbor) then
                   occluders.Add(
                     {
                       P1 = Vector2(wx, wy + cellH)
@@ -72,7 +76,7 @@ module GridOccluders =
                   }
                 )
               | ValueSome neighbor ->
-                if not (isSolid neighbor) then
+                if not(isSolid neighbor) then
                   occluders.Add(
                     {
                       P1 = Vector2(wx, wy)
@@ -91,7 +95,7 @@ module GridOccluders =
                   }
                 )
               | ValueSome neighbor ->
-                if not (isSolid neighbor) then
+                if not(isSolid neighbor) then
                   occluders.Add(
                     {
                       P1 = Vector2(wx, wy)
@@ -110,7 +114,7 @@ module GridOccluders =
                   }
                 )
               | ValueSome neighbor ->
-                if not (isSolid neighbor) then
+                if not(isSolid neighbor) then
                   occluders.Add(
                     {
                       P1 = Vector2(wx + cellW, wy)

@@ -27,7 +27,7 @@ module CsmMath =
     // Re-orthogonalize up against right to handle non-orthogonal cameraUp
     let up = Vector3.Cross(right, forward)
 
-    let halfV = tan (fovY * 0.5f)
+    let halfV = tan(fovY * 0.5f)
     let halfH = halfV * aspect
 
     let nearCenter = cameraPos + forward * near
@@ -69,8 +69,11 @@ module CsmMath =
     let lightPos = center - lightDir * 100.0f
     let lightView = Matrix4x4.CreateLookAt(lightPos, center, Vector3.UnitY)
 
-    let mutable minX, minY, minZ = System.Single.MaxValue, System.Single.MaxValue, System.Single.MaxValue
-    let mutable maxX, maxY, maxZ = System.Single.MinValue, System.Single.MinValue, System.Single.MinValue
+    let mutable minX, minY, minZ =
+      System.Single.MaxValue, System.Single.MaxValue, System.Single.MaxValue
+
+    let mutable maxX, maxY, maxZ =
+      System.Single.MinValue, System.Single.MinValue, System.Single.MinValue
 
     for corner in frustumCorners do
       let p = Vector3.Transform(corner, lightView)
@@ -92,6 +95,7 @@ module CsmMath =
 
     // Add small padding to Z to capture geometry outside frustum
     let zMult = 10.0f
+
     if minZ < 0.0f then
       minZ <- minZ * zMult
     else
@@ -103,11 +107,7 @@ module CsmMath =
       maxZ <- maxZ * zMult
 
     let lightProj =
-      Matrix4x4.CreateOrthographicOffCenter(
-        minX, maxX,
-        minY, maxY,
-        minZ, maxZ
-      )
+      Matrix4x4.CreateOrthographicOffCenter(minX, maxX, minY, maxY, minZ, maxZ)
 
     lightView * lightProj
 
@@ -122,7 +122,7 @@ module CsmMath =
     (cascadeCount: int)
     : float32[] =
 
-    let splits = Array.zeroCreate<float32> (cascadeCount - 1)
+    let splits = Array.zeroCreate<float32>(cascadeCount - 1)
     let ratio = far / near
 
     for i = 1 to cascadeCount - 1 do

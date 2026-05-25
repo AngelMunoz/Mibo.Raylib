@@ -31,7 +31,7 @@ type private MaterialKey = {
 }
 
 module private MaterialKey =
-  let fromMaterial3D (mat: Material3D) : MaterialKey = {
+  let fromMaterial3D(mat: Material3D) : MaterialKey = {
     AlbedoMapId =
       match mat.AlbedoMap with
       | ValueSome t -> t.Id
@@ -138,24 +138,40 @@ type private PipelineContext
       locAlbedoColor <- Raylib.GetShaderLocation(forwardShader, "albedoColor")
       locRoughness <- Raylib.GetShaderLocation(forwardShader, "roughness")
       locMetallic <- Raylib.GetShaderLocation(forwardShader, "metallic")
-      locEmissionColor <- Raylib.GetShaderLocation(forwardShader, "emissionColor")
+
+      locEmissionColor <-
+        Raylib.GetShaderLocation(forwardShader, "emissionColor")
+
       locOpacity <- Raylib.GetShaderLocation(forwardShader, "opacity")
       locTiling <- Raylib.GetShaderLocation(forwardShader, "tiling")
       locUseNormalMap <- Raylib.GetShaderLocation(forwardShader, "useNormalMap")
 
       locAmbientColor <- Raylib.GetShaderLocation(forwardShader, "ambientColor")
-      locAmbientIntensity <- Raylib.GetShaderLocation(forwardShader, "ambientIntensity")
+
+      locAmbientIntensity <-
+        Raylib.GetShaderLocation(forwardShader, "ambientIntensity")
+
       locDirLightDir <- Raylib.GetShaderLocation(forwardShader, "dirLightDir")
-      locDirLightColor <- Raylib.GetShaderLocation(forwardShader, "dirLightColor")
-      locDirLightIntensity <- Raylib.GetShaderLocation(forwardShader, "dirLightIntensity")
-      locDirLightCastsShadows <- Raylib.GetShaderLocation(forwardShader, "dirLightCastsShadows")
-      locPointLightCount <- Raylib.GetShaderLocation(forwardShader, "pointLightCount")
+
+      locDirLightColor <-
+        Raylib.GetShaderLocation(forwardShader, "dirLightColor")
+
+      locDirLightIntensity <-
+        Raylib.GetShaderLocation(forwardShader, "dirLightIntensity")
+
+      locDirLightCastsShadows <-
+        Raylib.GetShaderLocation(forwardShader, "dirLightCastsShadows")
+
+      locPointLightCount <-
+        Raylib.GetShaderLocation(forwardShader, "pointLightCount")
 
       for i = 0 to maxPointLights - 1 do
         locPointLightPos[i] <-
           Raylib.GetShaderLocation(forwardShader, $"pointLightPos[{i}]")
+
         locPointLightColor[i] <-
           Raylib.GetShaderLocation(forwardShader, $"pointLightColor[{i}]")
+
         locPointLightRadius[i] <-
           Raylib.GetShaderLocation(forwardShader, $"pointLightRadius[{i}]")
 
@@ -165,7 +181,12 @@ type private PipelineContext
     Vector3(float32 c.R / 255.0f, float32 c.G / 255.0f, float32 c.B / 255.0f)
 
   let colorToVec4(c: Color) =
-    Vector4(float32 c.R / 255.0f, float32 c.G / 255.0f, float32 c.B / 255.0f, float32 c.A / 255.0f)
+    Vector4(
+      float32 c.R / 255.0f,
+      float32 c.G / 255.0f,
+      float32 c.B / 255.0f,
+      float32 c.A / 255.0f
+    )
 
   let ensureShaderActive() =
     if not shaderActive then
@@ -183,34 +204,128 @@ type private PipelineContext
 
     match ambient.Count with
     | 0 ->
-      Raylib.SetShaderValue(forwardShader, locAmbientColor, Vector3.Zero, ShaderUniformDataType.Vec3)
-      Raylib.SetShaderValue(forwardShader, locAmbientIntensity, 0.0f, ShaderUniformDataType.Float)
+      Raylib.SetShaderValue(
+        forwardShader,
+        locAmbientColor,
+        Vector3.Zero,
+        ShaderUniformDataType.Vec3
+      )
+
+      Raylib.SetShaderValue(
+        forwardShader,
+        locAmbientIntensity,
+        0.0f,
+        ShaderUniformDataType.Float
+      )
     | _ ->
       let a = ambient[0]
-      Raylib.SetShaderValue(forwardShader, locAmbientColor, colorToVec3 a.Color, ShaderUniformDataType.Vec3)
-      Raylib.SetShaderValue(forwardShader, locAmbientIntensity, a.Intensity, ShaderUniformDataType.Float)
+
+      Raylib.SetShaderValue(
+        forwardShader,
+        locAmbientColor,
+        colorToVec3 a.Color,
+        ShaderUniformDataType.Vec3
+      )
+
+      Raylib.SetShaderValue(
+        forwardShader,
+        locAmbientIntensity,
+        a.Intensity,
+        ShaderUniformDataType.Float
+      )
 
     match dirLights.Count with
     | 0 ->
-      Raylib.SetShaderValue(forwardShader, locDirLightDir, Vector3.Zero, ShaderUniformDataType.Vec3)
-      Raylib.SetShaderValue(forwardShader, locDirLightColor, Vector3.Zero, ShaderUniformDataType.Vec3)
-      Raylib.SetShaderValue(forwardShader, locDirLightIntensity, 0.0f, ShaderUniformDataType.Float)
-      Raylib.SetShaderValue(forwardShader, locDirLightCastsShadows, 0, ShaderUniformDataType.Int)
+      Raylib.SetShaderValue(
+        forwardShader,
+        locDirLightDir,
+        Vector3.Zero,
+        ShaderUniformDataType.Vec3
+      )
+
+      Raylib.SetShaderValue(
+        forwardShader,
+        locDirLightColor,
+        Vector3.Zero,
+        ShaderUniformDataType.Vec3
+      )
+
+      Raylib.SetShaderValue(
+        forwardShader,
+        locDirLightIntensity,
+        0.0f,
+        ShaderUniformDataType.Float
+      )
+
+      Raylib.SetShaderValue(
+        forwardShader,
+        locDirLightCastsShadows,
+        0,
+        ShaderUniformDataType.Int
+      )
     | _ ->
       let d = dirLights[0]
-      Raylib.SetShaderValue(forwardShader, locDirLightDir, d.Direction, ShaderUniformDataType.Vec3)
-      Raylib.SetShaderValue(forwardShader, locDirLightColor, colorToVec3 d.Color, ShaderUniformDataType.Vec3)
-      Raylib.SetShaderValue(forwardShader, locDirLightIntensity, d.Intensity, ShaderUniformDataType.Float)
-      Raylib.SetShaderValue(forwardShader, locDirLightCastsShadows, (if d.CastsShadows then 1 else 0), ShaderUniformDataType.Int)
+
+      Raylib.SetShaderValue(
+        forwardShader,
+        locDirLightDir,
+        d.Direction,
+        ShaderUniformDataType.Vec3
+      )
+
+      Raylib.SetShaderValue(
+        forwardShader,
+        locDirLightColor,
+        colorToVec3 d.Color,
+        ShaderUniformDataType.Vec3
+      )
+
+      Raylib.SetShaderValue(
+        forwardShader,
+        locDirLightIntensity,
+        d.Intensity,
+        ShaderUniformDataType.Float
+      )
+
+      Raylib.SetShaderValue(
+        forwardShader,
+        locDirLightCastsShadows,
+        (if d.CastsShadows then 1 else 0),
+        ShaderUniformDataType.Int
+      )
 
     let ptCount = min pointLights.Count maxPointLights
-    Raylib.SetShaderValue(forwardShader, locPointLightCount, ptCount, ShaderUniformDataType.Int)
+
+    Raylib.SetShaderValue(
+      forwardShader,
+      locPointLightCount,
+      ptCount,
+      ShaderUniformDataType.Int
+    )
 
     for i = 0 to ptCount - 1 do
       let l = pointLights[i]
-      Raylib.SetShaderValue(forwardShader, locPointLightPos[i], l.Position, ShaderUniformDataType.Vec3)
-      Raylib.SetShaderValue(forwardShader, locPointLightColor[i], colorToVec3 l.Color, ShaderUniformDataType.Vec3)
-      Raylib.SetShaderValue(forwardShader, locPointLightRadius[i], l.Radius, ShaderUniformDataType.Float)
+
+      Raylib.SetShaderValue(
+        forwardShader,
+        locPointLightPos[i],
+        l.Position,
+        ShaderUniformDataType.Vec3
+      )
+
+      Raylib.SetShaderValue(
+        forwardShader,
+        locPointLightColor[i],
+        colorToVec3 l.Color,
+        ShaderUniformDataType.Vec3
+      )
+
+      Raylib.SetShaderValue(
+        forwardShader,
+        locPointLightRadius[i],
+        l.Radius,
+        ShaderUniformDataType.Float
+      )
 
     lightsDirty <- false
 
@@ -224,23 +339,28 @@ type private PipelineContext
       mat.Shader <- forwardShader
 
       match mat3d.AlbedoMap with
-      | ValueSome t -> Raylib.SetMaterialTexture(&mat, MaterialMapIndex.Albedo, t)
+      | ValueSome t ->
+        Raylib.SetMaterialTexture(&mat, MaterialMapIndex.Albedo, t)
       | ValueNone -> ()
 
       match mat3d.RoughnessMap with
-      | ValueSome t -> Raylib.SetMaterialTexture(&mat, MaterialMapIndex.Roughness, t)
+      | ValueSome t ->
+        Raylib.SetMaterialTexture(&mat, MaterialMapIndex.Roughness, t)
       | ValueNone -> ()
 
       match mat3d.MetallicMap with
-      | ValueSome t -> Raylib.SetMaterialTexture(&mat, MaterialMapIndex.Metalness, t)
+      | ValueSome t ->
+        Raylib.SetMaterialTexture(&mat, MaterialMapIndex.Metalness, t)
       | ValueNone -> ()
 
       match mat3d.NormalMap with
-      | ValueSome t -> Raylib.SetMaterialTexture(&mat, MaterialMapIndex.Normal, t)
+      | ValueSome t ->
+        Raylib.SetMaterialTexture(&mat, MaterialMapIndex.Normal, t)
       | ValueNone -> ()
 
       match mat3d.EmissionMap with
-      | ValueSome t -> Raylib.SetMaterialTexture(&mat, MaterialMapIndex.Emission, t)
+      | ValueSome t ->
+        Raylib.SetMaterialTexture(&mat, MaterialMapIndex.Emission, t)
       | ValueNone -> ()
 
       materialCache[key] <- mat
@@ -250,17 +370,61 @@ type private PipelineContext
     cacheLocations()
     ensureShaderActive()
 
-    Raylib.SetShaderValue(forwardShader, locAlbedoColor, colorToVec4 mat3d.AlbedoColor, ShaderUniformDataType.Vec4)
-    Raylib.SetShaderValue(forwardShader, locRoughness, mat3d.Roughness, ShaderUniformDataType.Float)
-    Raylib.SetShaderValue(forwardShader, locMetallic, mat3d.Metallic, ShaderUniformDataType.Float)
-    Raylib.SetShaderValue(forwardShader, locEmissionColor, colorToVec4 mat3d.EmissionColor, ShaderUniformDataType.Vec4)
-    Raylib.SetShaderValue(forwardShader, locOpacity, mat3d.Opacity, ShaderUniformDataType.Float)
-    Raylib.SetShaderValue(forwardShader, locTiling, mat3d.Tiling, ShaderUniformDataType.Vec2)
+    Raylib.SetShaderValue(
+      forwardShader,
+      locAlbedoColor,
+      colorToVec4 mat3d.AlbedoColor,
+      ShaderUniformDataType.Vec4
+    )
 
-    let useNormal = match mat3d.NormalMap with | ValueSome _ -> 1 | ValueNone -> 0
-    Raylib.SetShaderValue(forwardShader, locUseNormalMap, useNormal, ShaderUniformDataType.Int)
+    Raylib.SetShaderValue(
+      forwardShader,
+      locRoughness,
+      mat3d.Roughness,
+      ShaderUniformDataType.Float
+    )
 
-  let drawMeshCore(mesh: Mesh) (transform: Matrix4x4) (material: Material3D) =
+    Raylib.SetShaderValue(
+      forwardShader,
+      locMetallic,
+      mat3d.Metallic,
+      ShaderUniformDataType.Float
+    )
+
+    Raylib.SetShaderValue(
+      forwardShader,
+      locEmissionColor,
+      colorToVec4 mat3d.EmissionColor,
+      ShaderUniformDataType.Vec4
+    )
+
+    Raylib.SetShaderValue(
+      forwardShader,
+      locOpacity,
+      mat3d.Opacity,
+      ShaderUniformDataType.Float
+    )
+
+    Raylib.SetShaderValue(
+      forwardShader,
+      locTiling,
+      mat3d.Tiling,
+      ShaderUniformDataType.Vec2
+    )
+
+    let useNormal =
+      match mat3d.NormalMap with
+      | ValueSome _ -> 1
+      | ValueNone -> 0
+
+    Raylib.SetShaderValue(
+      forwardShader,
+      locUseNormalMap,
+      useNormal,
+      ShaderUniformDataType.Int
+    )
+
+  let drawMeshCore (mesh: Mesh) (transform: Matrix4x4) (material: Material3D) =
     if cameraActive then
       if lightsDirty then
         uploadLights()
@@ -280,6 +444,7 @@ type private PipelineContext
       if cameraActive then
         ensureShaderInactive()
         Raylib.EndMode3D()
+
       Raylib.BeginMode3D(cam)
       cameraActive <- true
       currentCamera <- cam
@@ -296,12 +461,22 @@ type private PipelineContext
     member _.DrawBillboard(texture, position, size, color) =
       if cameraActive then
         let transform =
-          Matrix4x4.CreateBillboard(position, currentCamera.Position, Vector3.UnitY, Vector3.UnitY)
+          Matrix4x4.CreateBillboard(
+            position,
+            currentCamera.Position,
+            Vector3.UnitY,
+            Vector3.UnitY
+          )
 
         let scaled = Matrix4x4.CreateScale(size.X, size.Y, 1.0f)
         let final = scaled * transform
 
-        let mat = { Material3D.defaults with AlbedoColor = color; AlbedoMap = ValueSome texture }
+        let mat = {
+          Material3D.defaults with
+              AlbedoColor = color
+              AlbedoMap = ValueSome texture
+        }
+
         drawMeshCore Primitive3D.plane final mat
 
     member _.DrawLine3D(start, finish, color) =
@@ -313,7 +488,9 @@ type private PipelineContext
 
     member _.DrawMeshInstanced(mesh, transforms, material, instanceCount) =
       if cameraActive then
-        if lightsDirty then uploadLights()
+        if lightsDirty then
+          uploadLights()
+
         setMaterialUniforms(material)
         let mat = getOrCreateMaterial(material)
         Raylib.DrawMeshInstanced(mesh, mat, transforms, instanceCount)
@@ -322,10 +499,22 @@ type private PipelineContext
       if cameraActive then
         for i = 0 to count - 1 do
           let transform =
-            Matrix4x4.CreateBillboard(positions[i], currentCamera.Position, Vector3.UnitY, Vector3.UnitY)
+            Matrix4x4.CreateBillboard(
+              positions[i],
+              currentCamera.Position,
+              Vector3.UnitY,
+              Vector3.UnitY
+            )
+
           let scaled = Matrix4x4.CreateScale(sizes[i].X, sizes[i].Y, 1.0f)
           let final = scaled * transform
-          let mat = { Material3D.defaults with AlbedoColor = colors[i]; AlbedoMap = ValueSome textures[i] }
+
+          let mat = {
+            Material3D.defaults with
+                AlbedoColor = colors[i]
+                AlbedoMap = ValueSome textures[i]
+          }
+
           drawMeshCore Primitive3D.plane final mat
 
     member _.AddPointLight light =
@@ -344,12 +533,25 @@ type private PipelineContext
     member _.DrawImmediate action =
       let savedCam = cameraActive
       let savedShader = shaderActive
-      if shaderActive then Raylib.EndShaderMode(); shaderActive <- false
-      if cameraActive then Raylib.EndMode3D(); cameraActive <- false
-      try action()
+
+      if shaderActive then
+        Raylib.EndShaderMode()
+        shaderActive <- false
+
+      if cameraActive then
+        Raylib.EndMode3D()
+        cameraActive <- false
+
+      try
+        action()
       finally
-        if savedCam then Raylib.BeginMode3D(currentCamera); cameraActive <- true
-        if savedShader then Raylib.BeginShaderMode(forwardShader); shaderActive <- true
+        if savedCam then
+          Raylib.BeginMode3D(currentCamera)
+          cameraActive <- true
+
+        if savedShader then
+          Raylib.BeginShaderMode(forwardShader)
+          shaderActive <- true
 
   member internal _.Reset(gameContext: GameContext) =
     gameCtx <- gameContext
@@ -361,8 +563,13 @@ type private PipelineContext
     shaderActive <- false
 
   member internal _.EndAll() =
-    if shaderActive then Raylib.EndShaderMode(); shaderActive <- false
-    if cameraActive then Raylib.EndMode3D(); cameraActive <- false
+    if shaderActive then
+      Raylib.EndShaderMode()
+      shaderActive <- false
+
+    if cameraActive then
+      Raylib.EndMode3D()
+      cameraActive <- false
 
 // ------------------------------------------------------------------
 // Shadow Pass Helpers
@@ -370,28 +577,49 @@ type private PipelineContext
 
 module private ShadowPass =
 
-  type MeshDraw = {
-    Mesh: Mesh
-    Transform: Matrix4x4
-  }
+  type MeshDraw = { Mesh: Mesh; Transform: Matrix4x4 }
 
-  let collectMeshDraws (buffer: RenderBuffer3D) : MeshDraw[] =
+  let collectMeshDraws(buffer: RenderBuffer3D) : MeshDraw[] =
     let draws = ResizeArray<MeshDraw>()
+
     for i = 0 to buffer.Count - 1 do
       match buffer[i] with
       | :? Command3D.DrawMeshCommand as cmd ->
-        draws.Add({ Mesh = cmd.Mesh; Transform = cmd.Transform })
+        draws.Add(
+          {
+            Mesh = cmd.Mesh
+            Transform = cmd.Transform
+          }
+        )
       | :? Command3D.DrawSkinnedMeshCommand as cmd ->
-        draws.Add({ Mesh = cmd.Mesh; Transform = cmd.Transform })
+        draws.Add(
+          {
+            Mesh = cmd.Mesh
+            Transform = cmd.Transform
+          }
+        )
       | :? Command3D.DrawModelCommand as cmd ->
         let m = cmd.Model
+
         for mi = 0 to m.MeshCount - 1 do
           let mesh = NativePtr.get m.Meshes mi
-          draws.Add({ Mesh = mesh; Transform = cmd.Transform })
+
+          draws.Add(
+            {
+              Mesh = mesh
+              Transform = cmd.Transform
+            }
+          )
       | :? Command3D.DrawMeshInstancedCommand as cmd ->
         for ti = 0 to cmd.InstanceCount - 1 do
-          draws.Add({ Mesh = cmd.Mesh; Transform = cmd.Transforms[ti] })
+          draws.Add(
+            {
+              Mesh = cmd.Mesh
+              Transform = cmd.Transforms[ti]
+            }
+          )
       | _ -> ()
+
     draws.ToArray()
 
   let renderShadowCascade
@@ -410,8 +638,18 @@ module private ShadowPass =
     (draws: MeshDraw[])
     : Matrix4x4 =
 
-    let corners = CsmMath.frustumCornersWorld cameraPos cameraTarget cameraUp fovY aspect near far
-    let shadowMatrix = CsmMath.computeShadowMatrix corners lightDir shadowMapSize
+    let corners =
+      CsmMath.frustumCornersWorld
+        cameraPos
+        cameraTarget
+        cameraUp
+        fovY
+        aspect
+        near
+        far
+
+    let shadowMatrix =
+      CsmMath.computeShadowMatrix corners lightDir shadowMapSize
 
     Raylib.BeginTextureMode(shadowMap)
     Raylib.ClearBackground(Color.White)
@@ -494,7 +732,10 @@ type ClusteredForwardPipeline
       let isLast = i = ppPasses.Length - 1
 
       let dst: RenderTexture2D voption =
-        if isLast then ValueNone else ValueSome(rtPool.Acquire(w, h))
+        if isLast then
+          ValueNone
+        else
+          ValueSome(rtPool.Acquire(w, h))
 
       match dst with
       | ValueSome target ->
@@ -511,11 +752,21 @@ type ClusteredForwardPipeline
       let sourceRect = Raylib_cs.Rectangle(0.0f, 0.0f, float32 w, float32 -h)
       let destRect = Raylib_cs.Rectangle(0.0f, 0.0f, float32 w, float32 h)
 
-      Raylib.DrawTexturePro(src.Texture, sourceRect, destRect, Vector2.Zero, 0.0f, Color.White)
+      Raylib.DrawTexturePro(
+        src.Texture,
+        sourceRect,
+        destRect,
+        Vector2.Zero,
+        0.0f,
+        Color.White
+      )
+
       Raylib.EndShaderMode()
 
       match dst with
-      | ValueSome target -> Raylib.EndTextureMode(); src <- target
+      | ValueSome target ->
+        Raylib.EndTextureMode()
+        src <- target
       | ValueNone -> ()
 
   // ------------------------------------------------------------------
@@ -531,13 +782,19 @@ type ClusteredForwardPipeline
       shadowMaterial <- Raylib.LoadMaterialDefault()
       shadowMaterial.Shader <- shadowShader
 
-      shadowMaps <- Array.init shadowCfg.CascadeCount (fun _ ->
-        Raylib.LoadRenderTexture(shadowCfg.ShadowMapSize, shadowCfg.ShadowMapSize)
-      )
+      shadowMaps <-
+        Array.init shadowCfg.CascadeCount (fun _ ->
+          Raylib.LoadRenderTexture(
+            shadowCfg.ShadowMapSize,
+            shadowCfg.ShadowMapSize
+          ))
 
       cascadeSplits <-
         if shadowCfg.CascadeCount > 1 then
-          CsmMath.computeCascadeSplits shadowCfg.CameraNear shadowCfg.CameraFar shadowCfg.CascadeCount
+          CsmMath.computeCascadeSplits
+            shadowCfg.CameraNear
+            shadowCfg.CameraFar
+            shadowCfg.CascadeCount
         else
           Array.empty
 
@@ -552,10 +809,12 @@ type ClusteredForwardPipeline
 
       for KeyValue(_, mat) in materialCache do
         Raylib.UnloadMaterial(mat)
+
       materialCache.Clear()
 
       for sm in shadowMaps do
         Raylib.UnloadRenderTexture(sm)
+
       shadowMaps <- Array.empty
 
     member _.Execute gameCtx buffer rtPool =
@@ -574,12 +833,10 @@ type ClusteredForwardPipeline
         | :? Command3D.BeginCameraCommand as cmd ->
           activeCamera <- cmd.Camera
           cameraFound <- true
-        | :? Command3D.SetAmbientLightCommand as cmd ->
-          ambient.Add(cmd.Light)
+        | :? Command3D.SetAmbientLightCommand as cmd -> ambient.Add(cmd.Light)
         | :? Command3D.AddDirectionalLightCommand as cmd ->
           dirLights.Add(cmd.Light)
-        | :? Command3D.AddPointLightCommand as cmd ->
-          pointLights.Add(cmd.Light)
+        | :? Command3D.AddPointLightCommand as cmd -> pointLights.Add(cmd.Light)
         | _ -> ()
 
       let meshDraws = ShadowPass.collectMeshDraws buffer
@@ -589,7 +846,12 @@ type ClusteredForwardPipeline
       // ------------------------------------------------------------------
       let mutable shadowMatrices = Array.empty
 
-      if cameraFound && dirLights.Count > 0 && dirLights[0].CastsShadows && meshDraws.Length > 0 then
+      if
+        cameraFound
+        && dirLights.Count > 0
+        && dirLights[0].CastsShadows
+        && meshDraws.Length > 0
+      then
         let dir = dirLights[0]
         let fovY = activeCamera.FovY * MathF.PI / 180.0f
         let aspect = float32 gameCtx.WindowWidth / float32 gameCtx.WindowHeight
@@ -597,8 +859,14 @@ type ClusteredForwardPipeline
         shadowMatrices <- Array.zeroCreate<Matrix4x4> shadowCfg.CascadeCount
 
         for i = 0 to shadowCfg.CascadeCount - 1 do
-          let near = if i = 0 then shadowCfg.CameraNear else cascadeSplits[i - 1]
-          let far = if i = shadowCfg.CascadeCount - 1 then shadowCfg.CameraFar else cascadeSplits[i]
+          let near =
+            if i = 0 then shadowCfg.CameraNear else cascadeSplits[i - 1]
+
+          let far =
+            if i = shadowCfg.CascadeCount - 1 then
+              shadowCfg.CameraFar
+            else
+              cascadeSplits[i]
 
           shadowMatrices[i] <-
             ShadowPass.renderShadowCascade
@@ -625,8 +893,12 @@ type ClusteredForwardPipeline
       // Upload shadow uniforms if shadows were rendered
       if shadowMatrices.Length > 0 && cameraFound then
         let locCameraPos = Raylib.GetShaderLocation(forwardShader, "cameraPos")
-        let locShadowBias = Raylib.GetShaderLocation(forwardShader, "shadowBias")
-        let locNormalShadowBias = Raylib.GetShaderLocation(forwardShader, "normalShadowBias")
+
+        let locShadowBias =
+          Raylib.GetShaderLocation(forwardShader, "shadowBias")
+
+        let locNormalShadowBias =
+          Raylib.GetShaderLocation(forwardShader, "normalShadowBias")
 
         let locShadowMatrices =
           Array.init shadowCfg.CascadeCount (fun i ->
@@ -644,13 +916,39 @@ type ClusteredForwardPipeline
 
         Raylib.BeginShaderMode(forwardShader)
 
-        Raylib.SetShaderValue(forwardShader, locCameraPos, activeCamera.Position, ShaderUniformDataType.Vec3)
-        Raylib.SetShaderValue(forwardShader, locShadowBias, shadowCfg.ShadowBias, ShaderUniformDataType.Float)
-        Raylib.SetShaderValue(forwardShader, locNormalShadowBias, shadowCfg.NormalShadowBias, ShaderUniformDataType.Float)
+        Raylib.SetShaderValue(
+          forwardShader,
+          locCameraPos,
+          activeCamera.Position,
+          ShaderUniformDataType.Vec3
+        )
+
+        Raylib.SetShaderValue(
+          forwardShader,
+          locShadowBias,
+          shadowCfg.ShadowBias,
+          ShaderUniformDataType.Float
+        )
+
+        Raylib.SetShaderValue(
+          forwardShader,
+          locNormalShadowBias,
+          shadowCfg.NormalShadowBias,
+          ShaderUniformDataType.Float
+        )
 
         for i = 0 to shadowCfg.CascadeCount - 1 do
-          Raylib.SetShaderValueMatrix(forwardShader, locShadowMatrices[i], shadowMatrices[i])
-          Raylib.SetShaderValueTexture(forwardShader, locShadowMaps[i], shadowMaps[i].Depth)
+          Raylib.SetShaderValueMatrix(
+            forwardShader,
+            locShadowMatrices[i],
+            shadowMatrices[i]
+          )
+
+          Raylib.SetShaderValueTexture(
+            forwardShader,
+            locShadowMaps[i],
+            shadowMaps[i].Depth
+          )
 
         if locCascadeSplits >= 0 then
           Raylib.SetShaderValueV(
@@ -665,9 +963,11 @@ type ClusteredForwardPipeline
 
       // Render
       match ppConfig.Passes with
-      | ValueNone | ValueSome [||] ->
+      | ValueNone
+      | ValueSome [||] ->
         for i = 0 to buffer.Count - 1 do
           buffer[i].Render(ctx)
+
         context.EndAll()
       | _ ->
         let sceneRT = rtPool.Acquire(gameCtx.WindowWidth, gameCtx.WindowHeight)

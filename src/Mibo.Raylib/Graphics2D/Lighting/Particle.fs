@@ -48,13 +48,23 @@ type ParticleCommand
         let p = ps[i]
         let halfW = p.Size.X * 0.5f
         let halfH = p.Size.Y * 0.5f
-        let dest = Rectangle(
-          p.Position.X - halfW,
-          p.Position.Y - halfH,
-          p.Size.X,
-          p.Size.Y
+
+        let dest =
+          Rectangle(
+            p.Position.X - halfW,
+            p.Position.Y - halfH,
+            p.Size.X,
+            p.Size.Y
+          )
+
+        Raylib.DrawTexturePro(
+          tex,
+          p.SourceRect,
+          dest,
+          Vector2.Zero,
+          p.Rotation,
+          p.Color
         )
-        Raylib.DrawTexturePro(tex, p.SourceRect, dest, Vector2.Zero, p.Rotation, p.Color)
 
 /// <summary>Factory functions for particle render commands.</summary>
 module ParticleCommands =

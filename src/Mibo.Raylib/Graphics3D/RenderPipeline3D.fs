@@ -25,7 +25,10 @@ type IRenderPipeline3D =
   /// <param name="buffer">The accumulated render commands for this frame.</param>
   /// <param name="rtPool">Pooled render textures for intermediate targets (shadow maps, post-process ping-pong).</param>
   abstract Execute:
-    gameCtx: GameContext -> buffer: RenderBuffer3D -> rtPool: IRenderTargetPool3D -> unit
+    gameCtx: GameContext ->
+    buffer: RenderBuffer3D ->
+    rtPool: IRenderTargetPool3D ->
+      unit
 
   /// <summary>
   /// Called once when the renderer is created. Use for shader loading,
