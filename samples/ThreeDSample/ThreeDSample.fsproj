@@ -5,7 +5,19 @@
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="Constants.fs" />
+    <Compile Include="Types.fs" />
+    <Compile Include="DayNight.fs" />
+    <Compile Include="WorldGen.fs" />
+    <Compile Include="Physics.fs" />
+    <Compile Include="Systems.fs" />
+    <Compile Include="View.fs" />
     <Compile Include="Program.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="assets\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Mibo.Raylib\Mibo.Raylib.fsproj" />
