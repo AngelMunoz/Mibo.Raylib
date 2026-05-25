@@ -4,6 +4,18 @@
 
 ### Added
 
+- 3D rendering pipeline with CSM shadow maps (4-layer architecture: Renderer3D → Pipeline → Context → Commands).
+- `ClusteredForwardPipeline` with Cook-Torrance PBR shading, CSM shadow mapping, and material caching.
+- `Material3D` struct with PBR fields (albedo, roughness, metallic, normal, emission, opacity, tiling) and `fromRaylibMaterial` conversion.
+- `DrawMeshInstanced` for GPU instanced rendering of many copies of the same mesh.
+- `DrawBillboardBatch` for batched billboard rendering (particle systems).
+- Debug drawing commands: `DrawGrid`, `DrawBoundingBox`, `DrawPoint3D`, `DrawRay` via `DrawImmediate`.
+- `DrawModel` command that decomposes raylib `Model` into per-sub-mesh `DrawMesh` calls.
+- `DrawImmediate` escape hatch for custom rlgl rendering.
+- Render context uses camera state (BeginCamera/EndCamera) instead of hardcoding.
+- Configurable `maxPointLights` and `ShadowConfig` for CSM cascades.
+- `RenderBuffer3D` with `IDisposable` for `ArrayPool` return.
+
 - Initial port of Mibo from MonoGame to raylib-cs.
 - Core: `RaylibGame` runtime loop integrating Elmish architecture with raylib lifecycle.
 - Core: `Program` module for configuring init, update, renderers, and services.

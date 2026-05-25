@@ -77,6 +77,42 @@ module Command3D =
       member _.Render ctx =
         ctx.DrawSkinnedMesh(mesh, transform, material, bones)
 
+  [<Struct>]
+  type DrawMeshInstancedCommand
+    (mesh: Mesh, transforms: Matrix4x4[], material: Material3D, instanceCount: int)
+    =
+    /// <summary>The mesh to render.</summary>
+    member _.Mesh = mesh
+    /// <summary>Per-instance world transform matrices.</summary>
+    member _.Transforms = transforms
+    /// <summary>The material to apply.</summary>
+    member _.Material = material
+    /// <summary>Number of instances to draw.</summary>
+    member _.InstanceCount = instanceCount
+
+    interface IRenderCommand3D with
+      member _.Render ctx =
+        ctx.DrawMeshInstanced(mesh, transforms, material, instanceCount)
+
+  [<Struct>]
+  type DrawBillboardBatchCommand
+    (textures: Texture2D[], positions: Vector3[], sizes: Vector2[], colors: Color[], count: int)
+    =
+    /// <summary>Textures for each billboard (one per billboard).</summary>
+    member _.Textures = textures
+    /// <summary>World-space positions for each billboard.</summary>
+    member _.Positions = positions
+    /// <summary>Sizes (width, height) for each billboard.</summary>
+    member _.Sizes = sizes
+    /// <summary>Colors for each billboard.</summary>
+    member _.Colors = colors
+    /// <summary>Number of billboards to draw.</summary>
+    member _.Count = count
+
+    interface IRenderCommand3D with
+      member _.Render ctx =
+        ctx.DrawBillboardBatch(textures, positions, sizes, colors, count)
+
   let inline drawMesh
     (mesh: Mesh)
     (transform: Matrix4x4)
@@ -112,6 +148,23 @@ module Command3D =
     (bones: Matrix4x4[])
     : IRenderCommand3D =
     DrawSkinnedMeshCommand(mesh, transform, material, bones)
+
+  let inline drawMeshInstanced
+    (mesh: Mesh)
+    (transforms: Matrix4x4[])
+    (material: Material3D)
+    (instanceCount: int)
+    : IRenderCommand3D =
+    DrawMeshInstancedCommand(mesh, transforms, material, instanceCount)
+
+  let inline drawBillboardBatch
+    (textures: Texture2D[])
+    (positions: Vector3[])
+    (sizes: Vector2[])
+    (colors: Color[])
+    (count: int)
+    : IRenderCommand3D =
+    DrawBillboardBatchCommand(textures, positions, sizes, colors, count)
 
   // ═══════════════════════════════════════════════════════════════════
   // Camera Commands

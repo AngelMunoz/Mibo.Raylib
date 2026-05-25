@@ -85,6 +85,35 @@ module Draw3D =
     buffer.Add(Command3D.drawSkinnedMesh mesh transform material bones)
     buffer
 
+  /// <summary>
+  /// Draws multiple instances of the same mesh with different transforms.
+  /// Prefer this over individual <c>drawMesh</c> calls for many copies of the same mesh.
+  /// </summary>
+  let inline drawMeshInstanced
+    (mesh: Mesh)
+    (transforms: Matrix4x4[])
+    (material: Material3D)
+    (instanceCount: int)
+    (buffer: RenderBuffer3D)
+    =
+    buffer.Add(Command3D.drawMeshInstanced mesh transforms material instanceCount)
+    buffer
+
+  /// <summary>
+  /// Draws multiple billboards in a single batch.
+  /// Prefer this over individual <c>drawBillboard</c> calls for many sprites at once.
+  /// </summary>
+  let inline drawBillboardBatch
+    (textures: Texture2D[])
+    (positions: Vector3[])
+    (sizes: Vector2[])
+    (colors: Color[])
+    (count: int)
+    (buffer: RenderBuffer3D)
+    =
+    buffer.Add(Command3D.drawBillboardBatch textures positions sizes colors count)
+    buffer
+
   // ──────────────────────────────────────────────
   // Camera
   // ──────────────────────────────────────────────

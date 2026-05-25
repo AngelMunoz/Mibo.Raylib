@@ -55,6 +55,20 @@ type IRenderContext3D =
   abstract DrawSkinnedMesh: mesh: Mesh * transform: Matrix4x4 * material: Material3D * boneMatrices: Matrix4x4[] -> unit
 
   /// <summary>
+  /// Draws multiple instances of the same mesh with different transforms.
+  /// Prefer this over individual <see cref="M:Mibo.Elmish.Graphics3D.IRenderContext3D.DrawMesh"/>
+  /// calls when rendering many copies of the same mesh (e.g. foliage, debris).
+  /// </summary>
+  abstract DrawMeshInstanced: mesh: Mesh * transforms: Matrix4x4[] * material: Material3D * instanceCount: int -> unit
+
+  /// <summary>
+  /// Draws multiple billboards in a single batch.
+  /// Prefer this over individual <see cref="M:Mibo.Elmish.Graphics3D.IRenderContext3D.DrawBillboard"/>
+  /// calls when rendering many sprites at once (e.g. particles).
+  /// </summary>
+  abstract DrawBillboardBatch: textures: Texture2D[] * positions: Vector3[] * sizes: Vector2[] * colors: Color[] * count: int -> unit
+
+  /// <summary>
   /// Adds a point light to the scene. Advisory — unsupported pipelines no-op.
   /// </summary>
   abstract AddPointLight: light: PointLight3D -> unit

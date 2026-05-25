@@ -96,16 +96,23 @@ void main()
 
   let forwardFragmentFmt (maxPointLights: int) (cascadeCount: int) =
     let cascadeArray = String.init cascadeCount (fun _ -> "")
+
     let shadowMapSamplers =
       if cascadeCount > 0 then
-        String.concat "" [for i in 0..cascadeCount-1 -> $"uniform sampler2D shadowMap{i};"]
+        String.concat "" [
+          for i in 0 .. cascadeCount - 1 -> $"uniform sampler2D shadowMap{i};"
+        ]
       else
         ""
+
     let shadowMatrices =
       if cascadeCount > 0 then
-        String.concat "" [for i in 0..cascadeCount-1 -> $"uniform mat4 shadowMatrix{i};"]
+        String.concat "" [
+          for i in 0 .. cascadeCount - 1 -> $"uniform mat4 shadowMatrix{i};"
+        ]
       else
         ""
+
     let cascadeSplitDecl =
       if cascadeCount > 1 then
         $"uniform float cascadeSplits[{cascadeCount - 1}];"
@@ -113,6 +120,8 @@ void main()
         ""
 
     $"""#version 330
+
+const float PI = 3.14159265359;
 
 in vec2 fragTexCoord;
 in vec4 fragColor;
@@ -122,7 +131,10 @@ in vec3 fragWorldPos;
 out vec4 finalColor;
 
 uniform sampler2D texture0; // albedo
-uniform sampler2D texture1; // normal map (optional)
+uniform sampler2D texture1; // metalness
+uniform sampler2D texture2; // normal map
+uniform sampler2D texture3; // roughness
+uniform sampler2D texture4; // emission
 
 uniform vec4 albedoColor;
 uniform float roughness;
@@ -158,8 +170,42 @@ vec3 getNormal()
     if (useNormalMap == 0)
         return normalize(fragNormal);
 
-    vec3 tangentNormal = texture(texture1, fragTexCoord * tiling).xyz * 2.0 - 1.0;
-    return normalize(fragNormal + tangentNormal * 0.5);
+    vec3 tangentNormal = texture(texture2, fragTexCoord * tiling).xyz * 2.0 - 1.0;
+    vec3 N = normalize(fragNormal);
+    vec3 T = normalize(cross(N, vec3(0.0, 1.0, 0.0)));
+    if (length(cross(N, vec3(0.0, 1.0, 0.0))) < 0.001)
+        T = normalize(cross(N, vec3(1.0, 0.0, 0.0)));
+    vec3 B = cross(N, T);
+    mat3 TBN = mat3(T, B, N);
+    return normalize(TBN * tangentNormal);
+}}
+
+float distributionGGX(vec3 N, vec3 H, float r)
+{{
+    float a = r * r;
+    float a2 = a * a;
+    float NdotH = max(dot(N, H), 0.0);
+    float NdotH2 = NdotH * NdotH;
+    float denom = NdotH2 * (a2 - 1.0) + 1.0;
+    return a2 / max(PI * denom * denom, 0.0001);
+}}
+
+float geometrySchlickGGX(float NdotV, float r)
+{{
+    float k = ((r + 1.0) * (r + 1.0)) / 8.0;
+    return NdotV / max(NdotV * (1.0 - k) + k, 0.0001);
+}}
+
+float geometrySmith(vec3 N, vec3 V, vec3 L, float r)
+{{
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotL = max(dot(N, L), 0.0);
+    return geometrySchlickGGX(NdotV, r) * geometrySchlickGGX(NdotL, r);
+}}
+
+vec3 fresnelSchlick(float cosTheta, vec3 F0)
+{{
+    return F0 + (1.0 - F0) * pow(max(1.0 - cosTheta, 0.0), 5.0);
 }}
 
 float sampleShadowMap(sampler2D shadowMap, vec4 shadowCoord, float bias)
@@ -207,9 +253,9 @@ int getCascadeIndex(vec3 worldPos)
     float viewDepth = length(cameraPos - worldPos);
 
     {String.concat "\n    " [
-      for i in 0..(cascadeCount-2) ->
-        $"if (viewDepth < cascadeSplits[{i}]) return {i};"
-    ]}
+       for i in 0 .. (cascadeCount - 2) ->
+         $"if (viewDepth < cascadeSplits[{i}]) return {i};"
+     ]}
     return {cascadeCount - 1};
 }}
 
@@ -223,30 +269,63 @@ float computeDirShadow(vec3 worldPos, vec3 normal)
     float bias = shadowBias + normalShadowBias * (1.0 - max(dot(normalize(normal), -normalize(dirLightDir)), 0.0));
 
     {String.concat "\n    " [
-      for i in 0..(cascadeCount-1) ->
-        $"if (cascadeIdx == {i}) shadowCoord = shadowMatrix{i} * vec4(worldPos, 1.0);"
-    ]}
+       for i in 0 .. (cascadeCount - 1) ->
+         $"if (cascadeIdx == {i}) shadowCoord = shadowMatrix{i} * vec4(worldPos, 1.0);"
+     ]}
 
     {String.concat "\n    " [
-      for i in 0..(cascadeCount-1) ->
-        $"if (cascadeIdx == {i}) return sampleShadowMapPCF(shadowMap{i}, shadowCoord, bias);"
-    ]}
+       for i in 0 .. (cascadeCount - 1) ->
+         $"if (cascadeIdx == {i}) return sampleShadowMapPCF(shadowMap{i}, shadowCoord, bias);"
+     ]}
 
     return 1.0;
+}}
+
+vec3 calcPBR(vec3 V, vec3 N, vec3 L, vec3 radiance, vec3 albedo, float r, float m)
+{{
+    vec3 H = normalize(V + L);
+
+    vec3 F0 = mix(vec3(0.04), albedo, m);
+    float D = distributionGGX(N, H, r);
+    float G = geometrySmith(N, V, L, r);
+    vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
+
+    vec3 num = D * G * F;
+    float denom = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0);
+    vec3 spec = num / max(denom, 0.0001);
+
+    vec3 kS = F;
+    vec3 kD = (vec3(1.0) - kS) * (1.0 - m);
+    float NdotL = max(dot(N, L), 0.0);
+
+    return (kD * albedo / PI + spec) * radiance * NdotL;
 }}
 
 void main()
 {{
     vec2 uv = fragTexCoord * tiling;
     vec4 texColor = texture(texture0, uv) * albedoColor * fragColor;
+    vec3 albedo = texColor.rgb;
     vec3 normal = getNormal();
 
-    vec3 light = ambientColor * ambientIntensity;
+    float r = texture(texture3, uv).r * roughness + (1.0 - texture(texture3, uv).r) * roughness;
+    r = clamp(r, 0.04, 1.0);
+    float m = texture(texture1, uv).r * metallic + (1.0 - texture(texture1, uv).r) * metallic;
+    m = clamp(m, 0.0, 1.0);
 
+    vec3 V = normalize(cameraPos - fragWorldPos);
+
+    // Ambient
+    vec3 ambient = ambientColor * albedo * ambientIntensity;
+
+    // Directional light (PBR)
     float dirShadow = computeDirShadow(fragWorldPos, normal);
-    float dirDiff = max(dot(normal, -normalize(dirLightDir)), 0.0);
-    light += dirLightColor * dirLightIntensity * dirDiff * dirShadow;
+    vec3 L = normalize(-dirLightDir);
+    vec3 radiance = dirLightColor * dirLightIntensity;
+    vec3 dirResult = calcPBR(V, normal, L, radiance, albedo, r, m) * dirShadow;
 
+    // Point lights (PBR)
+    vec3 pointResult = vec3(0.0);
     int count = min(pointLightCount, {maxPointLights});
     for (int i = 0; i < count; i++)
     {{
@@ -254,14 +333,19 @@ void main()
         float dist = length(toLight);
         if (dist < pointLightRadius[i])
         {{
-            vec3 L = normalize(toLight);
-            float diff = max(dot(normal, L), 0.0);
+            vec3 pL = normalize(toLight);
             float atten = 1.0 - (dist / pointLightRadius[i]);
-            light += pointLightColor[i] * diff * atten;
+            vec3 pRadiance = pointLightColor[i] * atten;
+            pointResult += calcPBR(V, normal, pL, pRadiance, albedo, r, m);
         }}
     }}
 
-    vec3 result = texColor.rgb * light + emissionColor.rgb;
+    vec3 emission = emissionColor.rgb;
+    // Emission map modulation
+    vec4 emTex = texture(texture4, uv);
+    emission *= emTex.rgb;
+
+    vec3 result = ambient + dirResult + pointResult + emission;
     float alpha = texColor.a * opacity;
     finalColor = vec4(result, alpha);
 }}
@@ -272,7 +356,10 @@ void main()
   /// The fragment shader is generated with the specified max point light array size and cascade count.
   /// </summary>
   let loadForwardShader (maxPointLights: int) (cascadeCount: int) : Shader =
-    Raylib.LoadShaderFromMemory(forwardVertex, forwardFragmentFmt maxPointLights cascadeCount)
+    Raylib.LoadShaderFromMemory(
+      forwardVertex,
+      forwardFragmentFmt maxPointLights cascadeCount
+    )
 
   /// <summary>Loads the shadow pass vertex + fragment shader.</summary>
   let loadShadowShader() : Shader =

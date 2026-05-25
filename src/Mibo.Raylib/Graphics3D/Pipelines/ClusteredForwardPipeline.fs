@@ -1,8 +1,11 @@
+#nowarn "9"
+
 namespace Mibo.Elmish.Graphics3D.Pipelines
 
 open System
 open System.Collections.Generic
 open System.Numerics
+open FSharp.NativeInterop
 open Raylib_cs
 open Mibo.Elmish
 open Mibo.Elmish.Graphics3D
@@ -308,6 +311,23 @@ type private PipelineContext
     member _.DrawSkinnedMesh(mesh, transform, material, _boneMatrices) =
       drawMeshCore mesh transform material
 
+    member _.DrawMeshInstanced(mesh, transforms, material, instanceCount) =
+      if cameraActive then
+        if lightsDirty then uploadLights()
+        setMaterialUniforms(material)
+        let mat = getOrCreateMaterial(material)
+        Raylib.DrawMeshInstanced(mesh, mat, transforms, instanceCount)
+
+    member _.DrawBillboardBatch(textures, positions, sizes, colors, count) =
+      if cameraActive then
+        for i = 0 to count - 1 do
+          let transform =
+            Matrix4x4.CreateBillboard(positions[i], currentCamera.Position, Vector3.UnitY, Vector3.UnitY)
+          let scaled = Matrix4x4.CreateScale(sizes[i].X, sizes[i].Y, 1.0f)
+          let final = scaled * transform
+          let mat = { Material3D.defaults with AlbedoColor = colors[i]; AlbedoMap = ValueSome textures[i] }
+          drawMeshCore Primitive3D.plane final mat
+
     member _.AddPointLight light =
       pointLights.Add(light)
       lightsDirty <- true
@@ -363,6 +383,14 @@ module private ShadowPass =
         draws.Add({ Mesh = cmd.Mesh; Transform = cmd.Transform })
       | :? Command3D.DrawSkinnedMeshCommand as cmd ->
         draws.Add({ Mesh = cmd.Mesh; Transform = cmd.Transform })
+      | :? Command3D.DrawModelCommand as cmd ->
+        let m = cmd.Model
+        for mi = 0 to m.MeshCount - 1 do
+          let mesh = NativePtr.get m.Meshes mi
+          draws.Add({ Mesh = mesh; Transform = cmd.Transform })
+      | :? Command3D.DrawMeshInstancedCommand as cmd ->
+        for ti = 0 to cmd.InstanceCount - 1 do
+          draws.Add({ Mesh = cmd.Mesh; Transform = cmd.Transforms[ti] })
       | _ -> ()
     draws.ToArray()
 
