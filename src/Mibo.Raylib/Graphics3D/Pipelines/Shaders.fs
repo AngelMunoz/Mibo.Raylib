@@ -94,7 +94,11 @@ void main()
 }
 """
 
-  let forwardFragmentFmt (maxPointLights: int) (maxSpotLights: int) (cascadeCount: int) =
+  let forwardFragmentFmt
+    (maxPointLights: int)
+    (maxSpotLights: int)
+    (cascadeCount: int)
+    =
     let cascadeArray = String.init cascadeCount (fun _ -> "")
 
     let shadowMapSamplers =
@@ -383,7 +387,11 @@ void main()
   /// Loads the built-in forward PBR vertex + fragment shader.
   /// The fragment shader is generated with the specified light array sizes and cascade count.
   /// </summary>
-  let loadForwardShader (maxPointLights: int) (maxSpotLights: int) (cascadeCount: int) : Shader =
+  let loadForwardShader
+    (maxPointLights: int)
+    (maxSpotLights: int)
+    (cascadeCount: int)
+    : Shader =
     Raylib.LoadShaderFromMemory(
       forwardVertex,
       forwardFragmentFmt maxPointLights maxSpotLights cascadeCount

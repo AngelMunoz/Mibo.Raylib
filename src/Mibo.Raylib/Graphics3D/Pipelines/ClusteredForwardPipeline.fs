@@ -186,7 +186,8 @@ type private PipelineContext
         locPointLightRadius[i] <-
           Raylib.GetShaderLocation(forwardShader, $"pointLightRadius[{i}]")
 
-      locSpotLightCount <- Raylib.GetShaderLocation(forwardShader, "spotLightCount")
+      locSpotLightCount <-
+        Raylib.GetShaderLocation(forwardShader, "spotLightCount")
 
       for i = 0 to maxSpotLights - 1 do
         locSpotLightPos[i] <-
@@ -878,7 +879,9 @@ type ClusteredForwardPipeline
 
   interface IRenderPipeline3D with
     member _.Initialize() =
-      forwardShader <- Shaders.loadForwardShader maxPt maxSp shadowCfg.CascadeCount
+      forwardShader <-
+        Shaders.loadForwardShader maxPt maxSp shadowCfg.CascadeCount
+
       shadowShader <- Shaders.loadShadowShader()
       postProcessShader <- Shaders.loadPostProcessShader()
 
