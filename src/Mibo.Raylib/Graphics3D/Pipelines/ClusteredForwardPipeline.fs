@@ -100,7 +100,8 @@ type private PipelineContext
   (
     forwardShader: Shader,
     materialCache: Dictionary<MaterialKey, Material>,
-    maxPointLights: int
+    maxPointLights: int,
+    maxSpotLights: int
   ) =
 
   let mutable gameCtx = Unchecked.defaultof<GameContext>
@@ -111,6 +112,7 @@ type private PipelineContext
   let ambient = ResizeArray<AmbientLight3D>(1)
   let dirLights = ResizeArray<DirectionalLight3D>(1)
   let pointLights = ResizeArray<PointLight3D>(maxPointLights)
+  let spotLights = ResizeArray<SpotLight3D>(maxSpotLights)
   let mutable lightsDirty = true
 
   let mutable locsCached = false
@@ -132,6 +134,15 @@ type private PipelineContext
   let locPointLightPos = Array.zeroCreate<int> maxPointLights
   let locPointLightColor = Array.zeroCreate<int> maxPointLights
   let locPointLightRadius = Array.zeroCreate<int> maxPointLights
+
+  let mutable locSpotLightCount = -1
+  let locSpotLightPos = Array.zeroCreate<int> maxSpotLights
+  let locSpotLightDir = Array.zeroCreate<int> maxSpotLights
+  let locSpotLightColor = Array.zeroCreate<int> maxSpotLights
+  let locSpotLightIntensity = Array.zeroCreate<int> maxSpotLights
+  let locSpotLightRadius = Array.zeroCreate<int> maxSpotLights
+  let locSpotLightInnerCutoff = Array.zeroCreate<int> maxSpotLights
+  let locSpotLightOuterCutoff = Array.zeroCreate<int> maxSpotLights
 
   let cacheLocations() =
     if not locsCached then
@@ -174,6 +185,30 @@ type private PipelineContext
 
         locPointLightRadius[i] <-
           Raylib.GetShaderLocation(forwardShader, $"pointLightRadius[{i}]")
+
+      locSpotLightCount <- Raylib.GetShaderLocation(forwardShader, "spotLightCount")
+
+      for i = 0 to maxSpotLights - 1 do
+        locSpotLightPos[i] <-
+          Raylib.GetShaderLocation(forwardShader, $"spotLightPos[{i}]")
+
+        locSpotLightDir[i] <-
+          Raylib.GetShaderLocation(forwardShader, $"spotLightDir[{i}]")
+
+        locSpotLightColor[i] <-
+          Raylib.GetShaderLocation(forwardShader, $"spotLightColor[{i}]")
+
+        locSpotLightIntensity[i] <-
+          Raylib.GetShaderLocation(forwardShader, $"spotLightIntensity[{i}]")
+
+        locSpotLightRadius[i] <-
+          Raylib.GetShaderLocation(forwardShader, $"spotLightRadius[{i}]")
+
+        locSpotLightInnerCutoff[i] <-
+          Raylib.GetShaderLocation(forwardShader, $"spotLightInnerCutoff[{i}]")
+
+        locSpotLightOuterCutoff[i] <-
+          Raylib.GetShaderLocation(forwardShader, $"spotLightOuterCutoff[{i}]")
 
       locsCached <- true
 
@@ -324,6 +359,67 @@ type private PipelineContext
         forwardShader,
         locPointLightRadius[i],
         l.Radius,
+        ShaderUniformDataType.Float
+      )
+
+    let spCount = min spotLights.Count maxSpotLights
+
+    Raylib.SetShaderValue(
+      forwardShader,
+      locSpotLightCount,
+      spCount,
+      ShaderUniformDataType.Int
+    )
+
+    for i = 0 to spCount - 1 do
+      let s: SpotLight3D = spotLights[i]
+
+      Raylib.SetShaderValue(
+        forwardShader,
+        locSpotLightPos[i],
+        s.Position,
+        ShaderUniformDataType.Vec3
+      )
+
+      Raylib.SetShaderValue(
+        forwardShader,
+        locSpotLightDir[i],
+        s.Direction,
+        ShaderUniformDataType.Vec3
+      )
+
+      Raylib.SetShaderValue(
+        forwardShader,
+        locSpotLightColor[i],
+        colorToVec3 s.Color,
+        ShaderUniformDataType.Vec3
+      )
+
+      Raylib.SetShaderValue(
+        forwardShader,
+        locSpotLightIntensity[i],
+        s.Intensity,
+        ShaderUniformDataType.Float
+      )
+
+      Raylib.SetShaderValue(
+        forwardShader,
+        locSpotLightRadius[i],
+        s.Radius,
+        ShaderUniformDataType.Float
+      )
+
+      Raylib.SetShaderValue(
+        forwardShader,
+        locSpotLightInnerCutoff[i],
+        s.InnerCutoff,
+        ShaderUniformDataType.Float
+      )
+
+      Raylib.SetShaderValue(
+        forwardShader,
+        locSpotLightOuterCutoff[i],
+        s.OuterCutoff,
         ShaderUniformDataType.Float
       )
 
@@ -525,6 +621,10 @@ type private PipelineContext
       dirLights.Add(light)
       lightsDirty <- true
 
+    member _.AddSpotLight light =
+      spotLights.Add(light)
+      lightsDirty <- true
+
     member _.SetAmbientLight light =
       ambient.Clear()
       ambient.Add(light)
@@ -558,6 +658,7 @@ type private PipelineContext
     ambient.Clear()
     dirLights.Clear()
     pointLights.Clear()
+    spotLights.Clear()
     lightsDirty <- true
     cameraActive <- false
     shaderActive <- false
@@ -695,11 +796,13 @@ type ClusteredForwardPipeline
   (
     ?postProcess: PostProcessConfig3D,
     ?maxPointLights: int,
+    ?maxSpotLights: int,
     ?shadowConfig: ShadowConfig
   ) =
 
   let ppConfig = defaultArg postProcess PostProcessConfig3D.none
   let maxPt = defaultArg maxPointLights 8
+  let maxSp = defaultArg maxSpotLights 4
   let shadowCfg = defaultArg shadowConfig ShadowConfig.defaults
 
   let mutable forwardShader: Shader = Unchecked.defaultof<Shader>
@@ -775,7 +878,7 @@ type ClusteredForwardPipeline
 
   interface IRenderPipeline3D with
     member _.Initialize() =
-      forwardShader <- Shaders.loadForwardShader maxPt shadowCfg.CascadeCount
+      forwardShader <- Shaders.loadForwardShader maxPt maxSp shadowCfg.CascadeCount
       shadowShader <- Shaders.loadShadowShader()
       postProcessShader <- Shaders.loadPostProcessShader()
 
@@ -798,7 +901,7 @@ type ClusteredForwardPipeline
         else
           Array.empty
 
-      context <- PipelineContext(forwardShader, materialCache, maxPt)
+      context <- PipelineContext(forwardShader, materialCache, maxPt, maxSp)
 
     member _.Shutdown() =
       Raylib.UnloadShader(forwardShader)

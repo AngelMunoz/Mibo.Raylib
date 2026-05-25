@@ -98,6 +98,11 @@ type IRenderContext3D =
   abstract AddDirectionalLight: light: DirectionalLight3D -> unit
 
   /// <summary>
+  /// Adds a spot light to the scene. Advisory — unsupported pipelines no-op.
+  /// </summary>
+  abstract AddSpotLight: light: SpotLight3D -> unit
+
+  /// <summary>
   /// Sets the ambient light for the scene. Advisory — unsupported pipelines no-op.
   /// </summary>
   abstract SetAmbientLight: light: AmbientLight3D -> unit

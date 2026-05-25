@@ -234,6 +234,17 @@ module Command3D =
   let inline addPointLight(light: PointLight3D) : IRenderCommand3D =
     AddPointLightCommand(light)
 
+  [<Struct>]
+  type AddSpotLightCommand(light: SpotLight3D) =
+    /// <summary>The spot light to add.</summary>
+    member _.Light = light
+
+    interface IRenderCommand3D with
+      member _.Render ctx = ctx.AddSpotLight light
+
+  let inline addSpotLight(light: SpotLight3D) : IRenderCommand3D =
+    AddSpotLightCommand(light)
+
   // ═══════════════════════════════════════════════════════════════════
   // Debug Drawing Commands
   // ═══════════════════════════════════════════════════════════════════

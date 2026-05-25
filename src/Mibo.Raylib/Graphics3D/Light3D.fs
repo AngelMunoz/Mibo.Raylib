@@ -36,7 +36,7 @@ type PointLight3D = {
   Radius: float32
 }
 
-/// <summary>Spot light configuration (reserved for future use).</summary>
+/// <summary>Spot light configuration for cone-shaped lights with distance attenuation.</summary>
 [<Struct>]
 type SpotLight3D = {
   /// <summary>World-space position of the light.</summary>
@@ -47,8 +47,10 @@ type SpotLight3D = {
   Color: Color
   /// <summary>Intensity multiplier.</summary>
   Intensity: float32
-  /// <summary>Inner cone angle in radians.</summary>
+  /// <summary>Maximum distance the light reaches.</summary>
+  Radius: float32
+  /// <summary>Cosine of the inner cone half-angle (full brightness).</summary>
   InnerCutoff: float32
-  /// <summary>Outer cone angle in radians.</summary>
+  /// <summary>Cosine of the outer cone half-angle (fade to zero).</summary>
   OuterCutoff: float32
 }

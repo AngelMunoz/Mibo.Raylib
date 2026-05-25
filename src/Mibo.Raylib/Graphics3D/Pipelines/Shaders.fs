@@ -94,7 +94,7 @@ void main()
 }
 """
 
-  let forwardFragmentFmt (maxPointLights: int) (cascadeCount: int) =
+  let forwardFragmentFmt (maxPointLights: int) (maxSpotLights: int) (cascadeCount: int) =
     let cascadeArray = String.init cascadeCount (fun _ -> "")
 
     let shadowMapSamplers =
@@ -156,6 +156,15 @@ uniform int pointLightCount;
 uniform vec3 pointLightPos[{maxPointLights}];
 uniform vec3 pointLightColor[{maxPointLights}];
 uniform float pointLightRadius[{maxPointLights}];
+
+uniform int spotLightCount;
+uniform vec3 spotLightPos[{maxSpotLights}];
+uniform vec3 spotLightDir[{maxSpotLights}];
+uniform vec3 spotLightColor[{maxSpotLights}];
+uniform float spotLightIntensity[{maxSpotLights}];
+uniform float spotLightRadius[{maxSpotLights}];
+uniform float spotLightInnerCutoff[{maxSpotLights}];
+uniform float spotLightOuterCutoff[{maxSpotLights}];
 
 uniform vec3 cameraPos;
 uniform float shadowBias;
@@ -340,12 +349,31 @@ void main()
         }}
     }}
 
+    // Spot lights (PBR)
+    vec3 spotResult = vec3(0.0);
+    int sCount = min(spotLightCount, {maxSpotLights});
+    for (int i = 0; i < sCount; i++)
+    {{
+        vec3 toLight = spotLightPos[i] - fragWorldPos;
+        float dist = length(toLight);
+        if (dist < spotLightRadius[i])
+        {{
+            vec3 sL = normalize(toLight);
+            float theta = dot(sL, normalize(-spotLightDir[i]));
+            float epsilon = spotLightInnerCutoff[i] - spotLightOuterCutoff[i];
+            float intensity = clamp((theta - spotLightOuterCutoff[i]) / max(epsilon, 0.0001), 0.0, 1.0);
+            float distAtten = 1.0 - (dist / spotLightRadius[i]);
+            vec3 sRadiance = spotLightColor[i] * spotLightIntensity[i] * intensity * distAtten;
+            spotResult += calcPBR(V, normal, sL, sRadiance, albedo, r, m);
+        }}
+    }}
+
     vec3 emission = emissionColor.rgb;
     // Emission map modulation
     vec4 emTex = texture(texture4, uv);
     emission *= emTex.rgb;
 
-    vec3 result = ambient + dirResult + pointResult + emission;
+    vec3 result = ambient + dirResult + pointResult + spotResult + emission;
     float alpha = texColor.a * opacity;
     finalColor = vec4(result, alpha);
 }}
@@ -353,12 +381,12 @@ void main()
 
   /// <summary>
   /// Loads the built-in forward PBR vertex + fragment shader.
-  /// The fragment shader is generated with the specified max point light array size and cascade count.
+  /// The fragment shader is generated with the specified light array sizes and cascade count.
   /// </summary>
-  let loadForwardShader (maxPointLights: int) (cascadeCount: int) : Shader =
+  let loadForwardShader (maxPointLights: int) (maxSpotLights: int) (cascadeCount: int) : Shader =
     Raylib.LoadShaderFromMemory(
       forwardVertex,
-      forwardFragmentFmt maxPointLights cascadeCount
+      forwardFragmentFmt maxPointLights maxSpotLights cascadeCount
     )
 
   /// <summary>Loads the shadow pass vertex + fragment shader.</summary>

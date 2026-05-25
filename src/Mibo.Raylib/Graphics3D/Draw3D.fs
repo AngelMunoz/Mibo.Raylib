@@ -156,6 +156,11 @@ module Draw3D =
     buffer.Add(Command3D.addPointLight light)
     buffer
 
+  /// <summary>Adds a spot light to the scene.</summary>
+  let inline addSpotLight (light: SpotLight3D) (buffer: RenderBuffer3D) =
+    buffer.Add(Command3D.addSpotLight light)
+    buffer
+
   // ──────────────────────────────────────────────
   // Debug Drawing
   // ──────────────────────────────────────────────
