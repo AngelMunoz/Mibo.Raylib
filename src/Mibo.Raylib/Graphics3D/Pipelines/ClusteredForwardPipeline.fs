@@ -101,7 +101,8 @@ type private PipelineContext
     forwardShader: Shader,
     materialCache: Dictionary<MaterialKey, Material>,
     maxPointLights: int,
-    maxSpotLights: int
+    maxSpotLights: int,
+    cascadeCount: int
   ) =
 
   let mutable gameCtx = Unchecked.defaultof<GameContext>
@@ -114,6 +115,10 @@ type private PipelineContext
   let pointLights = ResizeArray<PointLight3D>(maxPointLights)
   let spotLights = ResizeArray<SpotLight3D>(maxSpotLights)
   let mutable lightsDirty = true
+
+  let mutable activeShadowMaps = Array.empty<RenderTexture2D>
+  let mutable activeShadowMatrices = Array.empty<Matrix4x4>
+  let locShadowMaps = Array.zeroCreate<int> cascadeCount
 
   let mutable locsCached = false
   let mutable locAlbedoColor = -1
@@ -210,6 +215,20 @@ type private PipelineContext
 
         locSpotLightOuterCutoff[i] <-
           Raylib.GetShaderLocation(forwardShader, $"spotLightOuterCutoff[{i}]")
+
+      for i = 0 to cascadeCount - 1 do
+        locShadowMaps[i] <- Raylib.GetShaderLocation(forwardShader, $"shadowMap{i}")
+
+      Raylib.BeginShaderMode(forwardShader)
+      for i = 0 to cascadeCount - 1 do
+        let slot = 10 + i
+        Raylib.SetShaderValue(
+          forwardShader,
+          locShadowMaps[i],
+          slot,
+          ShaderUniformDataType.Int
+        )
+      Raylib.EndShaderMode()
 
       locsCached <- true
 
@@ -521,6 +540,12 @@ type private PipelineContext
       ShaderUniformDataType.Int
     )
 
+    if activeShadowMaps.Length > 0 && activeShadowMatrices.Length > 0 then
+      for i = 0 to activeShadowMaps.Length - 1 do
+        Rlgl.ActiveTextureSlot(10 + i)
+        Rlgl.EnableTexture(activeShadowMaps[i].Texture.Id)
+      Rlgl.ActiveTextureSlot(0)
+
   let drawMeshCore (mesh: Mesh) (transform: Matrix4x4) (material: Material3D) =
     if cameraActive then
       if lightsDirty then
@@ -654,8 +679,10 @@ type private PipelineContext
           Raylib.BeginShaderMode(forwardShader)
           shaderActive <- true
 
-  member internal _.Reset(gameContext: GameContext) =
+  member internal _.Reset(gameContext: GameContext, shadowMapsArray: RenderTexture2D[], shadowMatricesArray: Matrix4x4[]) =
     gameCtx <- gameContext
+    activeShadowMaps <- shadowMapsArray
+    activeShadowMatrices <- shadowMatricesArray
     ambient.Clear()
     dirLights.Clear()
     pointLights.Clear()
@@ -764,8 +791,8 @@ module private ShadowPass =
       minZ <- min minZ p.Z; maxZ <- max maxZ p.Z
 
     let zMult = 10.0f
-    let nearZ = if minZ < 0f then minZ * zMult else minZ / zMult
-    let farZ  = if maxZ < 0f then maxZ / zMult else maxZ * zMult
+    let nearPlane = max 0.01f (if maxZ < 0f then -maxZ / zMult else 0.01f)
+    let farPlane = if minZ < 0f then -minZ * zMult else 1000.0f
 
     // Symmetric square ortho frustum — required by BeginMode3D ortho mode
     let halfExtent = max (max (abs minX) (abs maxX)) (max (abs minY) (abs maxY))
@@ -779,9 +806,9 @@ module private ShadowPass =
 
     Raylib.BeginTextureMode(shadowMap)
     Raylib.ClearBackground(Color.White)
+    Rlgl.SetClipPlanes(float nearPlane, float farPlane)
     Raylib.BeginMode3D(lightCamera)
     Rlgl.EnableDepthTest()
-    Rlgl.SetClipPlanes(float nearZ, float farZ)
 
     Rlgl.DisableBackfaceCulling()
 
@@ -797,7 +824,7 @@ module private ShadowPass =
     let top = float halfExtent
     let fbAspect = float32 shadowMapSize / float32 shadowMapSize  // square = 1.0f
     let right = float32 top * fbAspect
-    let lightProj = Raymath.MatrixOrtho(float -right, float right, float -top, float top, float nearZ, float farZ)
+    let lightProj = Raymath.MatrixOrtho(float -right, float right, float -top, float top, float nearPlane, float farPlane)
     Raymath.MatrixMultiply(lightProj, lightView)
 
 // ------------------------------------------------------------------
@@ -934,7 +961,7 @@ type ClusteredForwardPipeline
         else
           Array.empty
 
-      context <- PipelineContext(forwardShader, materialCache, maxPt, maxSp)
+      context <- PipelineContext(forwardShader, materialCache, maxPt, maxSp, shadowCfg.CascadeCount)
 
     member _.Shutdown() =
       Raylib.UnloadShader(forwardShader)
@@ -1025,7 +1052,7 @@ type ClusteredForwardPipeline
       // ------------------------------------------------------------------
       // Forward pass — context is reset each frame, populated by commands
       // ------------------------------------------------------------------
-      context.Reset(gameCtx)
+      context.Reset(gameCtx, shadowMaps, shadowMatrices)
       let ctx = context :> IRenderContext3D
 
       // Upload shadow uniforms if shadows were rendered
@@ -1041,10 +1068,6 @@ type ClusteredForwardPipeline
         let locShadowMatrices =
           Array.init shadowCfg.CascadeCount (fun i ->
             Raylib.GetShaderLocation(forwardShader, $"shadowMatrix{i}"))
-
-        let locShadowMaps =
-          Array.init shadowCfg.CascadeCount (fun i ->
-            Raylib.GetShaderLocation(forwardShader, $"shadowMap{i}"))
 
         let locCascadeSplits =
           if cascadeSplits.Length > 0 then
@@ -1080,12 +1103,6 @@ type ClusteredForwardPipeline
             forwardShader,
             locShadowMatrices[i],
             shadowMatrices[i]
-          )
-
-          Raylib.SetShaderValueTexture(
-            forwardShader,
-            locShadowMaps[i],
-            shadowMaps[i].Texture
           )
 
         if locCascadeSplits >= 0 then

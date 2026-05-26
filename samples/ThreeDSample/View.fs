@@ -38,22 +38,15 @@ let view (ctx: GameContext) (model: GameModel) (buffer: RenderBuffer3D) =
     c
 
   let ambient = { Color = DayNight.getAmbientColor time; Intensity = 0.6f }
-  let sunIntensity = DayNight.getSunIntensity time
-  let moonIntensity = DayNight.getMoonIntensity time
+  let primaryIntensity = DayNight.getPrimaryLightIntensity time
 
   buffer
   |> Draw3D.beginCamera camera
   |> Draw3D.setAmbientLight ambient
   |> Draw3D.addDirectionalLight {
-    Direction = DayNight.getSunDirection time
-    Color = DayNight.getSunColor time
-    Intensity = 1.2f * sunIntensity
-    CastsShadows = true
-  }
-  |> Draw3D.addDirectionalLight {
-    Direction = DayNight.getMoonDirection time
-    Color = Color(180uy, 200uy, 255uy)
-    Intensity = 2f * moonIntensity
+    Direction = DayNight.getPrimaryLightDirection time
+    Color = DayNight.getPrimaryLightColor time
+    Intensity = 1.5f * primaryIntensity
     CastsShadows = true
   }
   |> ignore
@@ -88,6 +81,16 @@ let view (ctx: GameContext) (model: GameModel) (buffer: RenderBuffer3D) =
                   Raymath.MatrixMultiply(rot, trans)
 
               buffer.Add(Command3D.drawModel blockModel transform) |> ignore
+
+              if blockType = BlockType.MushroomLight then
+                buffer.Add(
+                  Command3D.addPointLight {
+                    Position = worldPos + Vector3(0.0f, 0.5f, 0.0f)
+                    Color = Color(255uy, 200uy, 120uy)
+                    Radius = 6.0f
+                  }
+                ) |> ignore
+
               drawCount <- drawCount + 1)
 
   // Player model
