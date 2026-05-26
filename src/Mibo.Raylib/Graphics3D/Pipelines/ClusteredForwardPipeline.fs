@@ -86,8 +86,8 @@ module ShadowConfig =
   let defaults: ShadowConfig = {
     CascadeCount = 3
     ShadowMapSize = 2048
-    ShadowBias = 0.005f
-    NormalShadowBias = 0.02f
+    ShadowBias = 0.01f
+    NormalShadowBias = 0.05f
     CameraNear = 0.1f
     CameraFar = 1000.0f
   }
@@ -777,7 +777,9 @@ module private ShadowPass =
       |> fun sum -> sum / float32 corners.Length
 
     let lightPos = center - lightDir * 100.0f
-    let lightView = Raymath.MatrixLookAt(lightPos, center, Vector3.UnitY)
+    let forward = Vector3.Normalize(center - lightPos)
+    let safeUp = if abs forward.Y > 0.99f then Vector3.UnitZ else Vector3.UnitY
+    let lightView = Raymath.MatrixLookAt(lightPos, center, safeUp)
 
     let mutable minX, minY, minZ =
       System.Single.MaxValue, System.Single.MaxValue, System.Single.MaxValue
@@ -800,16 +802,18 @@ module private ShadowPass =
     let mutable lightCamera = Camera3D()
     lightCamera.Position <- lightPos
     lightCamera.Target <- center
-    lightCamera.Up <- Vector3.UnitY
+    lightCamera.Up <- safeUp
     lightCamera.FovY <- 2.0f * halfExtent
     lightCamera.Projection <- CameraProjection.Orthographic
 
     Raylib.BeginTextureMode(shadowMap)
     Raylib.ClearBackground(Color.White)
-    Rlgl.SetClipPlanes(float nearPlane, float farPlane)
     Raylib.BeginMode3D(lightCamera)
-    Rlgl.EnableDepthTest()
 
+    let actualView = Rlgl.GetMatrixModelview()
+    let actualProj = Rlgl.GetMatrixProjection()
+
+    Rlgl.EnableDepthTest()
     Rlgl.DisableBackfaceCulling()
 
     for draw in draws do
@@ -819,13 +823,9 @@ module private ShadowPass =
     Raylib.EndMode3D()
     Raylib.EndTextureMode()
 
-    // Shadow matrix for forward pass (must match what BeginMode3D produced)
-    // BeginMode3D uses fovY/2 as orthogonal top, and right = top * framebufferAspect
-    let top = float halfExtent
-    let fbAspect = float32 shadowMapSize / float32 shadowMapSize  // square = 1.0f
-    let right = float32 top * fbAspect
-    let lightProj = Raymath.MatrixOrtho(float -right, float right, float -top, float top, float nearPlane, float farPlane)
-    Raymath.MatrixMultiply(lightProj, lightView)
+    let combined = Matrix4x4.Multiply(actualProj, actualView)
+    let yFlip = Matrix4x4.CreateScale(1.0f, -1.0f, 1.0f)
+    Matrix4x4.Multiply(yFlip, combined)
 
 // ------------------------------------------------------------------
 // ClusteredForwardPipeline
