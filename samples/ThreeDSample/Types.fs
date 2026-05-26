@@ -48,6 +48,7 @@ type BlockType =
   | Crate
   | Barrel
   | Flag
+  | MushroomLight
 
 module BlockType =
   let modelPath = function
@@ -76,6 +77,7 @@ module BlockType =
     | Crate -> Constants.KenneyModels.crate
     | Barrel -> Constants.KenneyModels.barrel
     | Flag -> Constants.KenneyModels.flag
+    | MushroomLight -> Constants.KenneyModels.mushrooms
     | Empty -> ""
 
   let modelVerticalOffset = function
@@ -93,7 +95,7 @@ module BlockType =
     | _ -> 0.0f
 
   let isSolid = function
-    | Empty | Coin | Jewel | Heart | Star | GrassTuft | Mushrooms | Flag -> false
+    | Empty | Coin | Jewel | Heart | Star | GrassTuft | Mushrooms | MushroomLight | Flag -> false
     | _ -> true
 
   let isCollectible = function
@@ -102,6 +104,10 @@ module BlockType =
 
   let isDecoration = function
     | TreePine | TreeSnow | Rock | GrassTuft | Mushrooms | Flag | Barrel | Crate -> true
+    | _ -> false
+
+  let isLightSource = function
+    | MushroomLight -> true
     | _ -> false
 
 [<Struct>]

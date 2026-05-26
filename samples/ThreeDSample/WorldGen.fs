@@ -112,6 +112,13 @@ let generateChunk cx cz worldSeed : Chunk =
     s
     |> Layout3D.scatterXZ 1 grassCount (rng.Next()) BlockType.GrassTuft) grid |> ignore
 
+  // ── Glowing mushrooms (light sources) ──
+  let lanternCount = rng.Next(1, 3)
+
+  Layout3D.run (fun s ->
+    s
+    |> Layout3D.scatterXZ 1 lanternCount (rng.Next()) BlockType.MushroomLight) grid |> ignore
+
   // ── Coins on elevated platforms (procedural — needs neighbor checks) ──
   let coinCount = rng.Next(2, 8)
 

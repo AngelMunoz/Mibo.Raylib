@@ -742,33 +742,63 @@ module private ShadowPass =
 
     let corners =
       CsmMath.frustumCornersWorld
-        cameraPos
-        cameraTarget
-        cameraUp
-        fovY
-        aspect
-        near
-        far
+        cameraPos cameraTarget cameraUp fovY aspect near far
 
-    let shadowMatrix =
-      CsmMath.computeShadowMatrix corners lightDir shadowMapSize
+    let center =
+      corners
+      |> Array.fold (fun acc c -> acc + c) Vector3.Zero
+      |> fun sum -> sum / float32 corners.Length
+
+    let lightPos = center - lightDir * 100.0f
+    let lightView = Raymath.MatrixLookAt(lightPos, center, Vector3.UnitY)
+
+    let mutable minX, minY, minZ =
+      System.Single.MaxValue, System.Single.MaxValue, System.Single.MaxValue
+    let mutable maxX, maxY, maxZ =
+      System.Single.MinValue, System.Single.MinValue, System.Single.MinValue
+
+    for corner in corners do
+      let p = Raymath.Vector3Transform(corner, lightView)
+      minX <- min minX p.X; maxX <- max maxX p.X
+      minY <- min minY p.Y; maxY <- max maxY p.Y
+      minZ <- min minZ p.Z; maxZ <- max maxZ p.Z
+
+    let zMult = 10.0f
+    let nearZ = if minZ < 0f then minZ * zMult else minZ / zMult
+    let farZ  = if maxZ < 0f then maxZ / zMult else maxZ * zMult
+
+    // Symmetric square ortho frustum — required by BeginMode3D ortho mode
+    let halfExtent = max (max (abs minX) (abs maxX)) (max (abs minY) (abs maxY))
+
+    let mutable lightCamera = Camera3D()
+    lightCamera.Position <- lightPos
+    lightCamera.Target <- center
+    lightCamera.Up <- Vector3.UnitY
+    lightCamera.FovY <- 2.0f * halfExtent
+    lightCamera.Projection <- CameraProjection.Orthographic
 
     Raylib.BeginTextureMode(shadowMap)
     Raylib.ClearBackground(Color.White)
+    Raylib.BeginMode3D(lightCamera)
+    Rlgl.EnableDepthTest()
+    Rlgl.SetClipPlanes(float nearZ, float farZ)
 
-    let lightMvpLoc = Raylib.GetShaderLocation(shadowShader, "lightMvp")
-
-    Raylib.BeginShaderMode(shadowShader)
+    Rlgl.DisableBackfaceCulling()
 
     for draw in draws do
-      let mvp = shadowMatrix * draw.Transform
-      Raylib.SetShaderValueMatrix(shadowShader, lightMvpLoc, mvp)
-      Raylib.DrawMesh(draw.Mesh, shadowMaterial, Matrix4x4.Identity)
+      Raylib.DrawMesh(draw.Mesh, shadowMaterial, draw.Transform)
 
-    Raylib.EndShaderMode()
+    Rlgl.EnableBackfaceCulling()
+    Raylib.EndMode3D()
     Raylib.EndTextureMode()
 
-    shadowMatrix
+    // Shadow matrix for forward pass (must match what BeginMode3D produced)
+    // BeginMode3D uses fovY/2 as orthogonal top, and right = top * framebufferAspect
+    let top = float halfExtent
+    let fbAspect = float32 shadowMapSize / float32 shadowMapSize  // square = 1.0f
+    let right = float32 top * fbAspect
+    let lightProj = Raymath.MatrixOrtho(float -right, float right, float -top, float top, float nearZ, float farZ)
+    Raymath.MatrixMultiply(lightProj, lightView)
 
 // ------------------------------------------------------------------
 // ClusteredForwardPipeline
@@ -990,6 +1020,8 @@ type ClusteredForwardPipeline
               aspect
               meshDraws
 
+        Rlgl.SetClipPlanes(float shadowCfg.CameraNear, float shadowCfg.CameraFar)
+
       // ------------------------------------------------------------------
       // Forward pass — context is reset each frame, populated by commands
       // ------------------------------------------------------------------
@@ -1053,7 +1085,7 @@ type ClusteredForwardPipeline
           Raylib.SetShaderValueTexture(
             forwardShader,
             locShadowMaps[i],
-            shadowMaps[i].Depth
+            shadowMaps[i].Texture
           )
 
         if locCascadeSplits >= 0 then
@@ -1086,3 +1118,15 @@ type ClusteredForwardPipeline
         context.EndAll()
         Raylib.EndTextureMode()
         applyPostProcess gameCtx sceneRT rtPool
+
+      // DEBUG: Render shadow map cascade 0 as overlay in bottom-right corner
+      if shadowMatrices.Length > 0 && shadowMaps.Length > 0 then
+        let sm = shadowMaps[0]
+        let w = float32 gameCtx.WindowWidth
+        let h = float32 gameCtx.WindowHeight
+        let previewW = 256.0f
+        let previewH = 256.0f
+        let srcRect = Raylib_cs.Rectangle(0.0f, 0.0f, float32 shadowCfg.ShadowMapSize, float32 -shadowCfg.ShadowMapSize)
+        let dstRect = Raylib_cs.Rectangle(w - previewW - 10.0f, h - previewH - 10.0f, previewW, previewH)
+        Raylib.DrawTexturePro(sm.Texture, srcRect, dstRect, Vector2.Zero, 0.0f, Color.White)
+        Raylib.DrawRectangleLines(int (w - previewW - 10.0f), int (h - previewH - 10.0f), int previewW, int previewH, Color.Red)

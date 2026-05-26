@@ -1,6 +1,7 @@
 namespace Mibo.Elmish.Graphics3D.Pipelines
 
 open System.Numerics
+open Raylib_cs
 
 /// <summary>
 /// Helper functions for Cascaded Shadow Map (CSM) math.
@@ -54,6 +55,7 @@ module CsmMath =
 
   /// <summary>
   /// Computes an orthographic shadow view-projection matrix for a directional light.
+  /// Uses raylib Raymath for all matrix operations to avoid System.Numerics layout issues.
   /// </summary>
   let computeShadowMatrix
     (frustumCorners: Vector3[])
@@ -67,7 +69,7 @@ module CsmMath =
       |> fun sum -> sum / float32 frustumCorners.Length
 
     let lightPos = center - lightDir * 100.0f
-    let lightView = Matrix4x4.CreateLookAt(lightPos, center, Vector3.UnitY)
+    let lightView = Raymath.MatrixLookAt(lightPos, center, Vector3.UnitY)
 
     let mutable minX, minY, minZ =
       System.Single.MaxValue, System.Single.MaxValue, System.Single.MaxValue
@@ -76,7 +78,7 @@ module CsmMath =
       System.Single.MinValue, System.Single.MinValue, System.Single.MinValue
 
     for corner in frustumCorners do
-      let p = Vector3.Transform(corner, lightView)
+      let p = Raymath.Vector3Transform(corner, lightView)
       minX <- min minX p.X
       maxX <- max maxX p.X
       minY <- min minY p.Y
@@ -107,9 +109,9 @@ module CsmMath =
       maxZ <- maxZ * zMult
 
     let lightProj =
-      Matrix4x4.CreateOrthographicOffCenter(minX, maxX, minY, maxY, minZ, maxZ)
+      Raymath.MatrixOrtho(float minX, float maxX, float minY, float maxY, float minZ, float maxZ)
 
-    lightView * lightProj
+    Raymath.MatrixMultiply(lightProj, lightView)
 
   /// <summary>
   /// Computes CSM cascade split distances (view-space depth).

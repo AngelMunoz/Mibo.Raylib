@@ -48,13 +48,13 @@ let view (ctx: GameContext) (model: GameModel) (buffer: RenderBuffer3D) =
     Direction = DayNight.getSunDirection time
     Color = DayNight.getSunColor time
     Intensity = 1.2f * sunIntensity
-    CastsShadows = false
+    CastsShadows = true
   }
   |> Draw3D.addDirectionalLight {
     Direction = DayNight.getMoonDirection time
     Color = Color(180uy, 200uy, 255uy)
     Intensity = 2f * moonIntensity
-    CastsShadows = false
+    CastsShadows = true
   }
   |> ignore
 

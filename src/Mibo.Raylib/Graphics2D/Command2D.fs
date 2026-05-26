@@ -331,7 +331,7 @@ module Command2D =
       member _.Layer = cmdLayer
 
       member _.Render _ =
-        Raylib.DrawCircleGradient(centerX, centerY, radius, inner, outer)
+        Raylib.DrawCircleGradient(Vector2(float32 centerX, float32 centerY), radius, inner, outer)
 
   [<Struct>]
   type FillRingCommand

@@ -41,13 +41,13 @@ void main()
   let shadowPassVertex =
     """#version 330
 
-in vec3 vertexPosition;
+layout(location = 0) in vec3 vertexPosition;
 
-uniform mat4 lightMvp;
+uniform mat4 mvp;
 
 void main()
 {
-    gl_Position = lightMvp * vec4(vertexPosition, 1.0);
+    gl_Position = mvp * vec4(vertexPosition, 1.0);
 }
 """
 
@@ -58,7 +58,8 @@ out vec4 finalColor;
 
 void main()
 {
-    finalColor = vec4(1.0);
+    float depth = gl_FragCoord.z;
+    finalColor = vec4(depth, depth, depth, 1.0);
 }
 """
 

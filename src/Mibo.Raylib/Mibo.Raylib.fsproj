@@ -62,7 +62,7 @@
     <Compile Include="Layout3D/Renderer3D.fs" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Raylib-cs" Version="7.0.2" />
+    <PackageReference Include="Raylib-cs" Version="8.0.0" />
     <PackageReference Include="FSharp.UMX" Version="1.1.0" />
   </ItemGroup>
 </Project>
