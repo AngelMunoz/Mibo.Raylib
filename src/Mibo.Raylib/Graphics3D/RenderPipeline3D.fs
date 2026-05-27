@@ -10,7 +10,7 @@ open Mibo.Elmish
 /// The pipeline is the consumer of geometry, not the definer. It receives a buffer of
 /// <see cref="T:Mibo.Elmish.Graphics3D.IRenderCommand3D"/> and interprets them.
 ///
-/// The built-in <see cref="T:Mibo.Elmish.Graphics3D.Pipelines.ClusteredForwardPipeline"/>
+/// The built-in <see cref="T:Mibo.Elmish.Graphics3D.Pipelines.ForwardPbrPipeline"/>
 /// is the reference implementation, not the engine core. Users may swap it for a deferred,
 /// SDF, or visibility-buffer pipeline without changing their view functions.
 /// </remarks>

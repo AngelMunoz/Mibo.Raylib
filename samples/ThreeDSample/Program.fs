@@ -74,7 +74,7 @@ let main _ =
     |> Program.withSubscription subscribe
     |> Program.withTick Tick
     |> Program.withRenderer(fun () ->
-      let pipeline = ClusteredForwardPipeline()
+      let pipeline = ForwardPbrPipeline()
       Renderer3D.create pipeline View.view)
 
   let game = new RaylibGame<GameModel, Msg>(program)

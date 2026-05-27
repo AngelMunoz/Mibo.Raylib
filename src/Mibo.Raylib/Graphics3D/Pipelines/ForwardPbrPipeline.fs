@@ -62,34 +62,34 @@ module private MaterialKey =
   }
 
 // ------------------------------------------------------------------
-// Shadow Configuration
+// EVSM Shadow Configuration
 // ------------------------------------------------------------------
 
-/// <summary>Configuration for CSM shadow mapping in the forward pipeline.</summary>
+/// <summary>Configuration for Exponential Variance Shadow Maps in the forward pipeline.</summary>
 [<Struct>]
-type ShadowConfig = {
-  /// <summary>Number of shadow cascades (1 = single shadow map, 3+ = CSM). Default 3.</summary>
-  CascadeCount: int
-  /// <summary>Resolution of each shadow map (square). Default 2048.</summary>
+type EvsmConfig = {
+  /// <summary>Resolution of the shadow map (square). Default 2048.</summary>
   ShadowMapSize: int
-  /// <summary>Base shadow bias. Default 0.005.</summary>
-  ShadowBias: float32
-  /// <summary>Normal-based shadow bias multiplier. Default 0.02.</summary>
-  NormalShadowBias: float32
-  /// <summary>Camera near plane for cascade computation. Default 0.1.</summary>
-  CameraNear: float32
-  /// <summary>Camera far plane for cascade computation. Default 1000.0.</summary>
-  CameraFar: float32
+  /// <summary>Positive exponential warp constant. Higher values tighten shadows. Default 40.0.</summary>
+  PositiveExponent: float32
+  /// <summary>Negative exponential warp constant. Default 5.0.</summary>
+  NegativeExponent: float32
+  /// <summary>Minimum shadow value to reduce light bleeding. Default 0.2.</summary>
+  LightBleedReduction: float32
+  /// <summary>Show shadow map debug overlay in bottom-right corner.</summary>
+  ShowDebugOverlay: bool
+  /// <summary>Maximum distance from camera for shadow rendering. Default 100.0.</summary>
+  ShadowDistance: float32
 }
 
-module ShadowConfig =
-  let defaults: ShadowConfig = {
-    CascadeCount = 3
+module EvsmConfig =
+  let defaults: EvsmConfig = {
     ShadowMapSize = 2048
-    ShadowBias = 0.01f
-    NormalShadowBias = 0.05f
-    CameraNear = 0.1f
-    CameraFar = 1000.0f
+    PositiveExponent = 10.0f
+    NegativeExponent = 5.0f
+    LightBleedReduction = 0.2f
+    ShowDebugOverlay = true
+    ShadowDistance = 100.0f
   }
 
 // ------------------------------------------------------------------
@@ -101,8 +101,7 @@ type private PipelineContext
     forwardShader: Shader,
     materialCache: Dictionary<MaterialKey, Material>,
     maxPointLights: int,
-    maxSpotLights: int,
-    cascadeCount: int
+    maxSpotLights: int
   ) =
 
   let mutable gameCtx = Unchecked.defaultof<GameContext>
@@ -116,9 +115,8 @@ type private PipelineContext
   let spotLights = ResizeArray<SpotLight3D>(maxSpotLights)
   let mutable lightsDirty = true
 
-  let mutable activeShadowMaps = Array.empty<RenderTexture2D>
-  let mutable activeShadowMatrices = Array.empty<Matrix4x4>
-  let locShadowMaps = Array.zeroCreate<int> cascadeCount
+  let mutable activeShadowMap: RenderTexture2D = Unchecked.defaultof<RenderTexture2D>
+  let mutable activeLightViewProj = Matrix4x4.Identity
 
   let mutable locsCached = false
   let mutable locAlbedoColor = -1
@@ -148,6 +146,17 @@ type private PipelineContext
   let locSpotLightRadius = Array.zeroCreate<int> maxSpotLights
   let locSpotLightInnerCutoff = Array.zeroCreate<int> maxSpotLights
   let locSpotLightOuterCutoff = Array.zeroCreate<int> maxSpotLights
+
+  let mutable locShadowMap = -1
+  let mutable locLightViewProj = -1
+  let mutable locPositiveExp = -1
+  let mutable locNegativeExp = -1
+  let mutable locLightBleedReduction = -1
+  let mutable locCameraPos = -1
+
+  let mutable activePositiveExp = 0.0f
+  let mutable activeNegativeExp = 0.0f
+  let mutable activeLightBleedReduction = 0.0f
 
   let cacheLocations() =
     if not locsCached then
@@ -216,18 +225,19 @@ type private PipelineContext
         locSpotLightOuterCutoff[i] <-
           Raylib.GetShaderLocation(forwardShader, $"spotLightOuterCutoff[{i}]")
 
-      for i = 0 to cascadeCount - 1 do
-        locShadowMaps[i] <- Raylib.GetShaderLocation(forwardShader, $"shadowMap{i}")
+      locLightViewProj <- Raylib.GetShaderLocation(forwardShader, "lightViewProj")
+      locPositiveExp <- Raylib.GetShaderLocation(forwardShader, "positiveExp")
+      locNegativeExp <- Raylib.GetShaderLocation(forwardShader, "negativeExp")
+      locLightBleedReduction <- Raylib.GetShaderLocation(forwardShader, "lightBleedReduction")
+      locCameraPos <- Raylib.GetShaderLocation(forwardShader, "cameraPos")
 
       Raylib.BeginShaderMode(forwardShader)
-      for i = 0 to cascadeCount - 1 do
-        let slot = 10 + i
-        Raylib.SetShaderValue(
-          forwardShader,
-          locShadowMaps[i],
-          slot,
-          ShaderUniformDataType.Int
-        )
+      Raylib.SetShaderValue(
+        forwardShader,
+        locShadowMap,
+        10,
+        ShaderUniformDataType.Int
+      )
       Raylib.EndShaderMode()
 
       locsCached <- true
@@ -540,10 +550,9 @@ type private PipelineContext
       ShaderUniformDataType.Int
     )
 
-    if activeShadowMaps.Length > 0 && activeShadowMatrices.Length > 0 then
-      for i = 0 to activeShadowMaps.Length - 1 do
-        Rlgl.ActiveTextureSlot(10 + i)
-        Rlgl.EnableTexture(activeShadowMaps[i].Texture.Id)
+    if activeShadowMap.Texture.Id <> 0u then
+      Rlgl.ActiveTextureSlot(10)
+      Rlgl.EnableTexture(activeShadowMap.Texture.Id)
       Rlgl.ActiveTextureSlot(0)
 
   let drawMeshCore (mesh: Mesh) (transform: Matrix4x4) (material: Material3D) =
@@ -679,10 +688,21 @@ type private PipelineContext
           Raylib.BeginShaderMode(forwardShader)
           shaderActive <- true
 
-  member internal _.Reset(gameContext: GameContext, shadowMapsArray: RenderTexture2D[], shadowMatricesArray: Matrix4x4[]) =
+  member internal _.Reset
+    (
+      gameContext: GameContext,
+      shadowMap: RenderTexture2D,
+      lightViewProj: Matrix4x4,
+      posExp: float32,
+      negExp: float32,
+      lightBleedReduction: float32
+    ) =
     gameCtx <- gameContext
-    activeShadowMaps <- shadowMapsArray
-    activeShadowMatrices <- shadowMatricesArray
+    activeShadowMap <- shadowMap
+    activeLightViewProj <- lightViewProj
+    activePositiveExp <- posExp
+    activeNegativeExp <- negExp
+    activeLightBleedReduction <- lightBleedReduction
     ambient.Clear()
     dirLights.Clear()
     pointLights.Clear()
@@ -701,10 +721,10 @@ type private PipelineContext
       cameraActive <- false
 
 // ------------------------------------------------------------------
-// Shadow Pass Helpers
+// EVSM Shadow Pass Helpers
 // ------------------------------------------------------------------
 
-module private ShadowPass =
+module private EvsmPass =
 
   type MeshDraw = { Mesh: Mesh; Transform: Matrix4x4 }
 
@@ -714,62 +734,39 @@ module private ShadowPass =
     for i = 0 to buffer.Count - 1 do
       match buffer[i] with
       | :? Command3D.DrawMeshCommand as cmd ->
-        draws.Add(
-          {
-            Mesh = cmd.Mesh
-            Transform = cmd.Transform
-          }
-        )
+        draws.Add({ Mesh = cmd.Mesh; Transform = cmd.Transform })
       | :? Command3D.DrawSkinnedMeshCommand as cmd ->
-        draws.Add(
-          {
-            Mesh = cmd.Mesh
-            Transform = cmd.Transform
-          }
-        )
+        draws.Add({ Mesh = cmd.Mesh; Transform = cmd.Transform })
       | :? Command3D.DrawModelCommand as cmd ->
         let m = cmd.Model
-
         for mi = 0 to m.MeshCount - 1 do
           let mesh = NativePtr.get m.Meshes mi
-
-          draws.Add(
-            {
-              Mesh = mesh
-              Transform = cmd.Transform
-            }
-          )
+          draws.Add({ Mesh = mesh; Transform = cmd.Transform })
       | :? Command3D.DrawMeshInstancedCommand as cmd ->
         for ti = 0 to cmd.InstanceCount - 1 do
-          draws.Add(
-            {
-              Mesh = cmd.Mesh
-              Transform = cmd.Transforms[ti]
-            }
-          )
+          draws.Add({ Mesh = cmd.Mesh; Transform = cmd.Transforms[ti] })
       | _ -> ()
 
     draws.ToArray()
 
-  let renderShadowCascade
-    (shadowShader: Shader)
-    (shadowMaterial: Material)
-    (shadowMap: RenderTexture2D)
-    (shadowMapSize: int)
+  let renderShadowPass
+    (evsmShader: Shader)
+    (evsmMaterial: Material)
+    (shadowFbo: RenderTexture2D)
     (lightDir: Vector3)
-    (near: float32)
-    (far: float32)
     (cameraPos: Vector3)
     (cameraTarget: Vector3)
     (cameraUp: Vector3)
     (fovY: float32)
     (aspect: float32)
+    (positiveExp: float32)
+    (negativeExp: float32)
+    (shadowDistance: float32)
     (draws: MeshDraw[])
     : Matrix4x4 =
 
     let corners =
-      CsmMath.frustumCornersWorld
-        cameraPos cameraTarget cameraUp fovY aspect near far
+      EvsmMath.frustumCornersWorld cameraPos cameraTarget cameraUp fovY aspect 0.1f shadowDistance
 
     let center =
       corners
@@ -777,12 +774,12 @@ module private ShadowPass =
       |> fun sum -> sum / float32 corners.Length
 
     let lightPos = center - lightDir * 100.0f
-    let forward = Vector3.Normalize(center - lightPos)
-    let safeUp = if abs forward.Y > 0.99f then Vector3.UnitZ else Vector3.UnitY
+    let safeUp = if abs lightDir.Y > 0.99f then Vector3.UnitZ else Vector3.UnitY
     let lightView = Raymath.MatrixLookAt(lightPos, center, safeUp)
 
     let mutable minX, minY, minZ =
       System.Single.MaxValue, System.Single.MaxValue, System.Single.MaxValue
+
     let mutable maxX, maxY, maxZ =
       System.Single.MinValue, System.Single.MinValue, System.Single.MinValue
 
@@ -792,11 +789,6 @@ module private ShadowPass =
       minY <- min minY p.Y; maxY <- max maxY p.Y
       minZ <- min minZ p.Z; maxZ <- max maxZ p.Z
 
-    let zMult = 10.0f
-    let nearPlane = max 0.01f (if maxZ < 0f then -maxZ / zMult else 0.01f)
-    let farPlane = if minZ < 0f then -minZ * zMult else 1000.0f
-
-    // Symmetric square ortho frustum — required by BeginMode3D ortho mode
     let halfExtent = max (max (abs minX) (abs maxX)) (max (abs minY) (abs maxY))
 
     let mutable lightCamera = Camera3D()
@@ -806,19 +798,24 @@ module private ShadowPass =
     lightCamera.FovY <- 2.0f * halfExtent
     lightCamera.Projection <- CameraProjection.Orthographic
 
-    Raylib.BeginTextureMode(shadowMap)
-    Raylib.ClearBackground(Color.White)
-    Raylib.BeginMode3D(lightCamera)
+    Raylib.BeginTextureMode(shadowFbo)
+    Rlgl.ClearColor(0uy, 0uy, 0uy, 0uy)
+    Rlgl.ClearScreenBuffers()
 
+    Raylib.BeginMode3D(lightCamera)
     let actualView = Rlgl.GetMatrixModelview()
     let actualProj = Rlgl.GetMatrixProjection()
 
     Rlgl.EnableDepthTest()
     Rlgl.DisableBackfaceCulling()
+    Raylib.BeginShaderMode(evsmShader)
+    Raylib.SetShaderValue(evsmShader, Raylib.GetShaderLocation(evsmShader, "positiveExp"), positiveExp, ShaderUniformDataType.Float)
+    Raylib.SetShaderValue(evsmShader, Raylib.GetShaderLocation(evsmShader, "negativeExp"), negativeExp, ShaderUniformDataType.Float)
 
     for draw in draws do
-      Raylib.DrawMesh(draw.Mesh, shadowMaterial, draw.Transform)
+      Raylib.DrawMesh(draw.Mesh, evsmMaterial, draw.Transform)
 
+    Raylib.EndShaderMode()
     Rlgl.EnableBackfaceCulling()
     Raylib.EndMode3D()
     Raylib.EndTextureMode()
@@ -828,12 +825,12 @@ module private ShadowPass =
     Matrix4x4.Multiply(yFlip, combined)
 
 // ------------------------------------------------------------------
-// ClusteredForwardPipeline
+// ForwardPbrPipeline
 // ------------------------------------------------------------------
 
 /// <summary>
 /// Reference implementation of <see cref="T:Mibo.Elmish.Graphics3D.IRenderPipeline3D"/>.
-/// A Clustered Forward+ style pipeline with PBR lighting, CSM shadow mapping,
+/// A Forward PBR pipeline with EVSM shadow mapping, PBR lighting,
 /// material caching, and optional post-processing.
 /// </summary>
 /// <remarks>
@@ -843,34 +840,33 @@ module private ShadowPass =
 ///
 /// Features:
 /// <list type="bullet">
-///   <item><description>CSM shadow mapping for directional lights (configurable cascades)</description></item>
+///   <item><description>EVSM shadow mapping for directional lights (single shadow map, exponential variance)</description></item>
 ///   <item><description>Accumulated point and directional lights (configurable max point lights via uniform arrays, default 8)</description></item>
 ///   <item><description>Material caching: converts <see cref="T:Mibo.Elmish.Graphics3D.Material3D"/> to raylib <c>Material</c> on first use</description></item>
 ///   <item><description>Post-process via ping-pong render targets</description></item>
 ///   <item><description>CPU skinning fallback placeholder for <c>DrawSkinnedMesh</c></description></item>
 /// </list>
 /// </remarks>
-type ClusteredForwardPipeline
+type ForwardPbrPipeline
   (
     ?postProcess: PostProcessConfig3D,
     ?maxPointLights: int,
     ?maxSpotLights: int,
-    ?shadowConfig: ShadowConfig
+    ?evsmConfig: EvsmConfig
   ) =
 
   let ppConfig = defaultArg postProcess PostProcessConfig3D.none
   let maxPt = defaultArg maxPointLights 8
   let maxSp = defaultArg maxSpotLights 4
-  let shadowCfg = defaultArg shadowConfig ShadowConfig.defaults
+  let evsmCfg = defaultArg evsmConfig EvsmConfig.defaults
 
   let mutable forwardShader: Shader = Unchecked.defaultof<Shader>
-  let mutable shadowShader: Shader = Unchecked.defaultof<Shader>
+  let mutable evsmShader: Shader = Unchecked.defaultof<Shader>
   let mutable postProcessShader: Shader = Unchecked.defaultof<Shader>
   let materialCache = Dictionary<MaterialKey, Material>()
-  let mutable shadowMaterial: Material = Unchecked.defaultof<Material>
+  let mutable evsmMaterial: Material = Unchecked.defaultof<Material>
 
-  let mutable shadowMaps: RenderTexture2D[] = Array.empty
-  let mutable cascadeSplits: float32[] = Array.empty
+  let mutable shadowMap: RenderTexture2D = Unchecked.defaultof<RenderTexture2D>
 
   let mutable context: PipelineContext = Unchecked.defaultof<PipelineContext>
 
@@ -937,48 +933,32 @@ type ClusteredForwardPipeline
   interface IRenderPipeline3D with
     member _.Initialize() =
       forwardShader <-
-        Shaders.loadForwardShader maxPt maxSp shadowCfg.CascadeCount
+        Shaders.loadForwardShader maxPt maxSp
 
-      shadowShader <- Shaders.loadShadowShader()
+      evsmShader <- Shaders.loadEvsmShadowShader()
       postProcessShader <- Shaders.loadPostProcessShader()
 
-      shadowMaterial <- Raylib.LoadMaterialDefault()
-      shadowMaterial.Shader <- shadowShader
+      evsmMaterial <- Raylib.LoadMaterialDefault()
+      evsmMaterial.Shader <- evsmShader
 
-      shadowMaps <-
-        Array.init shadowCfg.CascadeCount (fun _ ->
-          Raylib.LoadRenderTexture(
-            shadowCfg.ShadowMapSize,
-            shadowCfg.ShadowMapSize
-          ))
+      shadowMap <- EvsmMath.createShadowFbo evsmCfg.ShadowMapSize evsmCfg.ShadowMapSize
 
-      cascadeSplits <-
-        if shadowCfg.CascadeCount > 1 then
-          CsmMath.computeCascadeSplits
-            shadowCfg.CameraNear
-            shadowCfg.CameraFar
-            shadowCfg.CascadeCount
-        else
-          Array.empty
-
-      context <- PipelineContext(forwardShader, materialCache, maxPt, maxSp, shadowCfg.CascadeCount)
+      context <- PipelineContext(forwardShader, materialCache, maxPt, maxSp)
 
     member _.Shutdown() =
       Raylib.UnloadShader(forwardShader)
-      Raylib.UnloadShader(shadowShader)
+      Raylib.UnloadShader(evsmShader)
       Raylib.UnloadShader(postProcessShader)
 
-      Raylib.UnloadMaterial(shadowMaterial)
+      Raylib.UnloadMaterial(evsmMaterial)
 
       for KeyValue(_, mat) in materialCache do
         Raylib.UnloadMaterial(mat)
 
       materialCache.Clear()
 
-      for sm in shadowMaps do
-        Raylib.UnloadRenderTexture(sm)
-
-      shadowMaps <- Array.empty
+      if shadowMap.Id <> 0u then
+        EvsmMath.destroyShadowFbo shadowMap
 
     member _.Execute gameCtx buffer rtPool =
       // ------------------------------------------------------------------
@@ -988,26 +968,22 @@ type ClusteredForwardPipeline
       let mutable cameraFound = false
 
       let dirLights = ResizeArray<DirectionalLight3D>()
-      let ambient = ResizeArray<AmbientLight3D>()
-      let pointLights = ResizeArray<PointLight3D>()
 
       for i = 0 to buffer.Count - 1 do
         match buffer[i] with
         | :? Command3D.BeginCameraCommand as cmd ->
           activeCamera <- cmd.Camera
           cameraFound <- true
-        | :? Command3D.SetAmbientLightCommand as cmd -> ambient.Add(cmd.Light)
         | :? Command3D.AddDirectionalLightCommand as cmd ->
           dirLights.Add(cmd.Light)
-        | :? Command3D.AddPointLightCommand as cmd -> pointLights.Add(cmd.Light)
         | _ -> ()
 
-      let meshDraws = ShadowPass.collectMeshDraws buffer
+      let meshDraws = EvsmPass.collectMeshDraws buffer
 
       // ------------------------------------------------------------------
       // Shadow pass
       // ------------------------------------------------------------------
-      let mutable shadowMatrices = Array.empty
+      let mutable shadowLightViewProj = Matrix4x4.Identity
 
       if
         cameraFound
@@ -1019,100 +995,73 @@ type ClusteredForwardPipeline
         let fovY = activeCamera.FovY * MathF.PI / 180.0f
         let aspect = float32 gameCtx.WindowWidth / float32 gameCtx.WindowHeight
 
-        shadowMatrices <- Array.zeroCreate<Matrix4x4> shadowCfg.CascadeCount
-
-        for i = 0 to shadowCfg.CascadeCount - 1 do
-          let near =
-            if i = 0 then shadowCfg.CameraNear else cascadeSplits[i - 1]
-
-          let far =
-            if i = shadowCfg.CascadeCount - 1 then
-              shadowCfg.CameraFar
-            else
-              cascadeSplits[i]
-
-          shadowMatrices[i] <-
-            ShadowPass.renderShadowCascade
-              shadowShader
-              shadowMaterial
-              shadowMaps[i]
-              shadowCfg.ShadowMapSize
-              dir.Direction
-              near
-              far
-              activeCamera.Position
-              activeCamera.Target
-              activeCamera.Up
-              fovY
-              aspect
-              meshDraws
-
-        Rlgl.SetClipPlanes(float shadowCfg.CameraNear, float shadowCfg.CameraFar)
+        shadowLightViewProj <-
+          EvsmPass.renderShadowPass
+            evsmShader
+            evsmMaterial
+            shadowMap
+            dir.Direction
+            activeCamera.Position
+            activeCamera.Target
+            activeCamera.Up
+            fovY
+            aspect
+            evsmCfg.PositiveExponent
+            evsmCfg.NegativeExponent
+            evsmCfg.ShadowDistance
+            meshDraws
 
       // ------------------------------------------------------------------
       // Forward pass — context is reset each frame, populated by commands
       // ------------------------------------------------------------------
-      context.Reset(gameCtx, shadowMaps, shadowMatrices)
+      context.Reset(
+        gameCtx,
+        shadowMap,
+        shadowLightViewProj,
+        evsmCfg.PositiveExponent,
+        evsmCfg.NegativeExponent,
+        evsmCfg.LightBleedReduction
+      )
+
       let ctx = context :> IRenderContext3D
 
       // Upload shadow uniforms if shadows were rendered
-      if shadowMatrices.Length > 0 && cameraFound then
-        let locCameraPos = Raylib.GetShaderLocation(forwardShader, "cameraPos")
-
-        let locShadowBias =
-          Raylib.GetShaderLocation(forwardShader, "shadowBias")
-
-        let locNormalShadowBias =
-          Raylib.GetShaderLocation(forwardShader, "normalShadowBias")
-
-        let locShadowMatrices =
-          Array.init shadowCfg.CascadeCount (fun i ->
-            Raylib.GetShaderLocation(forwardShader, $"shadowMatrix{i}"))
-
-        let locCascadeSplits =
-          if cascadeSplits.Length > 0 then
-            Raylib.GetShaderLocation(forwardShader, "cascadeSplits")
-          else
-            -1
-
+      if shadowLightViewProj <> Matrix4x4.Identity && cameraFound then
         Raylib.BeginShaderMode(forwardShader)
+
+        Raylib.SetShaderValueMatrix(
+          forwardShader,
+          Raylib.GetShaderLocation(forwardShader, "lightViewProj"),
+          shadowLightViewProj
+        )
 
         Raylib.SetShaderValue(
           forwardShader,
-          locCameraPos,
+          Raylib.GetShaderLocation(forwardShader, "positiveExp"),
+          evsmCfg.PositiveExponent,
+          ShaderUniformDataType.Float
+        )
+
+        Raylib.SetShaderValue(
+          forwardShader,
+          Raylib.GetShaderLocation(forwardShader, "negativeExp"),
+          evsmCfg.NegativeExponent,
+          ShaderUniformDataType.Float
+        )
+
+        Raylib.SetShaderValue(
+          forwardShader,
+          Raylib.GetShaderLocation(forwardShader, "lightBleedReduction"),
+          evsmCfg.LightBleedReduction,
+          ShaderUniformDataType.Float
+        )
+
+        Raylib.SetShaderValue(
+          forwardShader,
+          Raylib.GetShaderLocation(forwardShader, "cameraPos"),
           activeCamera.Position,
           ShaderUniformDataType.Vec3
         )
-
-        Raylib.SetShaderValue(
-          forwardShader,
-          locShadowBias,
-          shadowCfg.ShadowBias,
-          ShaderUniformDataType.Float
-        )
-
-        Raylib.SetShaderValue(
-          forwardShader,
-          locNormalShadowBias,
-          shadowCfg.NormalShadowBias,
-          ShaderUniformDataType.Float
-        )
-
-        for i = 0 to shadowCfg.CascadeCount - 1 do
-          Raylib.SetShaderValueMatrix(
-            forwardShader,
-            locShadowMatrices[i],
-            shadowMatrices[i]
-          )
-
-        if locCascadeSplits >= 0 then
-          Raylib.SetShaderValueV(
-            forwardShader,
-            locCascadeSplits,
-            cascadeSplits,
-            ShaderUniformDataType.Float,
-            cascadeSplits.Length
-          )
 
         Raylib.EndShaderMode()
 
@@ -1136,14 +1085,14 @@ type ClusteredForwardPipeline
         Raylib.EndTextureMode()
         applyPostProcess gameCtx sceneRT rtPool
 
-      // DEBUG: Render shadow map cascade 0 as overlay in bottom-right corner
-      if shadowMatrices.Length > 0 && shadowMaps.Length > 0 then
-        let sm = shadowMaps[0]
+      // DEBUG: Render shadow map as overlay in bottom-right corner
+      if evsmCfg.ShowDebugOverlay then
+        let sm = shadowMap
         let w = float32 gameCtx.WindowWidth
         let h = float32 gameCtx.WindowHeight
         let previewW = 256.0f
         let previewH = 256.0f
-        let srcRect = Raylib_cs.Rectangle(0.0f, 0.0f, float32 shadowCfg.ShadowMapSize, float32 -shadowCfg.ShadowMapSize)
+        let srcRect = Raylib_cs.Rectangle(0.0f, 0.0f, float32 evsmCfg.ShadowMapSize, float32 -evsmCfg.ShadowMapSize)
         let dstRect = Raylib_cs.Rectangle(w - previewW - 10.0f, h - previewH - 10.0f, previewW, previewH)
         Raylib.DrawTexturePro(sm.Texture, srcRect, dstRect, Vector2.Zero, 0.0f, Color.White)
         Raylib.DrawRectangleLines(int (w - previewW - 10.0f), int (h - previewH - 10.0f), int previewW, int previewH, Color.Red)

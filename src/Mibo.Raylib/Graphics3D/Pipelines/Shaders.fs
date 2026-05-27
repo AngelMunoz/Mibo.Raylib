@@ -3,7 +3,7 @@ namespace Mibo.Elmish.Graphics3D.Pipelines
 open Raylib_cs
 
 /// <summary>
-/// Built-in GLSL shader generators for the reference Clustered Forward+ pipeline.
+/// Built-in GLSL shader generators for the Forward PBR pipeline.
 /// </summary>
 /// <remarks>
 /// Fragment shaders use uniform arrays for point lights. The array size is
@@ -38,7 +38,7 @@ void main()
 }
 """
 
-  let shadowPassVertex =
+  let evsmShadowVertex =
     """#version 330
 
 layout(location = 0) in vec3 vertexPosition;
@@ -51,15 +51,20 @@ void main()
 }
 """
 
-  let shadowPassFragment =
+  let evsmShadowFragment =
     """#version 330
 
-out vec4 finalColor;
+uniform float positiveExp;
+uniform float negativeExp;
+
+out vec4 fragColor;
 
 void main()
 {
     float depth = gl_FragCoord.z;
-    finalColor = vec4(depth, depth, depth, 1.0);
+    float posMoment = exp(positiveExp * depth);
+    float negMoment = exp(-negativeExp * depth);
+    fragColor = vec4(posMoment, posMoment * posMoment, negMoment, negMoment * negMoment);
 }
 """
 
@@ -98,32 +103,7 @@ void main()
   let forwardFragmentFmt
     (maxPointLights: int)
     (maxSpotLights: int)
-    (cascadeCount: int)
     =
-    let cascadeArray = String.init cascadeCount (fun _ -> "")
-
-    let shadowMapSamplers =
-      if cascadeCount > 0 then
-        String.concat "" [
-          for i in 0 .. cascadeCount - 1 -> $"uniform sampler2D shadowMap{i};"
-        ]
-      else
-        ""
-
-    let shadowMatrices =
-      if cascadeCount > 0 then
-        String.concat "" [
-          for i in 0 .. cascadeCount - 1 -> $"uniform mat4 shadowMatrix{i};"
-        ]
-      else
-        ""
-
-    let cascadeSplitDecl =
-      if cascadeCount > 1 then
-        $"uniform float cascadeSplits[{cascadeCount - 1}];"
-      else
-        ""
-
     $"""#version 330
 
 const float PI = 3.14159265359;
@@ -172,12 +152,11 @@ uniform float spotLightInnerCutoff[{maxSpotLights}];
 uniform float spotLightOuterCutoff[{maxSpotLights}];
 
 uniform vec3 cameraPos;
-uniform float shadowBias;
-uniform float normalShadowBias;
-
-{shadowMapSamplers}
-{shadowMatrices}
-{cascadeSplitDecl}
+uniform sampler2D shadowMap;
+uniform mat4 lightViewProj;
+uniform float positiveExp;
+uniform float negativeExp;
+uniform float lightBleedReduction;
 
 vec3 getNormal()
 {{
@@ -222,77 +201,39 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0)
     return F0 + (1.0 - F0) * pow(max(1.0 - cosTheta, 0.0), 5.0);
 }}
 
-float sampleShadowMap(sampler2D shadowMap, vec4 shadowCoord, float bias)
+float computeDirShadow(vec3 worldPos)
 {{
+    if (dirLightCastsShadows == 0)
+        return 1.0;
+
+    vec4 shadowCoord = lightViewProj * vec4(worldPos, 1.0);
     vec3 projCoord = shadowCoord.xyz / shadowCoord.w;
     projCoord = projCoord * 0.5 + 0.5;
 
     if (projCoord.z > 1.0 || projCoord.x < 0.0 || projCoord.x > 1.0 || projCoord.y < 0.0 || projCoord.y > 1.0)
         return 1.0;
 
-    float closestDepth = texture(shadowMap, projCoord.xy).r;
-    float currentDepth = projCoord.z;
-    return currentDepth - bias > closestDepth ? 0.0 : 1.0;
-}}
+    vec4 moments = texture(shadowMap, projCoord.xy);
 
-float sampleShadowMapPCF(sampler2D shadowMap, vec4 shadowCoord, float bias)
-{{
-    vec3 projCoord = shadowCoord.xyz / shadowCoord.w;
-    projCoord = projCoord * 0.5 + 0.5;
-
-    if (projCoord.z > 1.0 || projCoord.x < 0.0 || projCoord.x > 1.0 || projCoord.y < 0.0 || projCoord.y > 1.0)
+    if (moments.r < 0.0001)
         return 1.0;
 
-    float currentDepth = projCoord.z;
-    vec2 texelSize = 1.0 / vec2(textureSize(shadowMap, 0));
-    float shadow = 0.0;
+    float posDepth = exp(positiveExp * projCoord.z);
+    float negDepth = exp(-negativeExp * projCoord.z);
 
-    for (int x = -1; x <= 1; ++x)
-    {{
-        for (int y = -1; y <= 1; ++y)
-        {{
-            vec2 sampleCoord = projCoord.xy + vec2(float(x), float(y)) * texelSize;
-            float pcfDepth = texture(shadowMap, sampleCoord).r;
-            shadow += currentDepth - bias > pcfDepth ? 0.0 : 1.0;
-        }}
-    }}
-    shadow /= 9.0;
+    float posMean = moments.r;
+    float posVariance = max(moments.g - posMean * posMean, 0.00001);
+    float posCheb = (posDepth < posMean) ? 1.0 : posVariance / (posVariance + (posDepth - posMean) * (posDepth - posMean));
+
+    float negMean = moments.b;
+    float negVariance = max(moments.a - negMean * negMean, 0.00001);
+    float negCheb = (negDepth > negMean) ? 1.0 : negVariance / (negVariance + (negDepth - negMean) * (negDepth - negMean));
+
+    float shadow = min(posCheb, negCheb);
+    shadow = clamp(shadow, lightBleedReduction, 1.0);
+    shadow = (shadow - lightBleedReduction) / (1.0 - lightBleedReduction);
+
     return shadow;
-}}
-
-int getCascadeIndex(vec3 worldPos)
-{{
-    if ({cascadeCount} <= 1) return 0;
-
-    float viewDepth = length(cameraPos - worldPos);
-
-    {String.concat "\n    " [
-       for i in 0 .. (cascadeCount - 2) ->
-         $"if (viewDepth < cascadeSplits[{i}]) return {i};"
-     ]}
-    return {cascadeCount - 1};
-}}
-
-float computeDirShadow(vec3 worldPos, vec3 normal)
-{{
-    if (dirLightCastsShadows == 0 || {cascadeCount} == 0)
-        return 1.0;
-
-    int cascadeIdx = getCascadeIndex(worldPos);
-    vec4 shadowCoord = vec4(0.0);
-    float bias = shadowBias + normalShadowBias * (1.0 - max(dot(normalize(normal), -normalize(dirLightDir)), 0.0));
-
-    {String.concat "\n    " [
-       for i in 0 .. (cascadeCount - 1) ->
-         $"if (cascadeIdx == {i}) shadowCoord = shadowMatrix{i} * vec4(worldPos, 1.0);"
-     ]}
-
-    {String.concat "\n    " [
-       for i in 0 .. (cascadeCount - 1) ->
-         $"if (cascadeIdx == {i}) return sampleShadowMapPCF(shadowMap{i}, shadowCoord, bias);"
-     ]}
-
-    return 1.0;
 }}
 
 vec3 calcPBR(vec3 V, vec3 N, vec3 L, vec3 radiance, vec3 albedo, float r, float m)
@@ -333,7 +274,7 @@ void main()
     vec3 ambient = ambientColor * albedo * ambientIntensity;
 
     // Directional light (PBR)
-    float dirShadow = computeDirShadow(fragWorldPos, normal);
+    float dirShadow = computeDirShadow(fragWorldPos);
     vec3 L = normalize(-dirLightDir);
     vec3 radiance = dirLightColor * dirLightIntensity;
     vec3 dirResult = calcPBR(V, normal, L, radiance, albedo, r, m) * dirShadow;
@@ -386,21 +327,20 @@ void main()
 
   /// <summary>
   /// Loads the built-in forward PBR vertex + fragment shader.
-  /// The fragment shader is generated with the specified light array sizes and cascade count.
+  /// The fragment shader is generated with the specified light array sizes.
   /// </summary>
   let loadForwardShader
     (maxPointLights: int)
     (maxSpotLights: int)
-    (cascadeCount: int)
     : Shader =
     Raylib.LoadShaderFromMemory(
       forwardVertex,
-      forwardFragmentFmt maxPointLights maxSpotLights cascadeCount
+      forwardFragmentFmt maxPointLights maxSpotLights
     )
 
-  /// <summary>Loads the shadow pass vertex + fragment shader.</summary>
-  let loadShadowShader() : Shader =
-    Raylib.LoadShaderFromMemory(shadowPassVertex, shadowPassFragment)
+  /// <summary>Loads the EVSM shadow pass vertex + fragment shader.</summary>
+  let loadEvsmShadowShader() : Shader =
+    Raylib.LoadShaderFromMemory(evsmShadowVertex, evsmShadowFragment)
 
   /// <summary>Loads the built-in fullscreen post-process vertex + fragment shader.</summary>
   let loadPostProcessShader() : Shader =

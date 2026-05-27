@@ -52,9 +52,9 @@
     <Compile Include="Graphics3D/Command3D.fs" />
     <Compile Include="Graphics3D/Draw3D.fs" />
     <Compile Include="Graphics3D/Pipelines/PostProcess3D.fs" />
-    <Compile Include="Graphics3D/Pipelines/CsmMath.fs" />
+    <Compile Include="Graphics3D/Pipelines/EvsmMath.fs" />
     <Compile Include="Graphics3D/Pipelines/Shaders.fs" />
-    <Compile Include="Graphics3D/Pipelines/ClusteredForwardPipeline.fs" />
+    <Compile Include="Graphics3D/Pipelines/ForwardPbrPipeline.fs" />
     <Compile Include="Layout3D/Grid3D.fs" />
     <Compile Include="Layout3D/Layout3D.fs" />
     <Compile Include="Layout3D/Interior.fs" />
