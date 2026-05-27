@@ -85,9 +85,9 @@ type EvsmConfig = {
 module EvsmConfig =
   let defaults: EvsmConfig = {
     ShadowMapSize = 2048
-    PositiveExponent = 10.0f
-    NegativeExponent = 5.0f
-    LightBleedReduction = 0.2f
+    PositiveExponent = 5.0f
+    NegativeExponent = 2.5f
+    LightBleedReduction = 0.1f
     ShowDebugOverlay = true
     ShadowDistance = 100.0f
   }
@@ -230,12 +230,13 @@ type private PipelineContext
       locNegativeExp <- Raylib.GetShaderLocation(forwardShader, "negativeExp")
       locLightBleedReduction <- Raylib.GetShaderLocation(forwardShader, "lightBleedReduction")
       locCameraPos <- Raylib.GetShaderLocation(forwardShader, "cameraPos")
+      locShadowMap <- Raylib.GetShaderLocation(forwardShader, "shadowMap")
 
       Raylib.BeginShaderMode(forwardShader)
       Raylib.SetShaderValue(
         forwardShader,
         locShadowMap,
-        10,
+        15,
         ShaderUniformDataType.Int
       )
       Raylib.EndShaderMode()
@@ -551,7 +552,7 @@ type private PipelineContext
     )
 
     if activeShadowMap.Texture.Id <> 0u then
-      Rlgl.ActiveTextureSlot(10)
+      Rlgl.ActiveTextureSlot(15)
       Rlgl.EnableTexture(activeShadowMap.Texture.Id)
       Rlgl.ActiveTextureSlot(0)
 
@@ -798,13 +799,22 @@ module private EvsmPass =
     lightCamera.FovY <- 2.0f * halfExtent
     lightCamera.Projection <- CameraProjection.Orthographic
 
+    // ------------------------------------------------------------------
+    // Render shadow pass using BeginMode3D (proper state setup)
+    // Compute forward-pass matrix manually using same parameters.
+    // Option B (proj * view) — tested as correct order.
+    // ------------------------------------------------------------------
+    let halfExtentD = float halfExtent
+    let manualView = Raymath.MatrixLookAt(lightPos, center, safeUp)
+    let manualProj = Raymath.MatrixOrtho(-halfExtentD, halfExtentD, -halfExtentD, halfExtentD, 0.01, 1000.0)
+    let yFlip = Matrix4x4.CreateScale(1.0f, -1.0f, 1.0f)
+
+    // Render shadow pass
     Raylib.BeginTextureMode(shadowFbo)
     Rlgl.ClearColor(0uy, 0uy, 0uy, 0uy)
     Rlgl.ClearScreenBuffers()
 
     Raylib.BeginMode3D(lightCamera)
-    let actualView = Rlgl.GetMatrixModelview()
-    let actualProj = Rlgl.GetMatrixProjection()
 
     Rlgl.EnableDepthTest()
     Rlgl.DisableBackfaceCulling()
@@ -820,9 +830,11 @@ module private EvsmPass =
     Raylib.EndMode3D()
     Raylib.EndTextureMode()
 
-    let combined = Matrix4x4.Multiply(actualProj, actualView)
-    let yFlip = Matrix4x4.CreateScale(1.0f, -1.0f, 1.0f)
-    Matrix4x4.Multiply(yFlip, combined)
+    // Build forward-pass matrix (proj * view * yFlip order)
+    let combined = Matrix4x4.Multiply(manualProj, manualView)
+    let lightViewProj = Matrix4x4.Multiply(combined, yFlip)
+
+    lightViewProj
 
 // ------------------------------------------------------------------
 // ForwardPbrPipeline

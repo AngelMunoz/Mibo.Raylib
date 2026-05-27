@@ -201,6 +201,13 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0)
     return F0 + (1.0 - F0) * pow(max(1.0 - cosTheta, 0.0), 5.0);
 }}
 
+// DIAGNOSTIC return values for computeDirShadow:
+//   0.00 = out of bounds XY (projCoord.x or .y outside [0,1] after NDC->UV)
+//   0.10 = depth out of bounds (projCoord.z > 1.0 or < 0.0)
+//   0.20 = empty texel (moments.r < 0.0001 — no geometry in shadow map at this UV)
+//   0.30 = Chebyshev returned shadow < 0.0 (shouldn't happen but checked)
+//   2.00 + shadow = valid Chebyshev result (visible as brightness > 1, clamped in main)
+// Remove the 2.0 offset in release; in debug it makes the diagnostic color visible.
 float computeDirShadow(vec3 worldPos)
 {{
     if (dirLightCastsShadows == 0)
@@ -210,23 +217,27 @@ float computeDirShadow(vec3 worldPos)
     vec3 projCoord = shadowCoord.xyz / shadowCoord.w;
     projCoord = projCoord * 0.5 + 0.5;
 
-    if (projCoord.z > 1.0 || projCoord.x < 0.0 || projCoord.x > 1.0 || projCoord.y < 0.0 || projCoord.y > 1.0)
-        return 1.0;
+    // DIAGNOSTIC: color-code the guard clauses
+    if (projCoord.x < 0.0 || projCoord.x > 1.0 || projCoord.y < 0.0 || projCoord.y > 1.0)
+        return 0.00;  // XY out of bounds
+
+    if (projCoord.z > 1.0 || projCoord.z < 0.0)
+        return 0.10;  // depth out of bounds
 
     vec4 moments = texture(shadowMap, projCoord.xy);
 
     if (moments.r < 0.0001)
-        return 1.0;
+        return 0.20;  // empty texel
 
     float posDepth = exp(positiveExp * projCoord.z);
     float negDepth = exp(-negativeExp * projCoord.z);
 
     float posMean = moments.r;
-    float posVariance = max(moments.g - posMean * posMean, 0.00001);
+    float posVariance = max(moments.g - posMean * posMean, 0.0001 * posMean * posMean);
     float posCheb = (posDepth < posMean) ? 1.0 : posVariance / (posVariance + (posDepth - posMean) * (posDepth - posMean));
 
     float negMean = moments.b;
-    float negVariance = max(moments.a - negMean * negMean, 0.00001);
+    float negVariance = max(moments.a - negMean * negMean, 0.0001 * negMean * negMean);
     float negCheb = (negDepth > negMean) ? 1.0 : negVariance / (negVariance + (negDepth - negMean) * (negDepth - negMean));
 
     float shadow = min(posCheb, negCheb);
