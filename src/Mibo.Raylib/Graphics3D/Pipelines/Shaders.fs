@@ -291,8 +291,9 @@ float computeDirShadow(vec3 worldPos)
     float negDepth = exp(-negativeExp * projCoord.z);
 
     float posMean = moments.r;
+    float ratio = posDepth / max(posMean, 0.0001);
     float posVariance = max(moments.g - posMean * posMean, 0.01 * posMean * posMean);
-    float tolerance = 1.05;
+    float tolerance = 10.0;
     float posCheb = (posDepth <= posMean * tolerance) ? 1.0 : posVariance / (posVariance + (posDepth - posMean) * (posDepth - posMean));
 
     float negMean = moments.b;
