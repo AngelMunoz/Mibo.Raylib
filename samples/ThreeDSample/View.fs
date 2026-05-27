@@ -23,7 +23,7 @@ let loadOrGetModel (cache: Dictionary<string, Model>) (path: string) (ctx: GameC
       m
 
 let view (ctx: GameContext) (model: GameModel) (buffer: RenderBuffer3D) =
-  let time = model.DayNightTimeOfDay
+  let time = 12.0f // DEBUG: fixed noon
   let skyColor = DayNight.getSkyColor time
 
   buffer.Add(Command3D.drawImmediate(fun () -> Raylib.ClearBackground(skyColor)))
@@ -38,15 +38,17 @@ let view (ctx: GameContext) (model: GameModel) (buffer: RenderBuffer3D) =
     c
 
   let ambient = { Color = DayNight.getAmbientColor time; Intensity = 0.6f }
-  let primaryIntensity = DayNight.getPrimaryLightIntensity time
+
+  // DEBUG: fixed light pointing straight down
+  let lightDir = Vector3(0.0f, -1.0f, 0.0f)
 
   buffer
   |> Draw3D.beginCamera camera
   |> Draw3D.setAmbientLight ambient
   |> Draw3D.addDirectionalLight {
-    Direction = DayNight.getPrimaryLightDirection time
-    Color = DayNight.getPrimaryLightColor time
-    Intensity = 1.5f * primaryIntensity
+    Direction = lightDir
+    Color = Color.White
+    Intensity = 1.5f
     CastsShadows = true
   }
   |> ignore
