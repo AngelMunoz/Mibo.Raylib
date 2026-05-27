@@ -753,7 +753,10 @@ module private EvsmPass =
   let renderShadowPass
     (evsmShader: Shader)
     (evsmMaterial: Material)
+    (blurHShader: Shader)
+    (blurVShader: Shader)
     (shadowFbo: RenderTexture2D)
+    (blurTempFbo: RenderTexture2D)
     (lightDir: Vector3)
     (cameraPos: Vector3)
     (cameraTarget: Vector3)
@@ -807,7 +810,7 @@ module private EvsmPass =
     let halfExtentD = float halfExtent
     let manualView = Raymath.MatrixLookAt(lightPos, center, safeUp)
     let manualProj = Raymath.MatrixOrtho(-halfExtentD, halfExtentD, -halfExtentD, halfExtentD, 0.01, 1000.0)
-    let yFlip = Matrix4x4.CreateScale(1.0f, -1.0f, 1.0f)
+    let yFlip = Raymath.MatrixScale(1.0f, -1.0f, 1.0f)
 
     // Render shadow pass
     Raylib.BeginTextureMode(shadowFbo)
@@ -830,9 +833,31 @@ module private EvsmPass =
     Raylib.EndMode3D()
     Raylib.EndTextureMode()
 
+    // Gaussian blur passes (horizontal then vertical)
+    let size = float32 shadowFbo.Texture.Width
+    let texelSize = Vector2(1.0f / size, 1.0f / size)
+    let srcRect = Raylib_cs.Rectangle(0.0f, 0.0f, size, -size)
+    let dstRect = Raylib_cs.Rectangle(0.0f, 0.0f, size, size)
+
+    // Horizontal blur: shadowFbo -> blurTempFbo
+    Raylib.BeginTextureMode(blurTempFbo)
+    Raylib.BeginShaderMode(blurHShader)
+    Raylib.SetShaderValue(blurHShader, Raylib.GetShaderLocation(blurHShader, "texelSize"), texelSize, ShaderUniformDataType.Vec2)
+    Raylib.DrawTexturePro(shadowFbo.Texture, srcRect, dstRect, Vector2.Zero, 0.0f, Color.White)
+    Raylib.EndShaderMode()
+    Raylib.EndTextureMode()
+
+    // Vertical blur: blurTempFbo -> shadowFbo
+    Raylib.BeginTextureMode(shadowFbo)
+    Raylib.BeginShaderMode(blurVShader)
+    Raylib.SetShaderValue(blurVShader, Raylib.GetShaderLocation(blurVShader, "texelSize"), texelSize, ShaderUniformDataType.Vec2)
+    Raylib.DrawTexturePro(blurTempFbo.Texture, srcRect, dstRect, Vector2.Zero, 0.0f, Color.White)
+    Raylib.EndShaderMode()
+    Raylib.EndTextureMode()
+
     // Build forward-pass matrix (proj * view * yFlip order)
-    let combined = Matrix4x4.Multiply(manualProj, manualView)
-    let lightViewProj = Matrix4x4.Multiply(combined, yFlip)
+    let combined = Raymath.MatrixMultiply(manualView, manualProj)
+    let lightViewProj = Raymath.MatrixMultiply(yFlip, combined)
 
     lightViewProj
 
@@ -874,11 +899,14 @@ type ForwardPbrPipeline
 
   let mutable forwardShader: Shader = Unchecked.defaultof<Shader>
   let mutable evsmShader: Shader = Unchecked.defaultof<Shader>
+  let mutable blurHShader: Shader = Unchecked.defaultof<Shader>
+  let mutable blurVShader: Shader = Unchecked.defaultof<Shader>
   let mutable postProcessShader: Shader = Unchecked.defaultof<Shader>
   let materialCache = Dictionary<MaterialKey, Material>()
   let mutable evsmMaterial: Material = Unchecked.defaultof<Material>
 
   let mutable shadowMap: RenderTexture2D = Unchecked.defaultof<RenderTexture2D>
+  let mutable blurTempFbo: RenderTexture2D = Unchecked.defaultof<RenderTexture2D>
 
   let mutable context: PipelineContext = Unchecked.defaultof<PipelineContext>
 
@@ -948,18 +976,23 @@ type ForwardPbrPipeline
         Shaders.loadForwardShader maxPt maxSp
 
       evsmShader <- Shaders.loadEvsmShadowShader()
+      blurHShader <- Shaders.loadBlurHShader()
+      blurVShader <- Shaders.loadBlurVShader()
       postProcessShader <- Shaders.loadPostProcessShader()
 
       evsmMaterial <- Raylib.LoadMaterialDefault()
       evsmMaterial.Shader <- evsmShader
 
       shadowMap <- EvsmMath.createShadowFbo evsmCfg.ShadowMapSize evsmCfg.ShadowMapSize
+      blurTempFbo <- EvsmMath.createShadowFbo evsmCfg.ShadowMapSize evsmCfg.ShadowMapSize
 
       context <- PipelineContext(forwardShader, materialCache, maxPt, maxSp)
 
     member _.Shutdown() =
       Raylib.UnloadShader(forwardShader)
       Raylib.UnloadShader(evsmShader)
+      Raylib.UnloadShader(blurHShader)
+      Raylib.UnloadShader(blurVShader)
       Raylib.UnloadShader(postProcessShader)
 
       Raylib.UnloadMaterial(evsmMaterial)
@@ -971,6 +1004,9 @@ type ForwardPbrPipeline
 
       if shadowMap.Id <> 0u then
         EvsmMath.destroyShadowFbo shadowMap
+
+      if blurTempFbo.Id <> 0u then
+        EvsmMath.destroyShadowFbo blurTempFbo
 
     member _.Execute gameCtx buffer rtPool =
       // ------------------------------------------------------------------
@@ -1011,7 +1047,10 @@ type ForwardPbrPipeline
           EvsmPass.renderShadowPass
             evsmShader
             evsmMaterial
+            blurHShader
+            blurVShader
             shadowMap
+            blurTempFbo
             dir.Direction
             activeCamera.Position
             activeCamera.Target

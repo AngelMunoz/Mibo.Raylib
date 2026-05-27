@@ -100,6 +100,65 @@ void main()
 }
 """
 
+  let blurVertex =
+    """#version 330
+
+in vec3 vertexPosition;
+in vec2 vertexTexCoord;
+
+out vec2 fragTexCoord;
+
+uniform mat4 mvp;
+
+void main()
+{
+    fragTexCoord = vertexTexCoord;
+    gl_Position = mvp * vec4(vertexPosition, 1.0);
+}
+"""
+
+  let blurFragmentH =
+    """#version 330
+
+in vec2 fragTexCoord;
+out vec4 fragColor;
+
+uniform sampler2D texture0;
+uniform vec2 texelSize;
+
+void main()
+{
+    vec4 result = vec4(0.0);
+    result += texture(texture0, fragTexCoord + vec2(-2.0 * texelSize.x, 0.0)) * 0.06136;
+    result += texture(texture0, fragTexCoord + vec2(-1.0 * texelSize.x, 0.0)) * 0.24477;
+    result += texture(texture0, fragTexCoord) * 0.38774;
+    result += texture(texture0, fragTexCoord + vec2(1.0 * texelSize.x, 0.0)) * 0.24477;
+    result += texture(texture0, fragTexCoord + vec2(2.0 * texelSize.x, 0.0)) * 0.06136;
+    fragColor = result;
+}
+"""
+
+  let blurFragmentV =
+    """#version 330
+
+in vec2 fragTexCoord;
+out vec4 fragColor;
+
+uniform sampler2D texture0;
+uniform vec2 texelSize;
+
+void main()
+{
+    vec4 result = vec4(0.0);
+    result += texture(texture0, fragTexCoord + vec2(0.0, -2.0 * texelSize.y)) * 0.06136;
+    result += texture(texture0, fragTexCoord + vec2(0.0, -1.0 * texelSize.y)) * 0.24477;
+    result += texture(texture0, fragTexCoord) * 0.38774;
+    result += texture(texture0, fragTexCoord + vec2(0.0, 1.0 * texelSize.y)) * 0.24477;
+    result += texture(texture0, fragTexCoord + vec2(0.0, 2.0 * texelSize.y)) * 0.06136;
+    fragColor = result;
+}
+"""
+
   let forwardFragmentFmt
     (maxPointLights: int)
     (maxSpotLights: int)
@@ -217,28 +276,28 @@ float computeDirShadow(vec3 worldPos)
     vec3 projCoord = shadowCoord.xyz / shadowCoord.w;
     projCoord = projCoord * 0.5 + 0.5;
 
-    // DIAGNOSTIC: color-code the guard clauses
     if (projCoord.x < 0.0 || projCoord.x > 1.0 || projCoord.y < 0.0 || projCoord.y > 1.0)
-        return 0.00;  // XY out of bounds
+        return 1.0;
 
     if (projCoord.z > 1.0 || projCoord.z < 0.0)
-        return 0.10;  // depth out of bounds
+        return 1.0;
 
     vec4 moments = texture(shadowMap, projCoord.xy);
 
     if (moments.r < 0.0001)
-        return 0.20;  // empty texel
+        return 1.0;
 
     float posDepth = exp(positiveExp * projCoord.z);
     float negDepth = exp(-negativeExp * projCoord.z);
 
     float posMean = moments.r;
-    float posVariance = max(moments.g - posMean * posMean, 0.0001 * posMean * posMean);
-    float posCheb = (posDepth < posMean) ? 1.0 : posVariance / (posVariance + (posDepth - posMean) * (posDepth - posMean));
+    float posVariance = max(moments.g - posMean * posMean, 0.01 * posMean * posMean);
+    float tolerance = 1.05;
+    float posCheb = (posDepth <= posMean * tolerance) ? 1.0 : posVariance / (posVariance + (posDepth - posMean) * (posDepth - posMean));
 
     float negMean = moments.b;
-    float negVariance = max(moments.a - negMean * negMean, 0.0001 * negMean * negMean);
-    float negCheb = (negDepth > negMean) ? 1.0 : negVariance / (negVariance + (negDepth - negMean) * (negDepth - negMean));
+    float negVariance = max(moments.a - negMean * negMean, 0.01 * negMean * negMean);
+    float negCheb = (negDepth >= negMean * 0.95) ? 1.0 : negVariance / (negVariance + (negDepth - negMean) * (negDepth - negMean));
 
     float shadow = min(posCheb, negCheb);
     shadow = clamp(shadow, lightBleedReduction, 1.0);
@@ -356,3 +415,11 @@ void main()
   /// <summary>Loads the built-in fullscreen post-process vertex + fragment shader.</summary>
   let loadPostProcessShader() : Shader =
     Raylib.LoadShaderFromMemory(postProcessVertex, postProcessFragment)
+
+  /// <summary>Loads the horizontal Gaussian blur shader for EVSM shadow maps.</summary>
+  let loadBlurHShader() : Shader =
+    Raylib.LoadShaderFromMemory(blurVertex, blurFragmentH)
+
+  /// <summary>Loads the vertical Gaussian blur shader for EVSM shadow maps.</summary>
+  let loadBlurVShader() : Shader =
+    Raylib.LoadShaderFromMemory(blurVertex, blurFragmentV)
