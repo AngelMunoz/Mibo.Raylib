@@ -179,7 +179,7 @@ type ShadowAtlas(config: ShadowAtlasConfig, biasConfig: ShadowBiasConfig) =
 
   let mutable fbo: RenderTexture2D = Unchecked.defaultof<RenderTexture2D>
   let casters = Dictionary<ShadowCasterId, ShadowCasterData>()
-  let viewProjs = Dictionary<ShadowCasterId, Matrix4x4>()
+  let viewProjs = Dictionary<int, Matrix4x4>()
   let mutable nextId = 0
   let mutable slotAllocator = 0
 
@@ -281,18 +281,14 @@ type ShadowAtlas(config: ShadowAtlasConfig, biasConfig: ShadowBiasConfig) =
     viewProjs.Clear()
     slotAllocator <- 0
 
-  /// <summary>Allocate a slot in the atlas. Returns region index.</summary>
+  /// <summary>Allocate a slot in the atlas. Returns region index, or ValueNone if full.</summary>
   member private _.AllocateSlot(regionCount: int) =
     if slotAllocator + regionCount > config.MaxCasters then
-      failwithf
-        "ShadowAtlas: No room for %d regions (allocated %d/%d)"
-        regionCount
-        slotAllocator
-        config.MaxCasters
-
-    let slot = slotAllocator
-    slotAllocator <- slotAllocator + regionCount
-    slot
+      ValueNone
+    else
+      let slot = slotAllocator
+      slotAllocator <- slotAllocator + regionCount
+      ValueSome slot
 
   /// <summary>Free a slot in the atlas.</summary>
   member private _.FreeSlot(regionIndex: int, regionCount: int) =
@@ -305,7 +301,7 @@ type ShadowAtlas(config: ShadowAtlasConfig, biasConfig: ShadowBiasConfig) =
 
   /// <summary>
   /// Register a new shadow caster and allocate atlas regions.
-  /// Returns the caster ID.
+  /// Returns the caster ID, or ValueNone if the atlas is full.
   /// </summary>
   member this.AddCaster
     (
@@ -315,32 +311,33 @@ type ShadowAtlas(config: ShadowAtlasConfig, biasConfig: ShadowBiasConfig) =
       lightTarget: Vector3,
       enabled: bool,
       biasOverride: float32 voption
-    ) : ShadowCasterId =
+    ) : ShadowCasterId voption =
     let regionCount =
       match casterType with
       | ShadowCasterType.Point -> 6 // Cubemap faces
       | _ -> 1
 
-    let id = nextId
-    nextId <- nextId + 1
+    match this.AllocateSlot(regionCount) with
+    | ValueNone -> ValueNone
+    | ValueSome region ->
+      let id = nextId
+      nextId <- nextId + 1
 
-    let region = this.AllocateSlot(regionCount)
+      let caster = {
+        Id = id
+        Type = casterType
+        LightPosition = lightPosition
+        LightDirection = lightDirection
+        LightTarget = lightTarget
+        AtlasRegion = region
+        RegionCount = regionCount
+        Enabled = enabled
+        BiasOverride = biasOverride
+        ViewProj = Matrix4x4.Identity
+      }
 
-    let caster = {
-      Id = id
-      Type = casterType
-      LightPosition = lightPosition
-      LightDirection = lightDirection
-      LightTarget = lightTarget
-      AtlasRegion = region
-      RegionCount = regionCount
-      Enabled = enabled
-      BiasOverride = biasOverride
-      ViewProj = Matrix4x4.Identity
-    }
-
-    casters[id] <- caster
-    id
+      casters[id] <- caster
+      ValueSome id
 
   /// <summary>Remove a shadow caster and free its atlas regions.</summary>
   member this.RemoveCaster(id: ShadowCasterId) =
@@ -383,9 +380,15 @@ type ShadowAtlas(config: ShadowAtlasConfig, biasConfig: ShadowBiasConfig) =
     let scale = Vector2(1.0f / float32 gridSize, 1.0f / float32 gridSize)
     Vector4(offset.X, offset.Y, scale.X, scale.Y)
 
-  /// <summary>Set the view-projection matrix for a caster by ID.</summary>
-  member _.SetCasterViewProj(id: ShadowCasterId, vp: Matrix4x4) =
-    viewProjs[id] <- vp
+  /// <summary>Set the view-projection matrix for a specific atlas region.</summary>
+  member _.SetRegionViewProj(regionIndex: int, vp: Matrix4x4) =
+    viewProjs[regionIndex] <- vp
+
+  /// <summary>Set the view-projection matrix for a single-region caster.</summary>
+  member this.SetCasterViewProj(id: ShadowCasterId, vp: Matrix4x4) =
+    match casters.TryGetValue(id) with
+    | true, caster -> this.SetRegionViewProj(caster.AtlasRegion, vp)
+    | false, _ -> ()
 
   /// <summary>Get viewport rectangle for a region index.</summary>
   member _.GetRegionViewport(regionIndex: int) =
@@ -419,8 +422,9 @@ type ShadowAtlas(config: ShadowAtlasConfig, biasConfig: ShadowBiasConfig) =
         // Fill regions (for point lights, fill all 6 faces)
         for r = 0 to caster.RegionCount - 1 do
           if index < config.MaxCasters then
-            // Get VP from dictionary
-            match viewProjs.TryGetValue(caster.Id) with
+            // Get VP from dictionary by region index
+            let regionIndex = caster.AtlasRegion + r
+            match viewProjs.TryGetValue(regionIndex) with
             | true, vp -> viewProjsUniforms[index] <- vp
             | false, _ -> viewProjsUniforms[index] <- Matrix4x4.Identity
 

@@ -282,14 +282,41 @@ float computePointShadow(vec3 worldPos, int casterIndex)
     vec2 faceUV = projectToFace(toFrag, face);
 
     // Calculate which region in the atlas this face uses
-    // Each point light uses 6 consecutive regions
-    int regionOffset = casterIndex * 6 + face;
+    // Each point light uses 6 consecutive regions starting at its casterIndex
+    int regionOffset = casterIndex + face;
     vec2 atlasUV = faceUV * shadowUVOffsets[regionOffset].zw + shadowUVOffsets[regionOffset].xy;
 
     float bias = shadowBiases[casterIndex];
     float dist = length(toFrag);
     float d = texture(shadowAtlas, atlasUV).r;
     return (dist - bias > d) ? 0.0 : 1.0;
+}}
+
+float computeSpotShadow(vec3 worldPos, int casterIndex)
+{{
+    if (casterIndex < 0 || casterIndex >= shadowCasterCount)
+        return 1.0;
+
+    vec4 shadowCoord = shadowViewProjs[casterIndex] * vec4(worldPos, 1.0);
+    vec3 projCoord = shadowCoord.xyz / shadowCoord.w;
+    projCoord = projCoord * 0.5 + 0.5;
+
+    if (projCoord.z > 1.0) return 0.0;
+    if (projCoord.x < 0.0 || projCoord.x > 1.0 || projCoord.y < 0.0 || projCoord.y > 1.0)
+        return 0.0;
+
+    vec2 atlasUV = projCoord.xy * shadowUVOffsets[casterIndex].zw + shadowUVOffsets[casterIndex].xy;
+
+    float bias = shadowBiases[casterIndex];
+    float shadow = 0.0;
+    vec2 texel = 1.0 / vec2(textureSize(shadowAtlas, 0));
+    for (int x = -1; x <= 1; x++) {{
+        for (int y = -1; y <= 1; y++) {{
+            float d = texture(shadowAtlas, atlasUV + vec2(float(x), float(y)) * texel).r;
+            shadow += (projCoord.z - bias > d) ? 0.0 : 1.0;
+        }}
+    }}
+    return shadow / 9.0;
 }}
 
 float computeDirShadow(vec3 worldPos)
@@ -363,7 +390,17 @@ void main()
             vec3 pL = normalize(toLight);
             float atten = 1.0 - (dist / pointLightRadius[i]);
             vec3 pRadiance = pointLightColor[i] * atten;
-            pointResult += calcPBR(V, normal, pL, pRadiance, albedo, r, m);
+            
+            // Find matching shadow caster for this point light
+            float ptShadow = 1.0;
+            for (int si = 0; si < shadowCasterCount; si++) {{
+                if (shadowTypes[si] == 1 && shadowLightPositions[si] == pointLightPos[i]) {{
+                    ptShadow = computePointShadow(fragWorldPos, si);
+                    break;
+                }}
+            }}
+            
+            pointResult += calcPBR(V, normal, pL, pRadiance, albedo, r, m) * ptShadow;
         }}
     }}
 
@@ -382,7 +419,17 @@ void main()
             float intensity = clamp((theta - spotLightOuterCutoff[i]) / max(epsilon, 0.0001), 0.0, 1.0);
             float distAtten = 1.0 - (dist / spotLightRadius[i]);
             vec3 sRadiance = spotLightColor[i] * spotLightIntensity[i] * intensity * distAtten;
-            spotResult += calcPBR(V, normal, sL, sRadiance, albedo, r, m);
+            
+            // Find matching shadow caster for this spot light
+            float spShadow = 1.0;
+            for (int si = 0; si < shadowCasterCount; si++) {{
+                if (shadowTypes[si] == 2 && shadowLightPositions[si] == spotLightPos[i]) {{
+                    spShadow = computeSpotShadow(fragWorldPos, si);
+                    break;
+                }}
+            }}
+            
+            spotResult += calcPBR(V, normal, sL, sRadiance, albedo, r, m) * spShadow;
         }}
     }}
 

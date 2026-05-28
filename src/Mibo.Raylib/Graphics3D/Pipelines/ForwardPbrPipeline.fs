@@ -871,7 +871,30 @@ type ForwardPbrPipeline
               |> ignore
 
           // TODO: Register point light casters
+          for pt in pointLights do
+            if pt.CastsShadows then
+              hasShadowCasters <- true
+              shadowAtlas.AddCaster(
+                ShadowCasterType.Point,
+                pt.Position,
+                Vector3.Zero,
+                Vector3.Zero,
+                true,
+                pt.ShadowBias
+              ) |> ignore
+
           // TODO: Register spot light casters
+          for sp in spotLights do
+            if sp.CastsShadows then
+              hasShadowCasters <- true
+              shadowAtlas.AddCaster(
+                ShadowCasterType.Spot,
+                sp.Position,
+                sp.Direction,
+                sp.Position + sp.Direction,
+                true,
+                sp.ShadowBias
+              ) |> ignore
 
           // Render shadow passes
           if shadowAtlas.Count > 0 then
@@ -884,68 +907,54 @@ type ForwardPbrPipeline
             Raylib.ClearBackground(Color.White)
 
             // Render each caster to its atlas region
+            let renderShadowRegion (regionIndex: int) (camera: Camera3D) =
+              shadowAtlas.GetRegionViewport(regionIndex)
+              Raylib.BeginMode3D(camera)
+
+              let vp =
+                Raymath.MatrixMultiply(
+                  Rlgl.GetMatrixModelview(),
+                  Rlgl.GetMatrixProjection()
+                )
+
+              shadowAtlas.SetRegionViewProj(regionIndex, vp)
+
+              for i = 0 to meshDrawCount - 1 do
+                let draw = meshDraws[i]
+                Raylib.DrawMesh(draw.Mesh, depthShadowMaterial, draw.Transform)
+
+              Raylib.EndMode3D()
+
             for caster in shadowAtlas.Casters do
               if caster.Enabled then
+                match caster.Type with
+                | ShadowCasterType.Point ->
+                  // Point light: render 6 cubemap faces
+                  for face = 0 to 5 do
+                    let struct (faceTarget, faceUp) =
+                      match face with
+                      | 0 -> struct (caster.LightPosition + Vector3.UnitX, -Vector3.UnitY) // +X
+                      | 1 -> struct (caster.LightPosition - Vector3.UnitX, -Vector3.UnitY) // -X
+                      | 2 -> struct (caster.LightPosition + Vector3.UnitY, Vector3.UnitZ) // +Y
+                      | 3 -> struct (caster.LightPosition - Vector3.UnitY, -Vector3.UnitZ) // -Y
+                      | 4 -> struct (caster.LightPosition + Vector3.UnitZ, -Vector3.UnitY) // +Z
+                      | 5 -> struct (caster.LightPosition - Vector3.UnitZ, -Vector3.UnitY) // -Z
+                      | _ -> struct (caster.LightPosition + Vector3.UnitX, -Vector3.UnitY)
 
-                // Create light camera for this caster
-                let lightCamera =
-                  match caster.Type with
-                  | ShadowCasterType.Directional ->
-                    let lightFromDir = Vector3.Normalize(-caster.LightDirection)
+                    let faceCamera =
+                      Camera3D(
+                        Position = caster.LightPosition,
+                        Target = faceTarget,
+                        Up = faceUp,
+                        FovY = 90.0f,
+                        Projection = CameraProjection.Perspective
+                      )
 
-                    // Compute shadow origin based on configured strategy
-                    let rawOrigin =
-                      match atlasCfg.OriginStrategy with
-                      | ShadowOriginStrategy.CameraTarget -> activeCamera.Target
-                      | ShadowOriginStrategy.SceneCenter -> Vector3.Zero
-                      | ShadowOriginStrategy.Custom f -> f activeCamera
+                    renderShadowRegion (caster.AtlasRegion + face) faceCamera
 
-                    // Grid snapping: quantize shadow origin to eliminate per-frame flickering.
-                    // Shadow map only re-renders when player crosses a grid boundary.
-                    let gridSize = atlasCfg.GridSnapSize
-
-                    let snappedX =
-                      if gridSize > 0.0f then
-                        MathF.Round(rawOrigin.X / gridSize) * gridSize
-                      else
-                        rawOrigin.X
-
-                    let snappedZ =
-                      if gridSize > 0.0f then
-                        MathF.Round(rawOrigin.Z / gridSize) * gridSize
-                      else
-                        rawOrigin.Z
-
-                    let shadowOrigin = Vector3(snappedX, rawOrigin.Y, snappedZ)
-
-                    // Derive light distance from config or use default
-                    let lightDistance =
-                      match atlasCfg.DirectionalLightDistance with
-                      | ValueSome d -> d
-                      | ValueNone -> 100.0f // Default: 100 units behind origin
-
-                    let lightPos = shadowOrigin + lightFromDir * lightDistance
-
-                    let safeUp =
-                      if abs caster.LightDirection.Y > 0.99f then
-                        Vector3.UnitZ
-                      else
-                        Vector3.UnitY
-
-                    // Derive ortho size from config or use default
-                    let orthoSize =
-                      match atlasCfg.DirectionalLightSize with
-                      | ValueSome s -> s
-                      | ValueNone -> 50.0f // Default: 50 unit coverage
-
-                    Camera3D(
-                      Position = lightPos,
-                      Target = shadowOrigin,
-                      Up = safeUp,
-                      FovY = orthoSize,
-                      Projection = CameraProjection.Orthographic
-                    )
-                  | _ ->
+                | ShadowCasterType.Spot ->
+                  // Spot light: render once with perspective projection
+                  let spotCamera =
                     Camera3D(
                       Position = caster.LightPosition,
                       Target = caster.LightPosition + caster.LightDirection,
@@ -954,32 +963,62 @@ type ForwardPbrPipeline
                       Projection = CameraProjection.Perspective
                     )
 
-                // Set viewport to this caster's atlas region, then BeginMode3D
-                // uses it for orthographic projection.
-                shadowAtlas.GetRegionViewport(caster.AtlasRegion)
+                  renderShadowRegion caster.AtlasRegion spotCamera
 
-                Raylib.BeginMode3D(lightCamera)
+                | _ ->
+                  // Directional light: render once with orthographic projection
+                  let lightFromDir = Vector3.Normalize(-caster.LightDirection)
 
-                // Capture VP inside BeginMode3D, same as C example
-                let vp =
-                  Raymath.MatrixMultiply(
-                    Rlgl.GetMatrixModelview(),
-                    Rlgl.GetMatrixProjection()
-                  )
+                  let rawOrigin =
+                    match atlasCfg.OriginStrategy with
+                    | ShadowOriginStrategy.CameraTarget -> activeCamera.Target
+                    | ShadowOriginStrategy.SceneCenter -> Vector3.Zero
+                    | ShadowOriginStrategy.Custom f -> f activeCamera
 
-                shadowAtlas.SetCasterViewProj(caster.Id, vp)
+                  let gridSize = atlasCfg.GridSnapSize
 
-                // Draw scene from light's perspective
-                for i = 0 to meshDrawCount - 1 do
-                  let draw = meshDraws[i]
+                  let snappedX =
+                    if gridSize > 0.0f then
+                      MathF.Round(rawOrigin.X / gridSize) * gridSize
+                    else
+                      rawOrigin.X
 
-                  Raylib.DrawMesh(
-                    draw.Mesh,
-                    depthShadowMaterial,
-                    draw.Transform
-                  )
+                  let snappedZ =
+                    if gridSize > 0.0f then
+                      MathF.Round(rawOrigin.Z / gridSize) * gridSize
+                    else
+                      rawOrigin.Z
 
-                Raylib.EndMode3D()
+                  let shadowOrigin = Vector3(snappedX, rawOrigin.Y, snappedZ)
+
+                  let lightDistance =
+                    match atlasCfg.DirectionalLightDistance with
+                    | ValueSome d -> d
+                    | ValueNone -> 100.0f
+
+                  let lightPos = shadowOrigin + lightFromDir * lightDistance
+
+                  let safeUp =
+                    if abs caster.LightDirection.Y > 0.99f then
+                      Vector3.UnitZ
+                    else
+                      Vector3.UnitY
+
+                  let orthoSize =
+                    match atlasCfg.DirectionalLightSize with
+                    | ValueSome s -> s
+                    | ValueNone -> 50.0f
+
+                  let dirCamera =
+                    Camera3D(
+                      Position = lightPos,
+                      Target = shadowOrigin,
+                      Up = safeUp,
+                      FovY = orthoSize,
+                      Projection = CameraProjection.Orthographic
+                    )
+
+                  renderShadowRegion caster.AtlasRegion dirCamera
 
             // Reset viewport to window size
             Rlgl.Viewport(0, 0, gameCtx.WindowWidth, gameCtx.WindowHeight)
