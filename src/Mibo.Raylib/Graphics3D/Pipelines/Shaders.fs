@@ -38,33 +38,40 @@ void main()
 }
 """
 
-  let evsmShadowVertex =
+  let depthShadowVertex =
     """#version 330
 
-layout(location = 0) in vec3 vertexPosition;
+in vec3 vertexPosition;
+in vec3 vertexNormal;
+in vec2 vertexTexCoord;
+in vec4 vertexColor;
 
 uniform mat4 mvp;
+uniform mat4 matModel;
+
+out vec3 fragPosition;
+out vec2 fragTexCoord;
+out vec4 fragColor;
+out vec3 fragNormal;
 
 void main()
 {
-    gl_Position = mvp * vec4(vertexPosition, 1.0);
+    fragPosition = vec3(matModel * vec4(vertexPosition, 1.0));
+    fragTexCoord = vertexTexCoord;
+    fragColor    = vertexColor;
+    fragNormal   = normalize(vec3(mat3(transpose(inverse(matModel))) * vertexNormal));
+    gl_Position  = mvp * vec4(vertexPosition, 1.0);
 }
 """
 
-  let evsmShadowFragment =
+  let depthShadowFragment =
     """#version 330
 
-uniform float positiveExp;
-uniform float negativeExp;
-
-out vec4 fragColor;
+out vec4 finalColor;
 
 void main()
 {
-    float depth = gl_FragCoord.z;
-    float posMoment = exp(positiveExp * depth);
-    float negMoment = exp(-negativeExp * depth);
-    fragColor = vec4(posMoment, posMoment * posMoment, negMoment, negMoment * negMoment);
+    finalColor = vec4(1.0);
 }
 """
 
@@ -97,65 +104,6 @@ uniform sampler2D texture0;
 void main()
 {
     finalColor = texture(texture0, fragTexCoord);
-}
-"""
-
-  let blurVertex =
-    """#version 330
-
-in vec3 vertexPosition;
-in vec2 vertexTexCoord;
-
-out vec2 fragTexCoord;
-
-uniform mat4 mvp;
-
-void main()
-{
-    fragTexCoord = vertexTexCoord;
-    gl_Position = mvp * vec4(vertexPosition, 1.0);
-}
-"""
-
-  let blurFragmentH =
-    """#version 330
-
-in vec2 fragTexCoord;
-out vec4 fragColor;
-
-uniform sampler2D texture0;
-uniform vec2 texelSize;
-
-void main()
-{
-    vec4 result = vec4(0.0);
-    result += texture(texture0, fragTexCoord + vec2(-2.0 * texelSize.x, 0.0)) * 0.06136;
-    result += texture(texture0, fragTexCoord + vec2(-1.0 * texelSize.x, 0.0)) * 0.24477;
-    result += texture(texture0, fragTexCoord) * 0.38774;
-    result += texture(texture0, fragTexCoord + vec2(1.0 * texelSize.x, 0.0)) * 0.24477;
-    result += texture(texture0, fragTexCoord + vec2(2.0 * texelSize.x, 0.0)) * 0.06136;
-    fragColor = result;
-}
-"""
-
-  let blurFragmentV =
-    """#version 330
-
-in vec2 fragTexCoord;
-out vec4 fragColor;
-
-uniform sampler2D texture0;
-uniform vec2 texelSize;
-
-void main()
-{
-    vec4 result = vec4(0.0);
-    result += texture(texture0, fragTexCoord + vec2(0.0, -2.0 * texelSize.y)) * 0.06136;
-    result += texture(texture0, fragTexCoord + vec2(0.0, -1.0 * texelSize.y)) * 0.24477;
-    result += texture(texture0, fragTexCoord) * 0.38774;
-    result += texture(texture0, fragTexCoord + vec2(0.0, 1.0 * texelSize.y)) * 0.24477;
-    result += texture(texture0, fragTexCoord + vec2(0.0, 2.0 * texelSize.y)) * 0.06136;
-    fragColor = result;
 }
 """
 
@@ -213,9 +161,7 @@ uniform float spotLightOuterCutoff[{maxSpotLights}];
 uniform vec3 cameraPos;
 uniform sampler2D shadowMap;
 uniform mat4 lightViewProj;
-uniform float positiveExp;
-uniform float negativeExp;
-uniform float lightBleedReduction;
+uniform int shadowPass;
 
 vec3 getNormal()
 {{
@@ -260,13 +206,6 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0)
     return F0 + (1.0 - F0) * pow(max(1.0 - cosTheta, 0.0), 5.0);
 }}
 
-// DIAGNOSTIC return values for computeDirShadow:
-//   0.00 = out of bounds XY (projCoord.x or .y outside [0,1] after NDC->UV)
-//   0.10 = depth out of bounds (projCoord.z > 1.0 or < 0.0)
-//   0.20 = empty texel (moments.r < 0.0001 — no geometry in shadow map at this UV)
-//   0.30 = Chebyshev returned shadow < 0.0 (shouldn't happen but checked)
-//   2.00 + shadow = valid Chebyshev result (visible as brightness > 1, clamped in main)
-// Remove the 2.0 offset in release; in debug it makes the diagnostic color visible.
 float computeDirShadow(vec3 worldPos)
 {{
     if (dirLightCastsShadows == 0)
@@ -276,35 +215,20 @@ float computeDirShadow(vec3 worldPos)
     vec3 projCoord = shadowCoord.xyz / shadowCoord.w;
     projCoord = projCoord * 0.5 + 0.5;
 
+    if (projCoord.z > 1.0) return 0.0;
     if (projCoord.x < 0.0 || projCoord.x > 1.0 || projCoord.y < 0.0 || projCoord.y > 1.0)
-        return 1.0;
+        return 0.0;
 
-    if (projCoord.z > 1.0 || projCoord.z < 0.0)
-        return 1.0;
-
-    vec4 moments = texture(shadowMap, projCoord.xy);
-
-    if (moments.r < 0.0001)
-        return 1.0;
-
-    float posDepth = exp(positiveExp * projCoord.z);
-    float negDepth = exp(-negativeExp * projCoord.z);
-
-    float posMean = moments.r;
-    float ratio = posDepth / max(posMean, 0.0001);
-    float posVariance = max(moments.g - posMean * posMean, 0.01 * posMean * posMean);
-    float tolerance = 10.0;
-    float posCheb = (posDepth <= posMean * tolerance) ? 1.0 : posVariance / (posVariance + (posDepth - posMean) * (posDepth - posMean));
-
-    float negMean = moments.b;
-    float negVariance = max(moments.a - negMean * negMean, 0.01 * negMean * negMean);
-    float negCheb = (negDepth >= negMean * 0.95) ? 1.0 : negVariance / (negVariance + (negDepth - negMean) * (negDepth - negMean));
-
-    float shadow = min(posCheb, negCheb);
-    shadow = clamp(shadow, lightBleedReduction, 1.0);
-    shadow = (shadow - lightBleedReduction) / (1.0 - lightBleedReduction);
-
-    return shadow;
+    float bias = max(0.0005 * (1.0 - dot(normalize(fragNormal), normalize(-dirLightDir))), 0.0001);
+    float shadow = 0.0;
+    vec2 texel = 1.0 / vec2(textureSize(shadowMap, 0));
+    for (int x = -1; x <= 1; x++) {{
+        for (int y = -1; y <= 1; y++) {{
+            float d = texture(shadowMap, projCoord.xy + vec2(float(x), float(y)) * texel).r;
+            shadow += (projCoord.z - bias > d) ? 0.0 : 1.0;
+        }}
+    }}
+    return shadow / 9.0;
 }}
 
 vec3 calcPBR(vec3 V, vec3 N, vec3 L, vec3 radiance, vec3 albedo, float r, float m)
@@ -329,6 +253,8 @@ vec3 calcPBR(vec3 V, vec3 N, vec3 L, vec3 radiance, vec3 albedo, float r, float 
 
 void main()
 {{
+    if (shadowPass == 1) {{ finalColor = vec4(1.0); return; }}
+
     vec2 uv = fragTexCoord * tiling;
     vec4 texColor = texture(texture0, uv) * albedoColor * fragColor;
     vec3 albedo = texColor.rgb;
@@ -409,18 +335,10 @@ void main()
       forwardFragmentFmt maxPointLights maxSpotLights
     )
 
-  /// <summary>Loads the EVSM shadow pass vertex + fragment shader.</summary>
-  let loadEvsmShadowShader() : Shader =
-    Raylib.LoadShaderFromMemory(evsmShadowVertex, evsmShadowFragment)
+  /// <summary>Loads the depth-only shadow pass vertex + fragment shader (C example compatible).</summary>
+  let loadDepthShadowShader() : Shader =
+    Raylib.LoadShaderFromMemory(depthShadowVertex, depthShadowFragment)
 
   /// <summary>Loads the built-in fullscreen post-process vertex + fragment shader.</summary>
   let loadPostProcessShader() : Shader =
     Raylib.LoadShaderFromMemory(postProcessVertex, postProcessFragment)
-
-  /// <summary>Loads the horizontal Gaussian blur shader for EVSM shadow maps.</summary>
-  let loadBlurHShader() : Shader =
-    Raylib.LoadShaderFromMemory(blurVertex, blurFragmentH)
-
-  /// <summary>Loads the vertical Gaussian blur shader for EVSM shadow maps.</summary>
-  let loadBlurVShader() : Shader =
-    Raylib.LoadShaderFromMemory(blurVertex, blurFragmentV)

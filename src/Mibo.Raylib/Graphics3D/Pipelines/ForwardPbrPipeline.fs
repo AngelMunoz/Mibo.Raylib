@@ -11,6 +11,37 @@ open Mibo.Elmish
 open Mibo.Elmish.Graphics3D
 
 // ------------------------------------------------------------------
+// NativePtr helpers — void* with DisableRuntimeMarshalling requires
+// explicit fixed + NativePtr.toVoidPtr.
+// ------------------------------------------------------------------
+[<AutoOpen>]
+module private NativeHelpers =
+
+  let setShaderInt (shader: Shader) (loc: int) (value: int) =
+    use p = fixed &value
+    Raylib.SetShaderValue(shader, loc, NativePtr.toVoidPtr p, ShaderUniformDataType.Int)
+
+  let setShaderFloat (shader: Shader) (loc: int) (value: float32) =
+    use p = fixed &value
+    Raylib.SetShaderValue(shader, loc, NativePtr.toVoidPtr p, ShaderUniformDataType.Float)
+
+  let setShaderVec3 (shader: Shader) (loc: int) (v: Vector3) =
+    use p = fixed &v
+    Raylib.SetShaderValue(shader, loc, NativePtr.toVoidPtr p, ShaderUniformDataType.Vec3)
+
+  let setShaderVec4 (shader: Shader) (loc: int) (v: Vector4) =
+    use p = fixed &v
+    Raylib.SetShaderValue(shader, loc, NativePtr.toVoidPtr p, ShaderUniformDataType.Vec4)
+
+  let setShaderVec2 (shader: Shader) (loc: int) (v: Vector2) =
+    use p = fixed &v
+    Raylib.SetShaderValue(shader, loc, NativePtr.toVoidPtr p, ShaderUniformDataType.Vec2)
+
+  let rlSetUniformInt (loc: int) (value: int) =
+    use p = fixed &value
+    Rlgl.SetUniform(loc, NativePtr.toVoidPtr p, int ShaderUniformDataType.Int, 1)
+
+// ------------------------------------------------------------------
 // Material Cache Key
 // ------------------------------------------------------------------
 
@@ -148,15 +179,7 @@ type private PipelineContext
   let locSpotLightOuterCutoff = Array.zeroCreate<int> maxSpotLights
 
   let mutable locShadowMap = -1
-  let mutable locLightViewProj = -1
-  let mutable locPositiveExp = -1
-  let mutable locNegativeExp = -1
-  let mutable locLightBleedReduction = -1
   let mutable locCameraPos = -1
-
-  let mutable activePositiveExp = 0.0f
-  let mutable activeNegativeExp = 0.0f
-  let mutable activeLightBleedReduction = 0.0f
 
   let cacheLocations() =
     if not locsCached then
@@ -225,21 +248,12 @@ type private PipelineContext
         locSpotLightOuterCutoff[i] <-
           Raylib.GetShaderLocation(forwardShader, $"spotLightOuterCutoff[{i}]")
 
-      locLightViewProj <- Raylib.GetShaderLocation(forwardShader, "lightViewProj")
-      locPositiveExp <- Raylib.GetShaderLocation(forwardShader, "positiveExp")
-      locNegativeExp <- Raylib.GetShaderLocation(forwardShader, "negativeExp")
-      locLightBleedReduction <- Raylib.GetShaderLocation(forwardShader, "lightBleedReduction")
       locCameraPos <- Raylib.GetShaderLocation(forwardShader, "cameraPos")
       locShadowMap <- Raylib.GetShaderLocation(forwardShader, "shadowMap")
 
-      Raylib.BeginShaderMode(forwardShader)
-      Raylib.SetShaderValue(
-        forwardShader,
-        locShadowMap,
-        15,
-        ShaderUniformDataType.Int
-      )
-      Raylib.EndShaderMode()
+      // Set shadowMap sampler to texture unit 15 — matches C example's
+      // rlSetUniform(sc.mapLoc, &sc.slot, SHADER_UNIFORM_INT, 1)
+      rlSetUniformInt locShadowMap 15
 
       locsCached <- true
 
@@ -551,9 +565,13 @@ type private PipelineContext
       ShaderUniformDataType.Int
     )
 
-    if activeShadowMap.Texture.Id <> 0u then
+    // Bind shadow map — matches C example's BindShadowMap exactly:
+    // rlActiveTextureSlot(sc.slot); rlEnableTexture(sc.target.depth.id);
+    // rlSetUniform(sc.mapLoc, &sc.slot, SHADER_UNIFORM_INT, 1);
+    if activeShadowMap.Depth.Id <> 0u then
       Rlgl.ActiveTextureSlot(15)
-      Rlgl.EnableTexture(activeShadowMap.Texture.Id)
+      Rlgl.EnableTexture(activeShadowMap.Depth.Id)
+      rlSetUniformInt locShadowMap 15
       Rlgl.ActiveTextureSlot(0)
 
   let drawMeshCore (mesh: Mesh) (transform: Matrix4x4) (material: Material3D) =
@@ -693,17 +711,11 @@ type private PipelineContext
     (
       gameContext: GameContext,
       shadowMap: RenderTexture2D,
-      lightViewProj: Matrix4x4,
-      posExp: float32,
-      negExp: float32,
-      lightBleedReduction: float32
+      lightViewProj: Matrix4x4
     ) =
     gameCtx <- gameContext
     activeShadowMap <- shadowMap
     activeLightViewProj <- lightViewProj
-    activePositiveExp <- posExp
-    activeNegativeExp <- negExp
-    activeLightBleedReduction <- lightBleedReduction
     ambient.Clear()
     dirLights.Clear()
     pointLights.Clear()
@@ -751,20 +763,15 @@ module private EvsmPass =
     draws.ToArray()
 
   let renderShadowPass
-    (evsmShader: Shader)
-    (evsmMaterial: Material)
-    (blurHShader: Shader)
-    (blurVShader: Shader)
+    (depthShadowShader: Shader)
+    (depthShadowMaterial: Material)
     (shadowFbo: RenderTexture2D)
-    (blurTempFbo: RenderTexture2D)
     (lightDir: Vector3)
     (cameraPos: Vector3)
     (cameraTarget: Vector3)
     (cameraUp: Vector3)
     (fovY: float32)
     (aspect: float32)
-    (positiveExp: float32)
-    (negativeExp: float32)
     (shadowDistance: float32)
     (draws: MeshDraw[])
     : Matrix4x4 =
@@ -803,63 +810,30 @@ module private EvsmPass =
     lightCamera.Projection <- CameraProjection.Orthographic
 
     // ------------------------------------------------------------------
-    // Render shadow pass using BeginMode3D (proper state setup)
-    // Compute forward-pass matrix manually using same parameters.
-    // Option B (proj * view) — tested as correct order.
+    // Render shadow pass — matches C example exactly:
+    // BeginTextureMode → ClearBackground(WHITE) → BeginMode3D
+    // → capture VP via rlGetMatrixModelview/projection
+    // → SetShaderValueMatrix → DrawScene → EndMode3D → EndTextureMode
     // ------------------------------------------------------------------
-    let halfExtentD = float halfExtent
-    let manualView = Raymath.MatrixLookAt(lightPos, center, safeUp)
-    let manualProj = Raymath.MatrixOrtho(-halfExtentD, halfExtentD, -halfExtentD, halfExtentD, 0.01, 1000.0)
-    let yFlip = Raymath.MatrixScale(1.0f, -1.0f, 1.0f)
-
-    // Render shadow pass
     Raylib.BeginTextureMode(shadowFbo)
-    Rlgl.ClearColor(0uy, 0uy, 0uy, 0uy)
-    Rlgl.ClearScreenBuffers()
+    Raylib.ClearBackground(Color.White)
 
     Raylib.BeginMode3D(lightCamera)
 
-    Rlgl.EnableDepthTest()
-    Rlgl.DisableBackfaceCulling()
-    Raylib.BeginShaderMode(evsmShader)
-    Raylib.SetShaderValue(evsmShader, Raylib.GetShaderLocation(evsmShader, "positiveExp"), positiveExp, ShaderUniformDataType.Float)
-    Raylib.SetShaderValue(evsmShader, Raylib.GetShaderLocation(evsmShader, "negativeExp"), negativeExp, ShaderUniformDataType.Float)
+    // Capture VP inside BeginMode3D, same as C example:
+    // Matrix vp = MatrixMultiply(rlGetMatrixModelview(), rlGetMatrixProjection());
+    // This is the EXACT matrix the batch uses for mvp — must match forward pass.
+    let vp = Raymath.MatrixMultiply(Rlgl.GetMatrixModelview(), Rlgl.GetMatrixProjection())
 
     for draw in draws do
-      Raylib.DrawMesh(draw.Mesh, evsmMaterial, draw.Transform)
+      Raylib.DrawMesh(draw.Mesh, depthShadowMaterial, draw.Transform)
 
-    Raylib.EndShaderMode()
-    Rlgl.EnableBackfaceCulling()
     Raylib.EndMode3D()
     Raylib.EndTextureMode()
 
-    // Gaussian blur passes (horizontal then vertical)
-    let size = float32 shadowFbo.Texture.Width
-    let texelSize = Vector2(1.0f / size, 1.0f / size)
-    let srcRect = Raylib_cs.Rectangle(0.0f, 0.0f, size, -size)
-    let dstRect = Raylib_cs.Rectangle(0.0f, 0.0f, size, size)
-
-    // Horizontal blur: shadowFbo -> blurTempFbo
-    Raylib.BeginTextureMode(blurTempFbo)
-    Raylib.BeginShaderMode(blurHShader)
-    Raylib.SetShaderValue(blurHShader, Raylib.GetShaderLocation(blurHShader, "texelSize"), texelSize, ShaderUniformDataType.Vec2)
-    Raylib.DrawTexturePro(shadowFbo.Texture, srcRect, dstRect, Vector2.Zero, 0.0f, Color.White)
-    Raylib.EndShaderMode()
-    Raylib.EndTextureMode()
-
-    // Vertical blur: blurTempFbo -> shadowFbo
-    Raylib.BeginTextureMode(shadowFbo)
-    Raylib.BeginShaderMode(blurVShader)
-    Raylib.SetShaderValue(blurVShader, Raylib.GetShaderLocation(blurVShader, "texelSize"), texelSize, ShaderUniformDataType.Vec2)
-    Raylib.DrawTexturePro(blurTempFbo.Texture, srcRect, dstRect, Vector2.Zero, 0.0f, Color.White)
-    Raylib.EndShaderMode()
-    Raylib.EndTextureMode()
-
-    // Build forward-pass matrix (proj * view * yFlip order)
-    let combined = Raymath.MatrixMultiply(manualView, manualProj)
-    let lightViewProj = Raymath.MatrixMultiply(yFlip, combined)
-
-    lightViewProj
+    // Return the VP captured from rlgl — this is what the forward shader uses
+    // for shadow comparison. Must be identical to what the shadow pass used.
+    vp
 
 // ------------------------------------------------------------------
 // ForwardPbrPipeline
@@ -898,15 +872,12 @@ type ForwardPbrPipeline
   let evsmCfg = defaultArg evsmConfig EvsmConfig.defaults
 
   let mutable forwardShader: Shader = Unchecked.defaultof<Shader>
-  let mutable evsmShader: Shader = Unchecked.defaultof<Shader>
-  let mutable blurHShader: Shader = Unchecked.defaultof<Shader>
-  let mutable blurVShader: Shader = Unchecked.defaultof<Shader>
+  let mutable depthShadowShader: Shader = Unchecked.defaultof<Shader>
   let mutable postProcessShader: Shader = Unchecked.defaultof<Shader>
   let materialCache = Dictionary<MaterialKey, Material>()
-  let mutable evsmMaterial: Material = Unchecked.defaultof<Material>
+  let mutable depthShadowMaterial: Material = Unchecked.defaultof<Material>
 
   let mutable shadowMap: RenderTexture2D = Unchecked.defaultof<RenderTexture2D>
-  let mutable blurTempFbo: RenderTexture2D = Unchecked.defaultof<RenderTexture2D>
 
   let mutable context: PipelineContext = Unchecked.defaultof<PipelineContext>
 
@@ -975,27 +946,22 @@ type ForwardPbrPipeline
       forwardShader <-
         Shaders.loadForwardShader maxPt maxSp
 
-      evsmShader <- Shaders.loadEvsmShadowShader()
-      blurHShader <- Shaders.loadBlurHShader()
-      blurVShader <- Shaders.loadBlurVShader()
+      depthShadowShader <- Shaders.loadDepthShadowShader()
       postProcessShader <- Shaders.loadPostProcessShader()
 
-      evsmMaterial <- Raylib.LoadMaterialDefault()
-      evsmMaterial.Shader <- evsmShader
+      depthShadowMaterial <- Raylib.LoadMaterialDefault()
+      depthShadowMaterial.Shader <- depthShadowShader
 
       shadowMap <- EvsmMath.createShadowFbo evsmCfg.ShadowMapSize evsmCfg.ShadowMapSize
-      blurTempFbo <- EvsmMath.createShadowFbo evsmCfg.ShadowMapSize evsmCfg.ShadowMapSize
 
       context <- PipelineContext(forwardShader, materialCache, maxPt, maxSp)
 
     member _.Shutdown() =
       Raylib.UnloadShader(forwardShader)
-      Raylib.UnloadShader(evsmShader)
-      Raylib.UnloadShader(blurHShader)
-      Raylib.UnloadShader(blurVShader)
+      Raylib.UnloadShader(depthShadowShader)
       Raylib.UnloadShader(postProcessShader)
 
-      Raylib.UnloadMaterial(evsmMaterial)
+      Raylib.UnloadMaterial(depthShadowMaterial)
 
       for KeyValue(_, mat) in materialCache do
         Raylib.UnloadMaterial(mat)
@@ -1004,9 +970,6 @@ type ForwardPbrPipeline
 
       if shadowMap.Id <> 0u then
         EvsmMath.destroyShadowFbo shadowMap
-
-      if blurTempFbo.Id <> 0u then
-        EvsmMath.destroyShadowFbo blurTempFbo
 
     member _.Execute gameCtx buffer rtPool =
       // ------------------------------------------------------------------
@@ -1045,20 +1008,15 @@ type ForwardPbrPipeline
 
         shadowLightViewProj <-
           EvsmPass.renderShadowPass
-            evsmShader
-            evsmMaterial
-            blurHShader
-            blurVShader
+            depthShadowShader
+            depthShadowMaterial
             shadowMap
-            blurTempFbo
             dir.Direction
             activeCamera.Position
             activeCamera.Target
             activeCamera.Up
             fovY
             aspect
-            evsmCfg.PositiveExponent
-            evsmCfg.NegativeExponent
             evsmCfg.ShadowDistance
             meshDraws
 
@@ -1068,17 +1026,14 @@ type ForwardPbrPipeline
       context.Reset(
         gameCtx,
         shadowMap,
-        shadowLightViewProj,
-        evsmCfg.PositiveExponent,
-        evsmCfg.NegativeExponent,
-        evsmCfg.LightBleedReduction
+        shadowLightViewProj
       )
 
       let ctx = context :> IRenderContext3D
 
       // Upload shadow uniforms if shadows were rendered
+      // Matches C example: rlEnableShader(shader.id); BindShadowMap(sun);
       if shadowLightViewProj <> Matrix4x4.Identity && cameraFound then
-        Raylib.BeginShaderMode(forwardShader)
 
         Raylib.SetShaderValueMatrix(
           forwardShader,
@@ -1086,35 +1041,26 @@ type ForwardPbrPipeline
           shadowLightViewProj
         )
 
-        Raylib.SetShaderValue(
-          forwardShader,
-          Raylib.GetShaderLocation(forwardShader, "positiveExp"),
-          evsmCfg.PositiveExponent,
-          ShaderUniformDataType.Float
-        )
+        setShaderVec3
+          forwardShader
+          (Raylib.GetShaderLocation(forwardShader, "cameraPos"))
+          activeCamera.Position
 
-        Raylib.SetShaderValue(
-          forwardShader,
-          Raylib.GetShaderLocation(forwardShader, "negativeExp"),
-          evsmCfg.NegativeExponent,
-          ShaderUniformDataType.Float
-        )
+        setShaderInt
+          forwardShader
+          (Raylib.GetShaderLocation(forwardShader, "shadowPass"))
+          0
 
-        Raylib.SetShaderValue(
-          forwardShader,
-          Raylib.GetShaderLocation(forwardShader, "lightBleedReduction"),
-          evsmCfg.LightBleedReduction,
-          ShaderUniformDataType.Float
-        )
-
-        Raylib.SetShaderValue(
-          forwardShader,
-          Raylib.GetShaderLocation(forwardShader, "cameraPos"),
-          activeCamera.Position,
-          ShaderUniformDataType.Vec3
-        )
-
-        Raylib.EndShaderMode()
+        // Bind shadow map — matches C example's BindShadowMap exactly:
+        // rlActiveTextureSlot(sc.slot);
+        // rlEnableTexture(sc.target.depth.id);
+        // rlSetUniform(sc.mapLoc, &sc.slot, SHADER_UNIFORM_INT, 1);
+        if shadowMap.Depth.Id <> 0u then
+          Rlgl.EnableShader(forwardShader.Id)
+          Rlgl.ActiveTextureSlot(15)
+          Rlgl.EnableTexture(shadowMap.Depth.Id)
+          rlSetUniformInt (Raylib.GetShaderLocation(forwardShader, "shadowMap")) 15
+          Rlgl.ActiveTextureSlot(0)
 
       // Render
       match ppConfig.Passes with
@@ -1145,5 +1091,5 @@ type ForwardPbrPipeline
         let previewH = 256.0f
         let srcRect = Raylib_cs.Rectangle(0.0f, 0.0f, float32 evsmCfg.ShadowMapSize, float32 -evsmCfg.ShadowMapSize)
         let dstRect = Raylib_cs.Rectangle(w - previewW - 10.0f, h - previewH - 10.0f, previewW, previewH)
-        Raylib.DrawTexturePro(sm.Texture, srcRect, dstRect, Vector2.Zero, 0.0f, Color.White)
+        Raylib.DrawTexturePro(sm.Depth, srcRect, dstRect, Vector2.Zero, 0.0f, Color.White)
         Raylib.DrawRectangleLines(int (w - previewW - 10.0f), int (h - previewH - 10.0f), int previewW, int previewH, Color.Red)

@@ -61,48 +61,24 @@ module EvsmMath =
   // ------------------------------------------------------------------
 
   /// <summary>
-  /// Creates a custom FBO-backed render target with an RGBA32F color attachment
-  /// and a depth renderbuffer for EVSM moments storage.
-  /// Uses Rlgl directly because raylib's LoadRenderTexture only creates RGBA8.
+  /// Creates a depth-only shadow FBO, matching the C example's LoadShadowmapRenderTexture.
+  /// Depth texture is attached as TEXTURE2D (not renderbuffer) so it can be sampled in shaders.
   /// </summary>
   let createShadowFbo (width: int) (height: int) : RenderTexture2D =
     let fboId = Rlgl.LoadFramebuffer()
     Rlgl.EnableFramebuffer(fboId)
-
-    let colorTexId =
-      let data = NativePtr.ofNativeInt<byte> 0n |> NativePtr.toVoidPtr
-      Rlgl.LoadTexture(data, width, height, PixelFormat.UncompressedR32G32B32A32, 1)
-
-    Rlgl.TextureParameters(colorTexId, Rlgl.TEXTURE_MIN_FILTER, Rlgl.TEXTURE_FILTER_LINEAR)
-    Rlgl.TextureParameters(colorTexId, Rlgl.TEXTURE_MAG_FILTER, Rlgl.TEXTURE_FILTER_LINEAR)
-    Rlgl.TextureParameters(colorTexId, Rlgl.TEXTURE_WRAP_S, Rlgl.TEXTURE_WRAP_CLAMP)
-    Rlgl.TextureParameters(colorTexId, Rlgl.TEXTURE_WRAP_T, Rlgl.TEXTURE_WRAP_CLAMP)
-
-    Rlgl.FramebufferAttach(
-      fboId, colorTexId,
-      FramebufferAttachType.ColorChannel0, FramebufferAttachTextureType.Texture2D, 0
-    )
-
-    let depthId = Rlgl.LoadTextureDepth(width, height, true)
-
-    Rlgl.FramebufferAttach(
-      fboId, depthId,
-      FramebufferAttachType.Depth, FramebufferAttachTextureType.Renderbuffer, 0
-    )
-
-    Rlgl.FramebufferComplete(fboId) |> ignore
+    let depthId = Rlgl.LoadTextureDepth(width, height, false)
+    Rlgl.FramebufferAttach(fboId, depthId, FramebufferAttachType.Depth, FramebufferAttachTextureType.Texture2D, 0)
     Rlgl.DisableFramebuffer()
-
     RenderTexture2D(
       Id = fboId,
-      Texture = Texture2D(Id = colorTexId, Width = width, Height = height, Mipmaps = 1, Format = PixelFormat.UncompressedR32G32B32A32),
-      Depth = Texture2D(Id = depthId, Width = width, Height = height, Mipmaps = 1, Format = PixelFormat.UncompressedR32G32B32A32)
+      Texture = Texture2D(Id = 0u, Width = width, Height = height, Mipmaps = 1, Format = PixelFormat.UncompressedR8G8B8A8),
+      Depth = Texture2D(Id = depthId, Width = width, Height = height, Mipmaps = 1, Format = enum<PixelFormat> 19)
     )
 
   /// <summary>
   /// Destroys a custom shadow FBO and its attachments.
   /// </summary>
   let destroyShadowFbo (rt: RenderTexture2D) =
-    Rlgl.UnloadFramebuffer(rt.Id)
-    Rlgl.UnloadTexture(rt.Texture.Id)
     Rlgl.UnloadTexture(rt.Depth.Id)
+    Rlgl.UnloadFramebuffer(rt.Id)
