@@ -34,6 +34,10 @@ type PointLight3D = {
   Color: Color
   /// <summary>Maximum radius of influence.</summary>
   Radius: float32
+  /// <summary>Whether this point light casts cubemap shadows.</summary>
+  CastsShadows: bool
+  /// <summary>Per-caster shadow bias override (None = use global default).</summary>
+  ShadowBias: float32 voption
 }
 
 /// <summary>Spot light configuration for cone-shaped lights with distance attenuation.</summary>
@@ -53,4 +57,8 @@ type SpotLight3D = {
   InnerCutoff: float32
   /// <summary>Cosine of the outer cone half-angle (fade to zero).</summary>
   OuterCutoff: float32
+  /// <summary>Whether this spot light casts shadows.</summary>
+  CastsShadows: bool
+  /// <summary>Per-caster shadow bias override (None = use global default).</summary>
+  ShadowBias: float32 voption
 }

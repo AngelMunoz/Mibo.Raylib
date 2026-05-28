@@ -1,0 +1,558 @@
+#nowarn "9"
+
+namespace Mibo.Elmish.Graphics3D.Pipelines
+
+open System
+open System.Collections.Generic
+open System.Numerics
+open FSharp.NativeInterop
+open Raylib_cs
+
+// ------------------------------------------------------------------
+// Shadow Atlas Types
+// ------------------------------------------------------------------
+
+/// <summary>Unique identifier for a shadow caster in the atlas.</summary>
+type ShadowCasterId = int
+
+/// <summary>Type of shadow caster determines projection and face count.</summary>
+type ShadowCasterType =
+  | Directional = 0
+  | Point = 1
+  | Spot = 2
+
+/// <summary>Data for a single shadow caster in the atlas.</summary>
+[<Struct>]
+type ShadowCasterData = {
+  /// <summary>Unique identifier for this caster.</summary>
+  Id: ShadowCasterId
+  /// <summary>Type of light (directional, point, spot).</summary>
+  Type: ShadowCasterType
+  /// <summary>World-space position of the light (for point/spot).</summary>
+  LightPosition: Vector3
+  /// <summary>Direction the light shines (normalized).</summary>
+  LightDirection: Vector3
+  /// <summary>Target point for spot lights.</summary>
+  LightTarget: Vector3
+  /// <summary>Index of first atlas region (0-based).</summary>
+  AtlasRegion: int
+  /// <summary>Number of atlas regions used (1 for directional/spot, 6 for point).</summary>
+  RegionCount: int
+  /// <summary>Whether this caster is currently casting shadows.</summary>
+  Enabled: bool
+  /// <summary>Per-caster shadow bias override (None = use global).</summary>
+  BiasOverride: float32 voption
+  /// <summary>View-projection matrix for this caster (filled during shadow pass).</summary>
+  mutable ViewProj: Matrix4x4
+}
+
+// ------------------------------------------------------------------
+// Shadow Atlas Configuration
+// ------------------------------------------------------------------
+
+/// <summary>Configuration for the shadow atlas system.</summary>
+[<Struct>]
+type ShadowAtlasConfig = {
+  /// <summary>Resolution of the atlas texture (square). Default 2048.</summary>
+  Resolution: int
+  /// <summary>Maximum number of shadow casters. Must be perfect square (4, 9, 16, 25, 36).</summary>
+  MaxCasters: int
+  /// <summary>Whether to show debug overlay. Default false.</summary>
+  ShowDebugOverlay: bool
+}
+
+/// <summary>Global shadow bias configuration.</summary>
+[<Struct>]
+type ShadowBiasConfig = {
+  /// <summary>Bias for directional light shadows. Default 0.0005.</summary>
+  DirectionalBias: float32
+  /// <summary>Bias for point light shadows. Default 0.01.</summary>
+  PointBias: float32
+  /// <summary>Bias for spot light shadows. Default 0.001.</summary>
+  SpotBias: float32
+  /// <summary>Slope-scale bias multiplier. Default 0.0005.</summary>
+  SlopeScaleBias: float32
+}
+
+module ShadowAtlasConfig =
+  let defaults: ShadowAtlasConfig = {
+    Resolution = 2048
+    MaxCasters = 16
+    ShowDebugOverlay = false
+  }
+
+module ShadowBiasConfig =
+  let defaults: ShadowBiasConfig = {
+    DirectionalBias = 0.0005f
+    PointBias = 0.01f
+    SpotBias = 0.001f
+    SlopeScaleBias = 0.0005f
+  }
+
+// ------------------------------------------------------------------
+// Shadow Atlas Implementation
+// ------------------------------------------------------------------
+
+/// <summary>
+/// Manages a texture atlas for multiple shadow maps.
+/// Supports directional, point (cubemap), and spot light shadows.
+/// </summary>
+[<Sealed>]
+type ShadowAtlas(config: ShadowAtlasConfig, biasConfig: ShadowBiasConfig) =
+
+  let gridSize = 
+    let sqrt = Math.Sqrt(float config.MaxCasters) |> int
+    if sqrt * sqrt <> config.MaxCasters then
+      failwithf "MaxCasters must be perfect square. Got %d, nearest is %d." config.MaxCasters (sqrt * sqrt)
+    sqrt
+
+  let regionsPerRow = gridSize
+  let regionSize = config.Resolution / gridSize
+
+  let mutable fbo: RenderTexture2D = Unchecked.defaultof<RenderTexture2D>
+  let casters = Dictionary<ShadowCasterId, ShadowCasterData>()
+  let viewProjs = Dictionary<ShadowCasterId, Matrix4x4>()
+  let mutable nextId = 0
+  let mutable slotAllocator = 0
+
+  // Pre-allocate uniform arrays
+  let viewProjsUniforms = Array.zeroCreate<Matrix4x4> config.MaxCasters
+  let uvOffsets = Array.zeroCreate<Vector4> config.MaxCasters
+  let lightPositions = Array.zeroCreate<Vector3> config.MaxCasters
+  let biases = Array.zeroCreate<float32> config.MaxCasters
+  let casterTypes = Array.zeroCreate<int> config.MaxCasters
+
+  /// <summary>Grid size (rows/columns) of the atlas.</summary>
+  member _.GridSize = gridSize
+
+  /// <summary>Size of each region in pixels.</summary>
+  member _.RegionSize = regionSize
+
+  /// <summary>The depth-only FBO for the atlas.</summary>
+  member _.Fbo = fbo
+
+  /// <summary>Number of currently allocated casters.</summary>
+  member _.Count = casters.Count
+
+  /// <summary>Get all active casters (for iteration).</summary>
+  member _.Casters = casters.Values
+
+  /// <summary>Get bias for a caster type, respecting per-caster override.</summary>
+  member _.GetBias(caster: ShadowCasterData) =
+    match caster.BiasOverride with
+    | ValueSome b -> b
+    | ValueNone ->
+      match caster.Type with
+      | ShadowCasterType.Directional -> biasConfig.DirectionalBias
+      | ShadowCasterType.Point -> biasConfig.PointBias
+      | ShadowCasterType.Spot -> biasConfig.SpotBias
+      | _ -> biasConfig.DirectionalBias
+
+  /// <summary>
+  /// Creates the atlas FBO and depth texture.
+  /// Must be called during pipeline initialization.
+  /// </summary>
+  member _.Initialize() =
+    if fbo.Id <> 0u then
+      failwith "ShadowAtlas already initialized"
+
+    let fboId = Rlgl.LoadFramebuffer()
+    Rlgl.EnableFramebuffer(fboId)
+    let depthId = Rlgl.LoadTextureDepth(config.Resolution, config.Resolution, false)
+    Rlgl.FramebufferAttach(fboId, depthId, FramebufferAttachType.Depth, FramebufferAttachTextureType.Texture2D, 0)
+    Rlgl.DisableFramebuffer()
+
+    fbo <- RenderTexture2D(
+      Id = fboId,
+      Texture = Texture2D(Id = 0u, Width = config.Resolution, Height = config.Resolution, Mipmaps = 1, Format = PixelFormat.UncompressedR8G8B8A8),
+      Depth = Texture2D(Id = depthId, Width = config.Resolution, Height = config.Resolution, Mipmaps = 1, Format = enum<PixelFormat> 19)
+    )
+
+  /// <summary>
+  /// Destroys the atlas FBO and releases resources.
+  /// Must be called during pipeline shutdown.
+  /// </summary>
+  member _.Shutdown() =
+    if fbo.Id <> 0u then
+      Rlgl.UnloadTexture(fbo.Depth.Id)
+      Rlgl.UnloadFramebuffer(fbo.Id)
+      fbo <- Unchecked.defaultof<RenderTexture2D>
+    casters.Clear()
+    viewProjs.Clear()
+    slotAllocator <- 0
+
+  /// <summary>Clear all casters and reset slot allocator. Call at start of each frame.</summary>
+  member _.Clear() =
+    casters.Clear()
+    viewProjs.Clear()
+    slotAllocator <- 0
+
+  /// <summary>Allocate a slot in the atlas. Returns region index.</summary>
+  member private _.AllocateSlot(regionCount: int) =
+    if slotAllocator + regionCount > config.MaxCasters then
+      failwithf "ShadowAtlas: No room for %d regions (allocated %d/%d)" regionCount slotAllocator config.MaxCasters
+    let slot = slotAllocator
+    slotAllocator <- slotAllocator + regionCount
+    slot
+
+  /// <summary>Free a slot in the atlas.</summary>
+  member private _.FreeSlot(regionIndex: int, regionCount: int) =
+    // Simple linear allocator - just decrement count
+    // In practice, we'd need a more sophisticated allocator for defragmentation
+    slotAllocator <- slotAllocator - regionCount
+    if slotAllocator < 0 then
+      slotAllocator <- 0
+
+  /// <summary>
+  /// Register a new shadow caster and allocate atlas regions.
+  /// Returns the caster ID.
+  /// </summary>
+  member this.AddCaster(
+    casterType: ShadowCasterType,
+    lightPosition: Vector3,
+    lightDirection: Vector3,
+    lightTarget: Vector3,
+    enabled: bool,
+    biasOverride: float32 voption
+  ) : ShadowCasterId =
+    let regionCount = 
+      match casterType with
+      | ShadowCasterType.Point -> 6  // Cubemap faces
+      | _ -> 1
+
+    let id = nextId
+    nextId <- nextId + 1
+
+    let region = this.AllocateSlot(regionCount)
+
+    let caster = {
+      Id = id
+      Type = casterType
+      LightPosition = lightPosition
+      LightDirection = lightDirection
+      LightTarget = lightTarget
+      AtlasRegion = region
+      RegionCount = regionCount
+      Enabled = enabled
+      BiasOverride = biasOverride
+      ViewProj = Matrix4x4.Identity
+    }
+
+    casters[id] <- caster
+    id
+
+  /// <summary>Remove a shadow caster and free its atlas regions.</summary>
+  member this.RemoveCaster(id: ShadowCasterId) =
+    match casters.TryGetValue(id) with
+    | true, caster ->
+      this.FreeSlot(caster.AtlasRegion, caster.RegionCount)
+      casters.Remove(id) |> ignore
+    | false, _ -> ()
+
+  /// <summary>Update a shadow caster's properties.</summary>
+  member this.UpdateCaster(
+    id: ShadowCasterId,
+    ?lightPosition: Vector3,
+    ?lightDirection: Vector3,
+    ?lightTarget: Vector3,
+    ?enabled: bool,
+    ?biasOverride: float32 voption
+  ) =
+    match casters.TryGetValue(id) with
+    | true, caster ->
+      casters[id] <- {
+        caster with
+          LightPosition = defaultArg lightPosition caster.LightPosition
+          LightDirection = defaultArg lightDirection caster.LightDirection
+          LightTarget = defaultArg lightTarget caster.LightTarget
+          Enabled = defaultArg enabled caster.Enabled
+          BiasOverride = defaultArg biasOverride caster.BiasOverride
+      }
+    | false, _ -> ()
+
+  /// <summary>Get UV offset/scale for a region index.</summary>
+  member _.GetUVOffsetScale(regionIndex: int) =
+    let row = regionIndex / regionsPerRow
+    let col = regionIndex % regionsPerRow
+    let offset = Vector2(float32 col / float32 gridSize, float32 row / float32 gridSize)
+    let scale = Vector2(1.0f / float32 gridSize, 1.0f / float32 gridSize)
+    Vector4(offset.X, offset.Y, scale.X, scale.Y)
+
+  /// <summary>Set the view-projection matrix for a caster by ID.</summary>
+  member _.SetCasterViewProj(id: ShadowCasterId, vp: Matrix4x4) =
+    viewProjs[id] <- vp
+
+  /// <summary>Get viewport rectangle for a region index.</summary>
+  member _.GetRegionViewport(regionIndex: int) =
+    let row = regionIndex / regionsPerRow
+    let col = regionIndex % regionsPerRow
+    Rlgl.Viewport(
+      col * regionSize,
+      row * regionSize,
+      regionSize,
+      regionSize
+    )
+
+  /// <summary>Get scissor rectangle for a region index.</summary>
+  member _.GetRegionScissor(regionIndex: int) =
+    let row = regionIndex / regionsPerRow
+    let col = regionIndex % regionsPerRow
+    Rlgl.Scissor(
+      col * regionSize,
+      row * regionSize,
+      regionSize,
+      regionSize
+    )
+
+  /// <summary>Clear a specific region in the atlas.</summary>
+  member this.ClearRegion(regionIndex: int) =
+    this.GetRegionViewport(regionIndex)
+    Raylib.ClearBackground(Color.White)
+    Rlgl.Viewport(0, 0, config.Resolution, config.Resolution)
+
+  /// <summary>
+  /// Prepare uniform arrays for upload to shader.
+  /// Call this each frame before rendering.
+  /// </summary>
+  member _.PrepareUniforms() =
+    let mutable index = 0
+    for kvp in casters do
+      let caster = kvp.Value
+      if caster.Enabled && index < config.MaxCasters then
+        // Fill regions (for point lights, fill all 6 faces)
+        for r = 0 to caster.RegionCount - 1 do
+          if index < config.MaxCasters then
+            // Get VP from dictionary
+            match viewProjs.TryGetValue(caster.Id) with
+            | true, vp -> viewProjsUniforms[index] <- vp
+            | false, _ -> viewProjsUniforms[index] <- Matrix4x4.Identity
+
+            // Inline GetUVOffsetScale
+            let regionIndex = caster.AtlasRegion + r
+            let row = regionIndex / regionsPerRow
+            let col = regionIndex % regionsPerRow
+            let offset = Vector2(float32 col / float32 gridSize, float32 row / float32 gridSize)
+            let scale = Vector2(1.0f / float32 gridSize, 1.0f / float32 gridSize)
+            uvOffsets[index] <- Vector4(offset.X, offset.Y, scale.X, scale.Y)
+
+            lightPositions[index] <- caster.LightPosition
+
+            // Inline GetBias
+            biases[index] <-
+              match caster.BiasOverride with
+              | ValueSome b -> b
+              | ValueNone ->
+                match caster.Type with
+                | ShadowCasterType.Directional -> biasConfig.DirectionalBias
+                | ShadowCasterType.Point -> biasConfig.PointBias
+                | ShadowCasterType.Spot -> biasConfig.SpotBias
+                | _ -> biasConfig.DirectionalBias
+
+            casterTypes[index] <- int caster.Type
+            index <- index + 1
+
+    // Zero out remaining
+    for i = index to config.MaxCasters - 1 do
+      viewProjsUniforms[i] <- Matrix4x4.Identity
+      uvOffsets[i] <- Vector4.Zero
+      lightPositions[i] <- Vector3.Zero
+      biases[i] <- 0.0f
+      casterTypes[i] <- -1
+
+  /// <summary>Get prepared uniform arrays (call after PrepareUniforms).</summary>
+  member _.ViewProjs = viewProjsUniforms
+  member _.UVOffsets = uvOffsets
+  member _.LightPositions = lightPositions
+  member _.Biases = biases
+  member _.CasterTypes = casterTypes
+
+  /// <summary>Get the number of active casters.</summary>
+  member _.ActiveCasterCount =
+    casters.Values |> Seq.filter (fun c -> c.Enabled) |> Seq.sumBy (fun c -> c.RegionCount)
+
+  /// <summary>
+  /// Render the debug overlay showing atlas regions.
+  /// </summary>
+  member _.RenderDebugOverlay(screenWidth: int, screenHeight: int) =
+    if config.ShowDebugOverlay && fbo.Id <> 0u then
+      let previewSize = min 256.0f (float32 screenWidth * 0.3f)
+      let previewX = float32 screenWidth - previewSize - 10.0f
+      let previewY = float32 screenHeight - previewSize - 10.0f
+
+      // Draw atlas preview
+      let srcRect = Raylib_cs.Rectangle(0.0f, 0.0f, float32 config.Resolution, float32 -config.Resolution)
+      let dstRect = Raylib_cs.Rectangle(previewX, previewY, previewSize, previewSize)
+      Raylib.DrawTexturePro(fbo.Depth, srcRect, dstRect, Vector2.Zero, 0.0f, Color.White)
+
+      // Draw grid lines
+      let gridLines = gridSize
+      for i = 0 to gridLines do
+        let x = previewX + (previewSize * float32 i / float32 gridLines)
+        let y = previewY + (previewSize * float32 i / float32 gridLines)
+        Raylib.DrawLine(int x, int previewY, int x, int (previewY + previewSize), Color.Red)
+        Raylib.DrawLine(int previewX, int y, int (previewX + previewSize), int y, Color.Red)
+
+      // Highlight used regions
+      for kvp in casters do
+        let caster = kvp.Value
+        if caster.Enabled then
+          for r = 0 to caster.RegionCount - 1 do
+            let regionIndex = caster.AtlasRegion + r
+            let row = regionIndex / regionsPerRow
+            let col = regionIndex % regionsPerRow
+            let regionX = previewX + (previewSize * float32 col / float32 gridSize)
+            let regionY = previewY + (previewSize * float32 row / float32 gridSize)
+            let regionW = previewSize / float32 gridSize
+            let regionH = previewSize / float32 gridSize
+            Raylib.DrawRectangleLines(int regionX, int regionY, int regionW, int regionH, Color.Yellow)
+
+      // Draw border
+      Raylib.DrawRectangleLines(int previewX - 1, int previewY - 1, int previewSize + 2, int previewSize + 2, Color.White)
+
+// ------------------------------------------------------------------
+// Helper Functions for Shadow Rendering
+// ------------------------------------------------------------------
+
+module ShadowAtlas =
+
+  /// <summary>
+  /// Determine which cubemap face a direction vector points to.
+  /// Uses dominant axis method for performance.
+  /// Returns 0-5: +X, -X, +Y, -Y, +Z, -Z
+  /// </summary>
+  let determineFace (dir: Vector3) =
+    let absX = abs dir.X
+    let absY = abs dir.Y
+    let absZ = abs dir.Z
+
+    if absX > absY && absX > absZ then
+      if dir.X > 0.0f then 0 else 1  // +X or -X
+    elif absY > absZ then
+      if dir.Y > 0.0f then 2 else 3  // +Y or -Y
+    else
+      if dir.Z > 0.0f then 4 else 5  // +Z or -Z
+
+  /// <summary>
+  /// Project a 3D direction onto a cubemap face and return 2D UV coordinates.
+  /// UV is in [0,1] range for the face.
+  /// </summary>
+  let projectToFace (dir: Vector3) (face: int) =
+    let mutable u = 0.0f
+    let mutable v = 0.0f
+
+    match face with
+    | 0 -> u <- dir.Y / dir.X; v <- dir.Z / dir.X   // +X
+    | 1 -> u <- -dir.Y / dir.X; v <- dir.Z / dir.X  // -X
+    | 2 -> u <- dir.X / dir.Y; v <- -dir.Z / dir.Y  // +Y
+    | 3 -> u <- dir.X / dir.Y; v <- dir.Z / dir.Y   // -Y
+    | 4 -> u <- dir.X / dir.Z; v <- dir.Y / dir.Z   // +Z
+    | 5 -> u <- -dir.X / dir.Z; v <- dir.Y / dir.Z  // -Z
+    | _ -> ()
+
+    // Remap from [-1,1] to [0,1]
+    Vector2(u * 0.5f + 0.5f, v * 0.5f + 0.5f)
+
+  /// <summary>
+  /// Compute view-projection matrix for a directional light shadow caster.
+  /// Uses orthographic projection centered on the camera frustum.
+  /// </summary>
+  let computeDirectionalViewProj
+    (lightDirection: Vector3)
+    (cameraPos: Vector3)
+    (cameraTarget: Vector3)
+    (cameraUp: Vector3)
+    (fovY: float32)
+    (aspect: float32)
+    (near: float32)
+    (far: float32)
+    : Matrix4x4 =
+
+    let forward = Vector3.Normalize(cameraTarget - cameraPos)
+    let lightDir = Vector3.Normalize(-lightDirection)
+
+    // Compute frustum corners
+    let halfV = tan(fovY * 0.5f)
+    let halfH = halfV * aspect
+
+    let nearCenter = cameraPos + forward * near
+    let farCenter = cameraPos + forward * far
+
+    let right = Vector3.Normalize(Vector3.Cross(forward, cameraUp))
+    let up = Vector3.Cross(right, forward)
+
+    let corners = [|
+      nearCenter - right * (halfH * near) - up * (halfV * near)
+      nearCenter + right * (halfH * near) - up * (halfV * near)
+      nearCenter - right * (halfH * near) + up * (halfV * near)
+      nearCenter + right * (halfH * near) + up * (halfV * near)
+      farCenter - right * (halfH * far) - up * (halfV * far)
+      farCenter + right * (halfH * far) - up * (halfV * far)
+      farCenter - right * (halfH * far) + up * (halfV * far)
+      farCenter + right * (halfH * far) + up * (halfV * far)
+    |]
+
+    // Compute bounding box in light space
+    let lightView = Raymath.MatrixLookAt(Vector3.Zero, lightDir, cameraUp)
+
+    let mutable minX, minY, minZ = Single.MaxValue, Single.MaxValue, Single.MaxValue
+    let mutable maxX, maxY, maxZ = Single.MinValue, Single.MinValue, Single.MinValue
+
+    for corner in corners do
+      let p = Raymath.Vector3Transform(corner, lightView)
+      minX <- min minX p.X; maxX <- max maxX p.X
+      minY <- min minY p.Y; maxY <- max maxY p.Y
+      minZ <- min minZ p.Z; maxZ <- max maxZ p.Z
+
+    // Add margin
+    let margin = 10.0f
+    minX <- minX - margin; maxX <- maxX + margin
+    minY <- minY - margin; maxY <- maxY + margin
+    minZ <- minZ - margin; maxZ <- maxZ + margin
+
+    // Orthographic projection
+    let lightPos = -lightDir * (maxZ + 100.0f)
+    let lightView = Raymath.MatrixLookAt(lightPos, lightPos + lightDir, cameraUp)
+    let lightProj = Raymath.MatrixOrtho(float minX, float maxX, float minY, float maxY, float minZ, float maxZ)
+
+    Raymath.MatrixMultiply(lightView, lightProj)
+
+  /// <summary>
+  /// Compute view-projection matrix for a point light shadow face.
+  /// </summary>
+  let computePointFaceViewProj
+    (lightPosition: Vector3)
+    (face: int)
+    (near: float32)
+    (far: float32)
+    : Matrix4x4 =
+
+    let (target, up) =
+      match face with
+      | 0 -> (lightPosition + Vector3.UnitX, -Vector3.UnitY)    // +X
+      | 1 -> (lightPosition - Vector3.UnitX, -Vector3.UnitY)    // -X
+      | 2 -> (lightPosition + Vector3.UnitY, Vector3.UnitZ)     // +Y
+      | 3 -> (lightPosition - Vector3.UnitY, -Vector3.UnitZ)    // -Y
+      | 4 -> (lightPosition + Vector3.UnitZ, -Vector3.UnitY)    // +Z
+      | 5 -> (lightPosition - Vector3.UnitZ, -Vector3.UnitY)    // -Z
+      | _ -> (lightPosition + Vector3.UnitX, -Vector3.UnitY)
+
+    let view = Raymath.MatrixLookAt(lightPosition, target, up)
+    let proj = Raymath.MatrixPerspective(float (90.0f * MathF.PI / 180.0f), 1.0, float near, float far)
+    Raymath.MatrixMultiply(view, proj)
+
+  /// <summary>
+  /// Compute view-projection matrix for a spot light shadow caster.
+  /// </summary>
+  let computeSpotViewProj
+    (lightPosition: Vector3)
+    (lightTarget: Vector3)
+    (lightUp: Vector3)
+    (fovY: float32)
+    (aspect: float32)
+    (near: float32)
+    (far: float32)
+    : Matrix4x4 =
+
+    let view = Raymath.MatrixLookAt(lightPosition, lightTarget, lightUp)
+    let proj = Raymath.MatrixPerspective(float fovY, float aspect, float near, float far)
+    Raymath.MatrixMultiply(view, proj)

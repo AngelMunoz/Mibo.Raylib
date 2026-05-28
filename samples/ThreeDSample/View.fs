@@ -90,6 +90,8 @@ let view (ctx: GameContext) (model: GameModel) (buffer: RenderBuffer3D) =
                     Position = worldPos + Vector3(0.0f, 0.5f, 0.0f)
                     Color = Color(255uy, 200uy, 120uy)
                     Radius = 6.0f
+                    CastsShadows = true
+                    ShadowBias = ValueNone
                   }
                 ) |> ignore
 

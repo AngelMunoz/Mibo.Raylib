@@ -110,10 +110,12 @@ void main()
   let forwardFragmentFmt
     (maxPointLights: int)
     (maxSpotLights: int)
+    (maxShadowCasters: int)
     =
     $"""#version 330
 
 const float PI = 3.14159265359;
+const int MAX_SHADOW_CASTERS = {maxShadowCasters};
 
 in vec2 fragTexCoord;
 in vec4 fragColor;
@@ -159,8 +161,13 @@ uniform float spotLightInnerCutoff[{maxSpotLights}];
 uniform float spotLightOuterCutoff[{maxSpotLights}];
 
 uniform vec3 cameraPos;
-uniform sampler2D shadowMap;
-uniform mat4 lightViewProj;
+uniform sampler2D shadowAtlas;
+uniform int shadowCasterCount;
+uniform mat4 shadowViewProjs[MAX_SHADOW_CASTERS];
+uniform vec4 shadowUVOffsets[MAX_SHADOW_CASTERS]; // xy=offset, zw=scale
+uniform vec3 shadowLightPositions[MAX_SHADOW_CASTERS];
+uniform float shadowBiases[MAX_SHADOW_CASTERS];
+uniform int shadowTypes[MAX_SHADOW_CASTERS]; // 0=directional, 1=point, 2=spot
 uniform int shadowPass;
 
 vec3 getNormal()
@@ -206,12 +213,12 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0)
     return F0 + (1.0 - F0) * pow(max(1.0 - cosTheta, 0.0), 5.0);
 }}
 
-float computeDirShadow(vec3 worldPos)
+float computeShadowFromAtlas(vec3 worldPos, int casterIndex)
 {{
-    if (dirLightCastsShadows == 0)
+    if (casterIndex < 0 || casterIndex >= shadowCasterCount)
         return 1.0;
 
-    vec4 shadowCoord = lightViewProj * vec4(worldPos, 1.0);
+    vec4 shadowCoord = shadowViewProjs[casterIndex] * vec4(worldPos, 1.0);
     vec3 projCoord = shadowCoord.xyz / shadowCoord.w;
     projCoord = projCoord * 0.5 + 0.5;
 
@@ -219,16 +226,84 @@ float computeDirShadow(vec3 worldPos)
     if (projCoord.x < 0.0 || projCoord.x > 1.0 || projCoord.y < 0.0 || projCoord.y > 1.0)
         return 0.0;
 
-    float bias = max(0.0005 * (1.0 - dot(normalize(fragNormal), normalize(-dirLightDir))), 0.0001);
+    // Apply UV offset/scale for atlas region
+    vec2 atlasUV = projCoord.xy * shadowUVOffsets[casterIndex].zw + shadowUVOffsets[casterIndex].xy;
+
+    float bias = shadowBiases[casterIndex];
     float shadow = 0.0;
-    vec2 texel = 1.0 / vec2(textureSize(shadowMap, 0));
+    vec2 texel = 1.0 / vec2(textureSize(shadowAtlas, 0));
     for (int x = -1; x <= 1; x++) {{
         for (int y = -1; y <= 1; y++) {{
-            float d = texture(shadowMap, projCoord.xy + vec2(float(x), float(y)) * texel).r;
+            float d = texture(shadowAtlas, atlasUV + vec2(float(x), float(y)) * texel).r;
             shadow += (projCoord.z - bias > d) ? 0.0 : 1.0;
         }}
     }}
     return shadow / 9.0;
+}}
+
+// Determine which cubemap face a direction points to (dominant axis method)
+int determineFace(vec3 dir)
+{{
+    vec3 absDir = abs(dir);
+    if (absDir.x > absDir.y && absDir.x > absDir.z) {{
+        return dir.x > 0.0 ? 0 : 1; // +X or -X
+    }} else if (absDir.y > absDir.z) {{
+        return dir.y > 0.0 ? 2 : 3; // +Y or -Y
+    }} else {{
+        return dir.z > 0.0 ? 4 : 5; // +Z or -Z
+    }}
+}}
+
+// Project 3D direction to 2D UV on a cubemap face
+vec2 projectToFace(vec3 dir, int face)
+{{
+    vec2 uv;
+    if (face == 0) {{ uv = dir.yz / dir.x; }}        // +X
+    else if (face == 1) {{ uv = dir.yz / -dir.x; }}  // -X
+    else if (face == 2) {{ uv = dir.xz / dir.y; }}   // +Y
+    else if (face == 3) {{ uv = dir.xz / -dir.y; }}  // -Y
+    else if (face == 4) {{ uv = dir.xy / dir.z; }}   // +Z
+    else {{ uv = dir.xy / -dir.z; }}                  // -Z
+
+    // Remap from [-1,1] to [0,1]
+    return uv * 0.5 + 0.5;
+}}
+
+float computePointShadow(vec3 worldPos, int casterIndex)
+{{
+    if (casterIndex < 0 || casterIndex >= shadowCasterCount)
+        return 1.0;
+
+    vec3 lightPos = shadowLightPositions[casterIndex];
+    vec3 toFrag = worldPos - lightPos;
+
+    // Determine face and project to UV
+    int face = determineFace(toFrag);
+    vec2 faceUV = projectToFace(toFrag, face);
+
+    // Calculate which region in the atlas this face uses
+    // Each point light uses 6 consecutive regions
+    int regionOffset = casterIndex * 6 + face;
+    vec2 atlasUV = faceUV * shadowUVOffsets[regionOffset].zw + shadowUVOffsets[regionOffset].xy;
+
+    float bias = shadowBiases[casterIndex];
+    float dist = length(toFrag);
+    float d = texture(shadowAtlas, atlasUV).r;
+    return (dist - bias > d) ? 0.0 : 1.0;
+}}
+
+float computeDirShadow(vec3 worldPos)
+{{
+    if (dirLightCastsShadows == 0)
+        return 1.0;
+
+    // Find the first directional light caster
+    for (int i = 0; i < shadowCasterCount; i++) {{
+        if (shadowTypes[i] == 0) {{ // Directional
+            return computeShadowFromAtlas(worldPos, i);
+        }}
+    }}
+    return 1.0;
 }}
 
 vec3 calcPBR(vec3 V, vec3 N, vec3 L, vec3 radiance, vec3 albedo, float r, float m)
@@ -324,15 +399,16 @@ void main()
 
   /// <summary>
   /// Loads the built-in forward PBR vertex + fragment shader.
-  /// The fragment shader is generated with the specified light array sizes.
+  /// The fragment shader is generated with the specified light and shadow array sizes.
   /// </summary>
   let loadForwardShader
     (maxPointLights: int)
     (maxSpotLights: int)
+    (maxShadowCasters: int)
     : Shader =
     Raylib.LoadShaderFromMemory(
       forwardVertex,
-      forwardFragmentFmt maxPointLights maxSpotLights
+      forwardFragmentFmt maxPointLights maxSpotLights maxShadowCasters
     )
 
   /// <summary>Loads the depth-only shadow pass vertex + fragment shader (C example compatible).</summary>

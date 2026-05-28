@@ -60,3 +60,47 @@ Each section may contain the following categories:
 - Security
 
 When adding entries to the changelog, make sure to follow format and categories.
+
+## raylib-cs / F# Quirks
+
+### DisableRuntimeMarshalling + void* Bug
+
+The project uses `[<DisableRuntimeMarshalling>]`. This affects how `SetShaderValue` and similar FFI calls work:
+
+- **DO NOT** pass raw `int`, `float32`, `Vector3` etc. directly as `void*` arguments. The runtime treats the value itself as a pointer address (e.g., passing `1` reads from address `0x1`, causing access violations).
+- **ALWAYS** use `fixed + NativePtr.toVoidPtr` for scalar/vec3/vec4 uniforms:
+
+```fsharp
+let setShaderInt (shader: Shader) (loc: int) (value: int) =
+    use p = fixed &value
+    Raylib.SetShaderValue(shader, loc, NativePtr.toVoidPtr p, ShaderUniformDataType.Int)
+```
+
+- **EXCEPTION**: `SetShaderValueMatrix` takes `Matrix4x4` directly (not `void*`) — this works correctly.
+- **EXCEPTION**: `Rlgl.SetUniform` (raw rlgl) also requires `fixed + NativePtr.toVoidPtr`.
+
+### Matrix Conventions
+
+#### System.Numerics vs raylib struct layout
+
+`Matrix4x4` in System.Numerics stores rows contiguously in memory: `m00 m01 m02 m03 m10 m11 m12 m13 ...`
+
+raylib's `rlMatrix` stores columns contiguously: `m0 m4 m8 m12 m1 m5 m9 m13 ...`
+
+`rlMatrixToFloatV` reorders from raylib's struct layout to GLSL column-major order (fields m0→m1→m2→...→m15). This means:
+- `SetShaderValueMatrix` and the batch's `glUniformMatrix4fv` both go through `rlMatrixToFloatV` — **they match**.
+- Do NOT manually blit a `Matrix4x4` to float arrays — use `rlMatrixToFloatV` for correct conversion.
+
+#### Vector4.Transform vs GLSL mat*vec
+
+- `Vector4.Transform(v, M)` computes `v * M^T` (transposed convention)
+- GLSL `M * v` computes `M * v` (standard convention)
+- These give **different results** on the same matrix. Do not mix them.
+- For uniform passing, `SetShaderValueMatrix` handles conversion via `rlMatrixToFloatV` — this is correct regardless.
+
+#### VP Matrix Capture
+
+When capturing the View-Projection matrix for shadow mapping:
+- **MUST** capture inside `BeginMode3D` using `Rlgl.GetMatrixModelview() * Rlgl.GetMatrixProjection()`
+- This matches what the batch computes for `mvp` (for identity model transforms)
+- Precomputing VP outside `BeginMode3D` or using `Matrix4x4.CreateLookAt * CreatePerspectiveFieldOfView` may produce different results due to raylib's internal matrix adjustments

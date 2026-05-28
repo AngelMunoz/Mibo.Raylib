@@ -19,27 +19,63 @@ module private NativeHelpers =
 
   let setShaderInt (shader: Shader) (loc: int) (value: int) =
     use p = fixed &value
-    Raylib.SetShaderValue(shader, loc, NativePtr.toVoidPtr p, ShaderUniformDataType.Int)
+
+    Raylib.SetShaderValue(
+      shader,
+      loc,
+      NativePtr.toVoidPtr p,
+      ShaderUniformDataType.Int
+    )
 
   let setShaderFloat (shader: Shader) (loc: int) (value: float32) =
     use p = fixed &value
-    Raylib.SetShaderValue(shader, loc, NativePtr.toVoidPtr p, ShaderUniformDataType.Float)
+
+    Raylib.SetShaderValue(
+      shader,
+      loc,
+      NativePtr.toVoidPtr p,
+      ShaderUniformDataType.Float
+    )
 
   let setShaderVec3 (shader: Shader) (loc: int) (v: Vector3) =
     use p = fixed &v
-    Raylib.SetShaderValue(shader, loc, NativePtr.toVoidPtr p, ShaderUniformDataType.Vec3)
+
+    Raylib.SetShaderValue(
+      shader,
+      loc,
+      NativePtr.toVoidPtr p,
+      ShaderUniformDataType.Vec3
+    )
 
   let setShaderVec4 (shader: Shader) (loc: int) (v: Vector4) =
     use p = fixed &v
-    Raylib.SetShaderValue(shader, loc, NativePtr.toVoidPtr p, ShaderUniformDataType.Vec4)
+
+    Raylib.SetShaderValue(
+      shader,
+      loc,
+      NativePtr.toVoidPtr p,
+      ShaderUniformDataType.Vec4
+    )
 
   let setShaderVec2 (shader: Shader) (loc: int) (v: Vector2) =
     use p = fixed &v
-    Raylib.SetShaderValue(shader, loc, NativePtr.toVoidPtr p, ShaderUniformDataType.Vec2)
+
+    Raylib.SetShaderValue(
+      shader,
+      loc,
+      NativePtr.toVoidPtr p,
+      ShaderUniformDataType.Vec2
+    )
 
   let rlSetUniformInt (loc: int) (value: int) =
     use p = fixed &value
-    Rlgl.SetUniform(loc, NativePtr.toVoidPtr p, int ShaderUniformDataType.Int, 1)
+
+    Rlgl.SetUniform(
+      loc,
+      NativePtr.toVoidPtr p,
+      int ShaderUniformDataType.Int,
+      1
+    )
 
 // ------------------------------------------------------------------
 // Material Cache Key
@@ -93,35 +129,8 @@ module private MaterialKey =
   }
 
 // ------------------------------------------------------------------
-// EVSM Shadow Configuration
+// Shadow Configuration (uses ShadowAtlas types from ShadowAtlas.fs)
 // ------------------------------------------------------------------
-
-/// <summary>Configuration for Exponential Variance Shadow Maps in the forward pipeline.</summary>
-[<Struct>]
-type EvsmConfig = {
-  /// <summary>Resolution of the shadow map (square). Default 2048.</summary>
-  ShadowMapSize: int
-  /// <summary>Positive exponential warp constant. Higher values tighten shadows. Default 40.0.</summary>
-  PositiveExponent: float32
-  /// <summary>Negative exponential warp constant. Default 5.0.</summary>
-  NegativeExponent: float32
-  /// <summary>Minimum shadow value to reduce light bleeding. Default 0.2.</summary>
-  LightBleedReduction: float32
-  /// <summary>Show shadow map debug overlay in bottom-right corner.</summary>
-  ShowDebugOverlay: bool
-  /// <summary>Maximum distance from camera for shadow rendering. Default 100.0.</summary>
-  ShadowDistance: float32
-}
-
-module EvsmConfig =
-  let defaults: EvsmConfig = {
-    ShadowMapSize = 2048
-    PositiveExponent = 5.0f
-    NegativeExponent = 2.5f
-    LightBleedReduction = 0.1f
-    ShowDebugOverlay = true
-    ShadowDistance = 100.0f
-  }
 
 // ------------------------------------------------------------------
 // Internal Context
@@ -146,7 +155,9 @@ type private PipelineContext
   let spotLights = ResizeArray<SpotLight3D>(maxSpotLights)
   let mutable lightsDirty = true
 
-  let mutable activeShadowMap: RenderTexture2D = Unchecked.defaultof<RenderTexture2D>
+  let mutable activeShadowMap: RenderTexture2D =
+    Unchecked.defaultof<RenderTexture2D>
+
   let mutable activeLightViewProj = Matrix4x4.Identity
 
   let mutable locsCached = false
@@ -710,11 +721,11 @@ type private PipelineContext
   member internal _.Reset
     (
       gameContext: GameContext,
-      shadowMap: RenderTexture2D,
+      shadowFbo: RenderTexture2D,
       lightViewProj: Matrix4x4
     ) =
     gameCtx <- gameContext
-    activeShadowMap <- shadowMap
+    activeShadowMap <- shadowFbo
     activeLightViewProj <- lightViewProj
     ambient.Clear()
     dirLights.Clear()
@@ -747,17 +758,39 @@ module private EvsmPass =
     for i = 0 to buffer.Count - 1 do
       match buffer[i] with
       | :? Command3D.DrawMeshCommand as cmd ->
-        draws.Add({ Mesh = cmd.Mesh; Transform = cmd.Transform })
+        draws.Add(
+          {
+            Mesh = cmd.Mesh
+            Transform = cmd.Transform
+          }
+        )
       | :? Command3D.DrawSkinnedMeshCommand as cmd ->
-        draws.Add({ Mesh = cmd.Mesh; Transform = cmd.Transform })
+        draws.Add(
+          {
+            Mesh = cmd.Mesh
+            Transform = cmd.Transform
+          }
+        )
       | :? Command3D.DrawModelCommand as cmd ->
         let m = cmd.Model
+
         for mi = 0 to m.MeshCount - 1 do
           let mesh = NativePtr.get m.Meshes mi
-          draws.Add({ Mesh = mesh; Transform = cmd.Transform })
+
+          draws.Add(
+            {
+              Mesh = mesh
+              Transform = cmd.Transform
+            }
+          )
       | :? Command3D.DrawMeshInstancedCommand as cmd ->
         for ti = 0 to cmd.InstanceCount - 1 do
-          draws.Add({ Mesh = cmd.Mesh; Transform = cmd.Transforms[ti] })
+          draws.Add(
+            {
+              Mesh = cmd.Mesh
+              Transform = cmd.Transforms[ti]
+            }
+          )
       | _ -> ()
 
     draws.ToArray()
@@ -777,7 +810,14 @@ module private EvsmPass =
     : Matrix4x4 =
 
     let corners =
-      EvsmMath.frustumCornersWorld cameraPos cameraTarget cameraUp fovY aspect 0.1f shadowDistance
+      EvsmMath.frustumCornersWorld
+        cameraPos
+        cameraTarget
+        cameraUp
+        fovY
+        aspect
+        0.1f
+        shadowDistance
 
     let center =
       corners
@@ -785,7 +825,13 @@ module private EvsmPass =
       |> fun sum -> sum / float32 corners.Length
 
     let lightPos = center - lightDir * 100.0f
-    let safeUp = if abs lightDir.Y > 0.99f then Vector3.UnitZ else Vector3.UnitY
+
+    let safeUp =
+      if abs lightDir.Y > 0.99f then
+        Vector3.UnitZ
+      else
+        Vector3.UnitY
+
     let lightView = Raymath.MatrixLookAt(lightPos, center, safeUp)
 
     let mutable minX, minY, minZ =
@@ -796,9 +842,12 @@ module private EvsmPass =
 
     for corner in corners do
       let p = Raymath.Vector3Transform(corner, lightView)
-      minX <- min minX p.X; maxX <- max maxX p.X
-      minY <- min minY p.Y; maxY <- max maxY p.Y
-      minZ <- min minZ p.Z; maxZ <- max maxZ p.Z
+      minX <- min minX p.X
+      maxX <- max maxX p.X
+      minY <- min minY p.Y
+      maxY <- max maxY p.Y
+      minZ <- min minZ p.Z
+      maxZ <- max maxZ p.Z
 
     let halfExtent = max (max (abs minX) (abs maxX)) (max (abs minY) (abs maxY))
 
@@ -823,7 +872,11 @@ module private EvsmPass =
     // Capture VP inside BeginMode3D, same as C example:
     // Matrix vp = MatrixMultiply(rlGetMatrixModelview(), rlGetMatrixProjection());
     // This is the EXACT matrix the batch uses for mvp — must match forward pass.
-    let vp = Raymath.MatrixMultiply(Rlgl.GetMatrixModelview(), Rlgl.GetMatrixProjection())
+    let vp =
+      Raymath.MatrixMultiply(
+        Rlgl.GetMatrixModelview(),
+        Rlgl.GetMatrixProjection()
+      )
 
     for draw in draws do
       Raylib.DrawMesh(draw.Mesh, depthShadowMaterial, draw.Transform)
@@ -863,13 +916,15 @@ type ForwardPbrPipeline
     ?postProcess: PostProcessConfig3D,
     ?maxPointLights: int,
     ?maxSpotLights: int,
-    ?evsmConfig: EvsmConfig
+    ?shadowAtlasConfig: ShadowAtlasConfig,
+    ?shadowBiasConfig: ShadowBiasConfig
   ) =
 
   let ppConfig = defaultArg postProcess PostProcessConfig3D.none
   let maxPt = defaultArg maxPointLights 8
   let maxSp = defaultArg maxSpotLights 4
-  let evsmCfg = defaultArg evsmConfig EvsmConfig.defaults
+  let atlasCfg = defaultArg shadowAtlasConfig ShadowAtlasConfig.defaults
+  let biasCfg = defaultArg shadowBiasConfig ShadowBiasConfig.defaults
 
   let mutable forwardShader: Shader = Unchecked.defaultof<Shader>
   let mutable depthShadowShader: Shader = Unchecked.defaultof<Shader>
@@ -877,7 +932,7 @@ type ForwardPbrPipeline
   let materialCache = Dictionary<MaterialKey, Material>()
   let mutable depthShadowMaterial: Material = Unchecked.defaultof<Material>
 
-  let mutable shadowMap: RenderTexture2D = Unchecked.defaultof<RenderTexture2D>
+  let mutable shadowAtlas: ShadowAtlas = Unchecked.defaultof<ShadowAtlas>
 
   let mutable context: PipelineContext = Unchecked.defaultof<PipelineContext>
 
@@ -943,8 +998,7 @@ type ForwardPbrPipeline
 
   interface IRenderPipeline3D with
     member _.Initialize() =
-      forwardShader <-
-        Shaders.loadForwardShader maxPt maxSp
+      forwardShader <- Shaders.loadForwardShader maxPt maxSp atlasCfg.MaxCasters
 
       depthShadowShader <- Shaders.loadDepthShadowShader()
       postProcessShader <- Shaders.loadPostProcessShader()
@@ -952,7 +1006,8 @@ type ForwardPbrPipeline
       depthShadowMaterial <- Raylib.LoadMaterialDefault()
       depthShadowMaterial.Shader <- depthShadowShader
 
-      shadowMap <- EvsmMath.createShadowFbo evsmCfg.ShadowMapSize evsmCfg.ShadowMapSize
+      shadowAtlas <- ShadowAtlas(atlasCfg, biasCfg)
+      shadowAtlas.Initialize()
 
       context <- PipelineContext(forwardShader, materialCache, maxPt, maxSp)
 
@@ -968,8 +1023,8 @@ type ForwardPbrPipeline
 
       materialCache.Clear()
 
-      if shadowMap.Id <> 0u then
-        EvsmMath.destroyShadowFbo shadowMap
+      if shadowAtlas <> Unchecked.defaultof<ShadowAtlas> then
+        shadowAtlas.Shutdown()
 
     member _.Execute gameCtx buffer rtPool =
       // ------------------------------------------------------------------
@@ -979,6 +1034,8 @@ type ForwardPbrPipeline
       let mutable cameraFound = false
 
       let dirLights = ResizeArray<DirectionalLight3D>()
+      let pointLights = ResizeArray<PointLight3D>()
+      let spotLights = ResizeArray<SpotLight3D>()
 
       for i = 0 to buffer.Count - 1 do
         match buffer[i] with
@@ -987,59 +1044,199 @@ type ForwardPbrPipeline
           cameraFound <- true
         | :? Command3D.AddDirectionalLightCommand as cmd ->
           dirLights.Add(cmd.Light)
+        | :? Command3D.AddPointLightCommand as cmd -> pointLights.Add(cmd.Light)
+        | :? Command3D.AddSpotLightCommand as cmd -> spotLights.Add(cmd.Light)
         | _ -> ()
 
       let meshDraws = EvsmPass.collectMeshDraws buffer
 
       // ------------------------------------------------------------------
-      // Shadow pass
+      // Shadow pass - render all shadow casters to atlas
       // ------------------------------------------------------------------
-      let mutable shadowLightViewProj = Matrix4x4.Identity
+      let mutable hasShadowCasters = false
 
-      if
-        cameraFound
-        && dirLights.Count > 0
-        && dirLights[0].CastsShadows
-        && meshDraws.Length > 0
-      then
-        let dir = dirLights[0]
-        let fovY = activeCamera.FovY * MathF.PI / 180.0f
-        let aspect = float32 gameCtx.WindowWidth / float32 gameCtx.WindowHeight
+      // Clear previous frame's casters
+      shadowAtlas.Clear()
 
-        shadowLightViewProj <-
-          EvsmPass.renderShadowPass
-            depthShadowShader
-            depthShadowMaterial
-            shadowMap
-            dir.Direction
-            activeCamera.Position
-            activeCamera.Target
-            activeCamera.Up
-            fovY
-            aspect
-            evsmCfg.ShadowDistance
-            meshDraws
+      if cameraFound && meshDraws.Length > 0 then
+        // Register shadow casters
+        for dir in dirLights do
+          if dir.CastsShadows then
+            hasShadowCasters <- true
+
+            // Register caster with atlas
+            shadowAtlas.AddCaster(
+              ShadowCasterType.Directional,
+              Vector3.Zero,
+              dir.Direction,
+              Vector3.Zero,
+              true,
+              ValueNone
+            )
+            |> ignore
+
+        // TODO: Register point light casters
+        // TODO: Register spot light casters
+
+        // Render shadow passes
+        if shadowAtlas.Count > 0 then
+          // Set shadowPass = 1 for the shadow pass shader
+          setShaderInt
+            forwardShader
+            (Raylib.GetShaderLocation(forwardShader, "shadowPass"))
+            1
+
+          // Render each caster to its atlas region
+          for caster in shadowAtlas.Casters do
+            if caster.Enabled then
+              // Set viewport to caster's region
+              shadowAtlas.GetRegionViewport(caster.AtlasRegion)
+
+              // Create light camera for this caster
+              let lightCamera =
+                match caster.Type with
+                | ShadowCasterType.Directional ->
+                  // Light shines in caster.LightDirection, light comes FROM opposite direction
+                  // Place camera in the direction light comes FROM, looking at the player
+                  // NOTE: activeCamera.Target = player position (camera looks AT the player)
+                  //       activeCamera.Position = camera position (orbits around player)
+                  //       Shadow must follow the PLAYER, not the camera
+                  let lightFromDir = Vector3.Normalize(-caster.LightDirection)
+                  let shadowOrigin = activeCamera.Target
+                  let lightPos = shadowOrigin + lightFromDir * 100.0f
+
+                  let safeUp =
+                    if abs caster.LightDirection.Y > 0.99f then
+                      Vector3.UnitZ
+                    else
+                      Vector3.UnitY
+
+                  Camera3D(
+                    Position = lightPos,
+                    Target = shadowOrigin,
+                    Up = safeUp,
+                    FovY = 50.0f,
+                    Projection = CameraProjection.Orthographic
+                  )
+                | _ ->
+                  Camera3D(
+                    Position = caster.LightPosition,
+                    Target = caster.LightPosition + caster.LightDirection,
+                    Up = Vector3.UnitY,
+                    FovY = 90.0f,
+                    Projection = CameraProjection.Perspective
+                  )
+
+              // Render shadow pass - matches F#C sample exactly:
+              // BeginTextureMode → ClearBackground(WHITE) → BeginMode3D
+              // → capture VP via rlGetMatrixModelview/projection
+              // → SetShaderValueMatrix → DrawScene → EndMode3D → EndTextureMode
+              Raylib.BeginTextureMode(shadowAtlas.Fbo)
+              Raylib.ClearBackground(Color.White)
+
+              Raylib.BeginMode3D(lightCamera)
+
+              // Capture VP inside BeginMode3D, same as C example
+              let vp =
+                Raymath.MatrixMultiply(
+                  Rlgl.GetMatrixModelview(),
+                  Rlgl.GetMatrixProjection()
+                )
+
+              shadowAtlas.SetCasterViewProj(caster.Id, vp)
+
+              // Draw scene from light's perspective
+              for draw in meshDraws do
+                Raylib.DrawMesh(draw.Mesh, depthShadowMaterial, draw.Transform)
+
+              Raylib.EndMode3D()
+              Raylib.EndTextureMode()
+
+          // Reset viewport
+          Rlgl.Viewport(0, 0, gameCtx.WindowWidth, gameCtx.WindowHeight)
+
+          // Set shadowPass = 0 for the main pass
+          setShaderInt
+            forwardShader
+            (Raylib.GetShaderLocation(forwardShader, "shadowPass"))
+            0
 
       // ------------------------------------------------------------------
       // Forward pass — context is reset each frame, populated by commands
       // ------------------------------------------------------------------
-      context.Reset(
-        gameCtx,
-        shadowMap,
-        shadowLightViewProj
-      )
+      context.Reset(gameCtx, shadowAtlas.Fbo, Matrix4x4.Identity)
 
       let ctx = context :> IRenderContext3D
 
-      // Upload shadow uniforms if shadows were rendered
-      // Matches C example: rlEnableShader(shader.id); BindShadowMap(sun);
-      if shadowLightViewProj <> Matrix4x4.Identity && cameraFound then
+      // Upload shadow atlas uniforms
+      if hasShadowCasters && cameraFound then
+        shadowAtlas.PrepareUniforms()
 
-        Raylib.SetShaderValueMatrix(
-          forwardShader,
-          Raylib.GetShaderLocation(forwardShader, "lightViewProj"),
-          shadowLightViewProj
-        )
+        // Upload atlas texture
+        if shadowAtlas.Fbo.Depth.Id <> 0u then
+          Rlgl.EnableShader(forwardShader.Id)
+          Rlgl.ActiveTextureSlot(15)
+          Rlgl.EnableTexture(shadowAtlas.Fbo.Depth.Id)
+
+          rlSetUniformInt
+            (Raylib.GetShaderLocation(forwardShader, "shadowAtlas"))
+            15
+
+          Rlgl.ActiveTextureSlot(0)
+
+        // Upload per-caster uniforms
+        let locViewProjs =
+          Raylib.GetShaderLocation(forwardShader, "shadowViewProjs")
+
+        let locUVOffsets =
+          Raylib.GetShaderLocation(forwardShader, "shadowUVOffsets")
+
+        let locLightPositions =
+          Raylib.GetShaderLocation(forwardShader, "shadowLightPositions")
+
+        let locBiases = Raylib.GetShaderLocation(forwardShader, "shadowBiases")
+
+        let locCasterTypes =
+          Raylib.GetShaderLocation(forwardShader, "shadowTypes")
+
+        let locCasterCount =
+          Raylib.GetShaderLocation(forwardShader, "shadowCasterCount")
+
+        // Upload arrays
+        for i = 0 to min shadowAtlas.ActiveCasterCount atlasCfg.MaxCasters - 1 do
+          let vpLocation =
+            Raylib.GetShaderLocation(forwardShader, $"shadowViewProjs[{i}]")
+
+          Raylib.SetShaderValueMatrix(
+            forwardShader,
+            vpLocation,
+            shadowAtlas.ViewProjs[i]
+          )
+
+          let uvLocation =
+            Raylib.GetShaderLocation(forwardShader, $"shadowUVOffsets[{i}]")
+
+          setShaderVec4 forwardShader uvLocation shadowAtlas.UVOffsets[i]
+
+          let posLocation =
+            Raylib.GetShaderLocation(
+              forwardShader,
+              $"shadowLightPositions[{i}]"
+            )
+
+          setShaderVec3 forwardShader posLocation shadowAtlas.LightPositions[i]
+
+          let biasLocation =
+            Raylib.GetShaderLocation(forwardShader, $"shadowBiases[{i}]")
+
+          setShaderFloat forwardShader biasLocation shadowAtlas.Biases[i]
+
+          let typeLocation =
+            Raylib.GetShaderLocation(forwardShader, $"shadowTypes[{i}]")
+
+          setShaderInt forwardShader typeLocation shadowAtlas.CasterTypes[i]
+
+        setShaderInt forwardShader locCasterCount shadowAtlas.ActiveCasterCount
 
         setShaderVec3
           forwardShader
@@ -1050,17 +1247,6 @@ type ForwardPbrPipeline
           forwardShader
           (Raylib.GetShaderLocation(forwardShader, "shadowPass"))
           0
-
-        // Bind shadow map — matches C example's BindShadowMap exactly:
-        // rlActiveTextureSlot(sc.slot);
-        // rlEnableTexture(sc.target.depth.id);
-        // rlSetUniform(sc.mapLoc, &sc.slot, SHADER_UNIFORM_INT, 1);
-        if shadowMap.Depth.Id <> 0u then
-          Rlgl.EnableShader(forwardShader.Id)
-          Rlgl.ActiveTextureSlot(15)
-          Rlgl.EnableTexture(shadowMap.Depth.Id)
-          rlSetUniformInt (Raylib.GetShaderLocation(forwardShader, "shadowMap")) 15
-          Rlgl.ActiveTextureSlot(0)
 
       // Render
       match ppConfig.Passes with
@@ -1082,14 +1268,5 @@ type ForwardPbrPipeline
         Raylib.EndTextureMode()
         applyPostProcess gameCtx sceneRT rtPool
 
-      // DEBUG: Render shadow map as overlay in bottom-right corner
-      if evsmCfg.ShowDebugOverlay then
-        let sm = shadowMap
-        let w = float32 gameCtx.WindowWidth
-        let h = float32 gameCtx.WindowHeight
-        let previewW = 256.0f
-        let previewH = 256.0f
-        let srcRect = Raylib_cs.Rectangle(0.0f, 0.0f, float32 evsmCfg.ShadowMapSize, float32 -evsmCfg.ShadowMapSize)
-        let dstRect = Raylib_cs.Rectangle(w - previewW - 10.0f, h - previewH - 10.0f, previewW, previewH)
-        Raylib.DrawTexturePro(sm.Depth, srcRect, dstRect, Vector2.Zero, 0.0f, Color.White)
-        Raylib.DrawRectangleLines(int (w - previewW - 10.0f), int (h - previewH - 10.0f), int previewW, int previewH, Color.Red)
+      // DEBUG: Render shadow atlas as overlay in bottom-right corner
+      shadowAtlas.RenderDebugOverlay(gameCtx.WindowWidth, gameCtx.WindowHeight)
