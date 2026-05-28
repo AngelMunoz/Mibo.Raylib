@@ -878,6 +878,11 @@ type ForwardPbrPipeline
             // Set shadowPass = 1 for the shadow pass shader
             setShaderInt forwardShader context.LocShadowPass 1
 
+            // Bind atlas FBO once for all casters. Viewport clips rasterization
+            // to each caster's region, so they never interfere.
+            Raylib.BeginTextureMode(shadowAtlas.Fbo)
+            Raylib.ClearBackground(Color.White)
+
             // Render each caster to its atlas region
             for caster in shadowAtlas.Casters do
               if caster.Enabled then
@@ -925,13 +930,9 @@ type ForwardPbrPipeline
                       Projection = CameraProjection.Perspective
                     )
 
-                // Render shadow pass
-                // Order matters: BeginTextureMode binds FBO and resets viewport,
-                // then we restrict viewport to atlas region, then BeginMode3D
-                // uses that restricted viewport for the orthographic projection.
-                Raylib.BeginTextureMode(shadowAtlas.Fbo)
+                // Set viewport to this caster's atlas region, then BeginMode3D
+                // uses it for orthographic projection.
                 shadowAtlas.GetRegionViewport(caster.AtlasRegion)
-                Raylib.ClearBackground(Color.White)
 
                 Raylib.BeginMode3D(lightCamera)
 
@@ -955,10 +956,10 @@ type ForwardPbrPipeline
                   )
 
                 Raylib.EndMode3D()
-                Raylib.EndTextureMode()
 
-            // Reset viewport
+            // Reset viewport to window size
             Rlgl.Viewport(0, 0, gameCtx.WindowWidth, gameCtx.WindowHeight)
+            Raylib.EndTextureMode()
 
             // Set shadowPass = 0 for the main pass
             setShaderInt forwardShader context.LocShadowPass 0
