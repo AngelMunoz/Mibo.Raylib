@@ -100,10 +100,15 @@ module ShadowBiasConfig =
 [<Sealed>]
 type ShadowAtlas(config: ShadowAtlasConfig, biasConfig: ShadowBiasConfig) =
 
-  let gridSize = 
+  let gridSize =
     let sqrt = Math.Sqrt(float config.MaxCasters) |> int
+
     if sqrt * sqrt <> config.MaxCasters then
-      failwithf "MaxCasters must be perfect square. Got %d, nearest is %d." config.MaxCasters (sqrt * sqrt)
+      failwithf
+        "MaxCasters must be perfect square. Got %d, nearest is %d."
+        config.MaxCasters
+        (sqrt * sqrt)
+
     sqrt
 
   let regionsPerRow = gridSize
@@ -158,15 +163,40 @@ type ShadowAtlas(config: ShadowAtlasConfig, biasConfig: ShadowBiasConfig) =
 
     let fboId = Rlgl.LoadFramebuffer()
     Rlgl.EnableFramebuffer(fboId)
-    let depthId = Rlgl.LoadTextureDepth(config.Resolution, config.Resolution, false)
-    Rlgl.FramebufferAttach(fboId, depthId, FramebufferAttachType.Depth, FramebufferAttachTextureType.Texture2D, 0)
+
+    let depthId =
+      Rlgl.LoadTextureDepth(config.Resolution, config.Resolution, false)
+
+    Rlgl.FramebufferAttach(
+      fboId,
+      depthId,
+      FramebufferAttachType.Depth,
+      FramebufferAttachTextureType.Texture2D,
+      0
+    )
+
     Rlgl.DisableFramebuffer()
 
-    fbo <- RenderTexture2D(
-      Id = fboId,
-      Texture = Texture2D(Id = 0u, Width = config.Resolution, Height = config.Resolution, Mipmaps = 1, Format = PixelFormat.UncompressedR8G8B8A8),
-      Depth = Texture2D(Id = depthId, Width = config.Resolution, Height = config.Resolution, Mipmaps = 1, Format = enum<PixelFormat> 19)
-    )
+    fbo <-
+      RenderTexture2D(
+        Id = fboId,
+        Texture =
+          Texture2D(
+            Id = 0u,
+            Width = config.Resolution,
+            Height = config.Resolution,
+            Mipmaps = 1,
+            Format = PixelFormat.UncompressedR8G8B8A8
+          ),
+        Depth =
+          Texture2D(
+            Id = depthId,
+            Width = config.Resolution,
+            Height = config.Resolution,
+            Mipmaps = 1,
+            Format = enum<PixelFormat> 19
+          )
+      )
 
   /// <summary>
   /// Destroys the atlas FBO and releases resources.
@@ -177,6 +207,7 @@ type ShadowAtlas(config: ShadowAtlasConfig, biasConfig: ShadowBiasConfig) =
       Rlgl.UnloadTexture(fbo.Depth.Id)
       Rlgl.UnloadFramebuffer(fbo.Id)
       fbo <- Unchecked.defaultof<RenderTexture2D>
+
     casters.Clear()
     viewProjs.Clear()
     slotAllocator <- 0
@@ -190,7 +221,12 @@ type ShadowAtlas(config: ShadowAtlasConfig, biasConfig: ShadowBiasConfig) =
   /// <summary>Allocate a slot in the atlas. Returns region index.</summary>
   member private _.AllocateSlot(regionCount: int) =
     if slotAllocator + regionCount > config.MaxCasters then
-      failwithf "ShadowAtlas: No room for %d regions (allocated %d/%d)" regionCount slotAllocator config.MaxCasters
+      failwithf
+        "ShadowAtlas: No room for %d regions (allocated %d/%d)"
+        regionCount
+        slotAllocator
+        config.MaxCasters
+
     let slot = slotAllocator
     slotAllocator <- slotAllocator + regionCount
     slot
@@ -200,6 +236,7 @@ type ShadowAtlas(config: ShadowAtlasConfig, biasConfig: ShadowBiasConfig) =
     // Simple linear allocator - just decrement count
     // In practice, we'd need a more sophisticated allocator for defragmentation
     slotAllocator <- slotAllocator - regionCount
+
     if slotAllocator < 0 then
       slotAllocator <- 0
 
@@ -207,17 +244,18 @@ type ShadowAtlas(config: ShadowAtlasConfig, biasConfig: ShadowBiasConfig) =
   /// Register a new shadow caster and allocate atlas regions.
   /// Returns the caster ID.
   /// </summary>
-  member this.AddCaster(
-    casterType: ShadowCasterType,
-    lightPosition: Vector3,
-    lightDirection: Vector3,
-    lightTarget: Vector3,
-    enabled: bool,
-    biasOverride: float32 voption
-  ) : ShadowCasterId =
-    let regionCount = 
+  member this.AddCaster
+    (
+      casterType: ShadowCasterType,
+      lightPosition: Vector3,
+      lightDirection: Vector3,
+      lightTarget: Vector3,
+      enabled: bool,
+      biasOverride: float32 voption
+    ) : ShadowCasterId =
+    let regionCount =
       match casterType with
-      | ShadowCasterType.Point -> 6  // Cubemap faces
+      | ShadowCasterType.Point -> 6 // Cubemap faces
       | _ -> 1
 
     let id = nextId
@@ -250,23 +288,24 @@ type ShadowAtlas(config: ShadowAtlasConfig, biasConfig: ShadowBiasConfig) =
     | false, _ -> ()
 
   /// <summary>Update a shadow caster's properties.</summary>
-  member this.UpdateCaster(
-    id: ShadowCasterId,
-    ?lightPosition: Vector3,
-    ?lightDirection: Vector3,
-    ?lightTarget: Vector3,
-    ?enabled: bool,
-    ?biasOverride: float32 voption
-  ) =
+  member this.UpdateCaster
+    (
+      id: ShadowCasterId,
+      ?lightPosition: Vector3,
+      ?lightDirection: Vector3,
+      ?lightTarget: Vector3,
+      ?enabled: bool,
+      ?biasOverride: float32 voption
+    ) =
     match casters.TryGetValue(id) with
     | true, caster ->
       casters[id] <- {
         caster with
-          LightPosition = defaultArg lightPosition caster.LightPosition
-          LightDirection = defaultArg lightDirection caster.LightDirection
-          LightTarget = defaultArg lightTarget caster.LightTarget
-          Enabled = defaultArg enabled caster.Enabled
-          BiasOverride = defaultArg biasOverride caster.BiasOverride
+            LightPosition = defaultArg lightPosition caster.LightPosition
+            LightDirection = defaultArg lightDirection caster.LightDirection
+            LightTarget = defaultArg lightTarget caster.LightTarget
+            Enabled = defaultArg enabled caster.Enabled
+            BiasOverride = defaultArg biasOverride caster.BiasOverride
       }
     | false, _ -> ()
 
@@ -274,7 +313,10 @@ type ShadowAtlas(config: ShadowAtlasConfig, biasConfig: ShadowBiasConfig) =
   member _.GetUVOffsetScale(regionIndex: int) =
     let row = regionIndex / regionsPerRow
     let col = regionIndex % regionsPerRow
-    let offset = Vector2(float32 col / float32 gridSize, float32 row / float32 gridSize)
+
+    let offset =
+      Vector2(float32 col / float32 gridSize, float32 row / float32 gridSize)
+
     let scale = Vector2(1.0f / float32 gridSize, 1.0f / float32 gridSize)
     Vector4(offset.X, offset.Y, scale.X, scale.Y)
 
@@ -286,23 +328,13 @@ type ShadowAtlas(config: ShadowAtlasConfig, biasConfig: ShadowBiasConfig) =
   member _.GetRegionViewport(regionIndex: int) =
     let row = regionIndex / regionsPerRow
     let col = regionIndex % regionsPerRow
-    Rlgl.Viewport(
-      col * regionSize,
-      row * regionSize,
-      regionSize,
-      regionSize
-    )
+    Rlgl.Viewport(col * regionSize, row * regionSize, regionSize, regionSize)
 
   /// <summary>Get scissor rectangle for a region index.</summary>
   member _.GetRegionScissor(regionIndex: int) =
     let row = regionIndex / regionsPerRow
     let col = regionIndex % regionsPerRow
-    Rlgl.Scissor(
-      col * regionSize,
-      row * regionSize,
-      regionSize,
-      regionSize
-    )
+    Rlgl.Scissor(col * regionSize, row * regionSize, regionSize, regionSize)
 
   /// <summary>Clear a specific region in the atlas.</summary>
   member this.ClearRegion(regionIndex: int) =
@@ -316,8 +348,10 @@ type ShadowAtlas(config: ShadowAtlasConfig, biasConfig: ShadowBiasConfig) =
   /// </summary>
   member _.PrepareUniforms() =
     let mutable index = 0
+
     for kvp in casters do
       let caster = kvp.Value
+
       if caster.Enabled && index < config.MaxCasters then
         // Fill regions (for point lights, fill all 6 faces)
         for r = 0 to caster.RegionCount - 1 do
@@ -331,8 +365,16 @@ type ShadowAtlas(config: ShadowAtlasConfig, biasConfig: ShadowBiasConfig) =
             let regionIndex = caster.AtlasRegion + r
             let row = regionIndex / regionsPerRow
             let col = regionIndex % regionsPerRow
-            let offset = Vector2(float32 col / float32 gridSize, float32 row / float32 gridSize)
-            let scale = Vector2(1.0f / float32 gridSize, 1.0f / float32 gridSize)
+
+            let offset =
+              Vector2(
+                float32 col / float32 gridSize,
+                float32 row / float32 gridSize
+              )
+
+            let scale =
+              Vector2(1.0f / float32 gridSize, 1.0f / float32 gridSize)
+
             uvOffsets[index] <- Vector4(offset.X, offset.Y, scale.X, scale.Y)
 
             lightPositions[index] <- caster.LightPosition
@@ -368,7 +410,9 @@ type ShadowAtlas(config: ShadowAtlasConfig, biasConfig: ShadowBiasConfig) =
 
   /// <summary>Get the number of active casters.</summary>
   member _.ActiveCasterCount =
-    casters.Values |> Seq.filter (fun c -> c.Enabled) |> Seq.sumBy (fun c -> c.RegionCount)
+    casters.Values
+    |> Seq.filter(fun c -> c.Enabled)
+    |> Seq.sumBy(fun c -> c.RegionCount)
 
   /// <summary>
   /// Render the debug overlay showing atlas regions.
@@ -380,34 +424,84 @@ type ShadowAtlas(config: ShadowAtlasConfig, biasConfig: ShadowBiasConfig) =
       let previewY = float32 screenHeight - previewSize - 10.0f
 
       // Draw atlas preview
-      let srcRect = Raylib_cs.Rectangle(0.0f, 0.0f, float32 config.Resolution, float32 -config.Resolution)
-      let dstRect = Raylib_cs.Rectangle(previewX, previewY, previewSize, previewSize)
-      Raylib.DrawTexturePro(fbo.Depth, srcRect, dstRect, Vector2.Zero, 0.0f, Color.White)
+      let srcRect =
+        Raylib_cs.Rectangle(
+          0.0f,
+          0.0f,
+          float32 config.Resolution,
+          float32 -config.Resolution
+        )
+
+      let dstRect =
+        Raylib_cs.Rectangle(previewX, previewY, previewSize, previewSize)
+
+      Raylib.DrawTexturePro(
+        fbo.Depth,
+        srcRect,
+        dstRect,
+        Vector2.Zero,
+        0.0f,
+        Color.White
+      )
 
       // Draw grid lines
       let gridLines = gridSize
+
       for i = 0 to gridLines do
         let x = previewX + (previewSize * float32 i / float32 gridLines)
         let y = previewY + (previewSize * float32 i / float32 gridLines)
-        Raylib.DrawLine(int x, int previewY, int x, int (previewY + previewSize), Color.Red)
-        Raylib.DrawLine(int previewX, int y, int (previewX + previewSize), int y, Color.Red)
+
+        Raylib.DrawLine(
+          int x,
+          int previewY,
+          int x,
+          int(previewY + previewSize),
+          Color.Red
+        )
+
+        Raylib.DrawLine(
+          int previewX,
+          int y,
+          int(previewX + previewSize),
+          int y,
+          Color.Red
+        )
 
       // Highlight used regions
       for kvp in casters do
         let caster = kvp.Value
+
         if caster.Enabled then
           for r = 0 to caster.RegionCount - 1 do
             let regionIndex = caster.AtlasRegion + r
             let row = regionIndex / regionsPerRow
             let col = regionIndex % regionsPerRow
-            let regionX = previewX + (previewSize * float32 col / float32 gridSize)
-            let regionY = previewY + (previewSize * float32 row / float32 gridSize)
+
+            let regionX =
+              previewX + (previewSize * float32 col / float32 gridSize)
+
+            let regionY =
+              previewY + (previewSize * float32 row / float32 gridSize)
+
             let regionW = previewSize / float32 gridSize
             let regionH = previewSize / float32 gridSize
-            Raylib.DrawRectangleLines(int regionX, int regionY, int regionW, int regionH, Color.Yellow)
+
+            Raylib.DrawRectangleLines(
+              int regionX,
+              int regionY,
+              int regionW,
+              int regionH,
+              Color.Yellow
+            )
 
       // Draw border
-      Raylib.DrawRectangleLines(int previewX - 1, int previewY - 1, int previewSize + 2, int previewSize + 2, Color.White)
+      Raylib.DrawRectangleLines(
+        int previewX - 1,
+        int previewY - 1,
+        int previewSize + 2,
+        int previewSize + 2,
+        Color.White
+      )
 
 // ------------------------------------------------------------------
 // Helper Functions for Shadow Rendering
@@ -420,17 +514,19 @@ module ShadowAtlas =
   /// Uses dominant axis method for performance.
   /// Returns 0-5: +X, -X, +Y, -Y, +Z, -Z
   /// </summary>
-  let determineFace (dir: Vector3) =
+  let determineFace(dir: Vector3) =
     let absX = abs dir.X
     let absY = abs dir.Y
     let absZ = abs dir.Z
 
     if absX > absY && absX > absZ then
-      if dir.X > 0.0f then 0 else 1  // +X or -X
+      if dir.X > 0.0f then 0 else 1 // +X or -X
     elif absY > absZ then
-      if dir.Y > 0.0f then 2 else 3  // +Y or -Y
+      if dir.Y > 0.0f then 2 else 3 // +Y or -Y
+    else if dir.Z > 0.0f then
+      4
     else
-      if dir.Z > 0.0f then 4 else 5  // +Z or -Z
+      5 // +Z or -Z
 
   /// <summary>
   /// Project a 3D direction onto a cubemap face and return 2D UV coordinates.
@@ -441,12 +537,24 @@ module ShadowAtlas =
     let mutable v = 0.0f
 
     match face with
-    | 0 -> u <- dir.Y / dir.X; v <- dir.Z / dir.X   // +X
-    | 1 -> u <- -dir.Y / dir.X; v <- dir.Z / dir.X  // -X
-    | 2 -> u <- dir.X / dir.Y; v <- -dir.Z / dir.Y  // +Y
-    | 3 -> u <- dir.X / dir.Y; v <- dir.Z / dir.Y   // -Y
-    | 4 -> u <- dir.X / dir.Z; v <- dir.Y / dir.Z   // +Z
-    | 5 -> u <- -dir.X / dir.Z; v <- dir.Y / dir.Z  // -Z
+    | 0 ->
+      u <- dir.Y / dir.X
+      v <- dir.Z / dir.X // +X
+    | 1 ->
+      u <- -dir.Y / dir.X
+      v <- dir.Z / dir.X // -X
+    | 2 ->
+      u <- dir.X / dir.Y
+      v <- -dir.Z / dir.Y // +Y
+    | 3 ->
+      u <- dir.X / dir.Y
+      v <- dir.Z / dir.Y // -Y
+    | 4 ->
+      u <- dir.X / dir.Z
+      v <- dir.Y / dir.Z // +Z
+    | 5 ->
+      u <- -dir.X / dir.Z
+      v <- dir.Y / dir.Z // -Z
     | _ -> ()
 
     // Remap from [-1,1] to [0,1]
@@ -494,25 +602,45 @@ module ShadowAtlas =
     // Compute bounding box in light space
     let lightView = Raymath.MatrixLookAt(Vector3.Zero, lightDir, cameraUp)
 
-    let mutable minX, minY, minZ = Single.MaxValue, Single.MaxValue, Single.MaxValue
-    let mutable maxX, maxY, maxZ = Single.MinValue, Single.MinValue, Single.MinValue
+    let mutable minX, minY, minZ =
+      Single.MaxValue, Single.MaxValue, Single.MaxValue
+
+    let mutable maxX, maxY, maxZ =
+      Single.MinValue, Single.MinValue, Single.MinValue
 
     for corner in corners do
       let p = Raymath.Vector3Transform(corner, lightView)
-      minX <- min minX p.X; maxX <- max maxX p.X
-      minY <- min minY p.Y; maxY <- max maxY p.Y
-      minZ <- min minZ p.Z; maxZ <- max maxZ p.Z
+      minX <- min minX p.X
+      maxX <- max maxX p.X
+      minY <- min minY p.Y
+      maxY <- max maxY p.Y
+      minZ <- min minZ p.Z
+      maxZ <- max maxZ p.Z
 
     // Add margin
     let margin = 10.0f
-    minX <- minX - margin; maxX <- maxX + margin
-    minY <- minY - margin; maxY <- maxY + margin
-    minZ <- minZ - margin; maxZ <- maxZ + margin
+    minX <- minX - margin
+    maxX <- maxX + margin
+    minY <- minY - margin
+    maxY <- maxY + margin
+    minZ <- minZ - margin
+    maxZ <- maxZ + margin
 
     // Orthographic projection
     let lightPos = -lightDir * (maxZ + 100.0f)
-    let lightView = Raymath.MatrixLookAt(lightPos, lightPos + lightDir, cameraUp)
-    let lightProj = Raymath.MatrixOrtho(float minX, float maxX, float minY, float maxY, float minZ, float maxZ)
+
+    let lightView =
+      Raymath.MatrixLookAt(lightPos, lightPos + lightDir, cameraUp)
+
+    let lightProj =
+      Raymath.MatrixOrtho(
+        float minX,
+        float maxX,
+        float minY,
+        float maxY,
+        float minZ,
+        float maxZ
+      )
 
     Raymath.MatrixMultiply(lightView, lightProj)
 
@@ -528,16 +656,24 @@ module ShadowAtlas =
 
     let (target, up) =
       match face with
-      | 0 -> (lightPosition + Vector3.UnitX, -Vector3.UnitY)    // +X
-      | 1 -> (lightPosition - Vector3.UnitX, -Vector3.UnitY)    // -X
-      | 2 -> (lightPosition + Vector3.UnitY, Vector3.UnitZ)     // +Y
-      | 3 -> (lightPosition - Vector3.UnitY, -Vector3.UnitZ)    // -Y
-      | 4 -> (lightPosition + Vector3.UnitZ, -Vector3.UnitY)    // +Z
-      | 5 -> (lightPosition - Vector3.UnitZ, -Vector3.UnitY)    // -Z
+      | 0 -> (lightPosition + Vector3.UnitX, -Vector3.UnitY) // +X
+      | 1 -> (lightPosition - Vector3.UnitX, -Vector3.UnitY) // -X
+      | 2 -> (lightPosition + Vector3.UnitY, Vector3.UnitZ) // +Y
+      | 3 -> (lightPosition - Vector3.UnitY, -Vector3.UnitZ) // -Y
+      | 4 -> (lightPosition + Vector3.UnitZ, -Vector3.UnitY) // +Z
+      | 5 -> (lightPosition - Vector3.UnitZ, -Vector3.UnitY) // -Z
       | _ -> (lightPosition + Vector3.UnitX, -Vector3.UnitY)
 
     let view = Raymath.MatrixLookAt(lightPosition, target, up)
-    let proj = Raymath.MatrixPerspective(float (90.0f * MathF.PI / 180.0f), 1.0, float near, float far)
+
+    let proj =
+      Raymath.MatrixPerspective(
+        float(90.0f * MathF.PI / 180.0f),
+        1.0,
+        float near,
+        float far
+      )
+
     Raymath.MatrixMultiply(view, proj)
 
   /// <summary>
@@ -554,5 +690,8 @@ module ShadowAtlas =
     : Matrix4x4 =
 
     let view = Raymath.MatrixLookAt(lightPosition, lightTarget, lightUp)
-    let proj = Raymath.MatrixPerspective(float fovY, float aspect, float near, float far)
+
+    let proj =
+      Raymath.MatrixPerspective(float fovY, float aspect, float near, float far)
+
     Raymath.MatrixMultiply(view, proj)

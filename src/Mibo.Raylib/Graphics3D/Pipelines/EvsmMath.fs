@@ -68,17 +68,40 @@ module EvsmMath =
     let fboId = Rlgl.LoadFramebuffer()
     Rlgl.EnableFramebuffer(fboId)
     let depthId = Rlgl.LoadTextureDepth(width, height, false)
-    Rlgl.FramebufferAttach(fboId, depthId, FramebufferAttachType.Depth, FramebufferAttachTextureType.Texture2D, 0)
+
+    Rlgl.FramebufferAttach(
+      fboId,
+      depthId,
+      FramebufferAttachType.Depth,
+      FramebufferAttachTextureType.Texture2D,
+      0
+    )
+
     Rlgl.DisableFramebuffer()
+
     RenderTexture2D(
       Id = fboId,
-      Texture = Texture2D(Id = 0u, Width = width, Height = height, Mipmaps = 1, Format = PixelFormat.UncompressedR8G8B8A8),
-      Depth = Texture2D(Id = depthId, Width = width, Height = height, Mipmaps = 1, Format = enum<PixelFormat> 19)
+      Texture =
+        Texture2D(
+          Id = 0u,
+          Width = width,
+          Height = height,
+          Mipmaps = 1,
+          Format = PixelFormat.UncompressedR8G8B8A8
+        ),
+      Depth =
+        Texture2D(
+          Id = depthId,
+          Width = width,
+          Height = height,
+          Mipmaps = 1,
+          Format = enum<PixelFormat> 19
+        )
     )
 
   /// <summary>
   /// Destroys a custom shadow FBO and its attachments.
   /// </summary>
-  let destroyShadowFbo (rt: RenderTexture2D) =
+  let destroyShadowFbo(rt: RenderTexture2D) =
     Rlgl.UnloadTexture(rt.Depth.Id)
     Rlgl.UnloadFramebuffer(rt.Id)

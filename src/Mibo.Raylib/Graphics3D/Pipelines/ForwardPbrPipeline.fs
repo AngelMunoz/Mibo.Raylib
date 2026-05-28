@@ -1089,20 +1089,21 @@ type ForwardPbrPipeline
           // Render each caster to its atlas region
           for caster in shadowAtlas.Casters do
             if caster.Enabled then
-              // Set viewport to caster's region
-              shadowAtlas.GetRegionViewport(caster.AtlasRegion)
 
               // Create light camera for this caster
               let lightCamera =
                 match caster.Type with
                 | ShadowCasterType.Directional ->
-                  // Light shines in caster.LightDirection, light comes FROM opposite direction
-                  // Place camera in the direction light comes FROM, looking at the player
-                  // NOTE: activeCamera.Target = player position (camera looks AT the player)
-                  //       activeCamera.Position = camera position (orbits around player)
-                  //       Shadow must follow the PLAYER, not the camera
                   let lightFromDir = Vector3.Normalize(-caster.LightDirection)
-                  let shadowOrigin = activeCamera.Target
+                  let rawOrigin = activeCamera.Target
+
+                  // Grid snapping: quantize shadow origin to eliminate per-frame flickering.
+                  // Shadow map only re-renders when player crosses a grid boundary.
+                  let gridSize = 2.0f
+                  let snappedX = MathF.Round(rawOrigin.X / gridSize) * gridSize
+                  let snappedZ = MathF.Round(rawOrigin.Z / gridSize) * gridSize
+                  let shadowOrigin = Vector3(snappedX, rawOrigin.Y, snappedZ)
+
                   let lightPos = shadowOrigin + lightFromDir * 100.0f
 
                   let safeUp =
@@ -1127,11 +1128,12 @@ type ForwardPbrPipeline
                     Projection = CameraProjection.Perspective
                   )
 
-              // Render shadow pass - matches F#C sample exactly:
-              // BeginTextureMode → ClearBackground(WHITE) → BeginMode3D
-              // → capture VP via rlGetMatrixModelview/projection
-              // → SetShaderValueMatrix → DrawScene → EndMode3D → EndTextureMode
+              // Render shadow pass
+              // Order matters: BeginTextureMode binds FBO and resets viewport,
+              // then we restrict viewport to atlas region, then BeginMode3D
+              // uses that restricted viewport for the orthographic projection.
               Raylib.BeginTextureMode(shadowAtlas.Fbo)
+              shadowAtlas.GetRegionViewport(caster.AtlasRegion)
               Raylib.ClearBackground(Color.White)
 
               Raylib.BeginMode3D(lightCamera)
