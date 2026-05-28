@@ -410,9 +410,15 @@ type ShadowAtlas(config: ShadowAtlasConfig, biasConfig: ShadowBiasConfig) =
 
   /// <summary>Get the number of active casters.</summary>
   member _.ActiveCasterCount =
-    casters.Values
-    |> Seq.filter(fun c -> c.Enabled)
-    |> Seq.sumBy(fun c -> c.RegionCount)
+    let mutable count = 0
+
+    for kvp in casters do
+      let c = kvp.Value
+
+      if c.Enabled then
+        count <- count + c.RegionCount
+
+    count
 
   /// <summary>
   /// Render the debug overlay showing atlas regions.
@@ -654,15 +660,15 @@ module ShadowAtlas =
     (far: float32)
     : Matrix4x4 =
 
-    let (target, up) =
+    let struct (target, up) =
       match face with
-      | 0 -> (lightPosition + Vector3.UnitX, -Vector3.UnitY) // +X
-      | 1 -> (lightPosition - Vector3.UnitX, -Vector3.UnitY) // -X
-      | 2 -> (lightPosition + Vector3.UnitY, Vector3.UnitZ) // +Y
-      | 3 -> (lightPosition - Vector3.UnitY, -Vector3.UnitZ) // -Y
-      | 4 -> (lightPosition + Vector3.UnitZ, -Vector3.UnitY) // +Z
-      | 5 -> (lightPosition - Vector3.UnitZ, -Vector3.UnitY) // -Z
-      | _ -> (lightPosition + Vector3.UnitX, -Vector3.UnitY)
+      | 0 -> struct (lightPosition + Vector3.UnitX, -Vector3.UnitY) // +X
+      | 1 -> struct (lightPosition - Vector3.UnitX, -Vector3.UnitY) // -X
+      | 2 -> struct (lightPosition + Vector3.UnitY, Vector3.UnitZ) // +Y
+      | 3 -> struct (lightPosition - Vector3.UnitY, -Vector3.UnitZ) // -Y
+      | 4 -> struct (lightPosition + Vector3.UnitZ, -Vector3.UnitY) // +Z
+      | 5 -> struct (lightPosition - Vector3.UnitZ, -Vector3.UnitY) // -Z
+      | _ -> struct (lightPosition + Vector3.UnitX, -Vector3.UnitY)
 
     let view = Raymath.MatrixLookAt(lightPosition, target, up)
 

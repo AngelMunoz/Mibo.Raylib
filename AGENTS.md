@@ -23,6 +23,7 @@ The core abstractions of the library MUST NOT incur performance penalties for us
 - Prefer structs over classes unless struct size is too large.
 - Prefer object expressions to classes.
 - Avoid heap allocations in hot paths.
+- If implementing an interface, use a struct instead of a class or object expression if that object is going to be in a hot path
 - Favor arrays and spans over lists.
 - Favor ArrayPool over allocating new arrays where possible.
 - Favor functional programming patterns but allow mutable state when necessary for performance.

@@ -52,7 +52,6 @@
     <Compile Include="Graphics3D/Command3D.fs" />
     <Compile Include="Graphics3D/Draw3D.fs" />
     <Compile Include="Graphics3D/Pipelines/PostProcess3D.fs" />
-    <Compile Include="Graphics3D/Pipelines/EvsmMath.fs" />
     <Compile Include="Graphics3D/Pipelines/ShadowAtlas.fs" />
     <Compile Include="Graphics3D/Pipelines/Shaders.fs" />
     <Compile Include="Graphics3D/Pipelines/ForwardPbrPipeline.fs" />
