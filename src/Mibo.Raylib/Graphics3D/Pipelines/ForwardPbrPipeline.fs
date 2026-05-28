@@ -892,21 +892,39 @@ type ForwardPbrPipeline
                   match caster.Type with
                   | ShadowCasterType.Directional ->
                     let lightFromDir = Vector3.Normalize(-caster.LightDirection)
-                    let rawOrigin = activeCamera.Target
+
+                    // Compute shadow origin based on configured strategy
+                    let rawOrigin =
+                      match atlasCfg.OriginStrategy with
+                      | ShadowOriginStrategy.CameraTarget -> activeCamera.Target
+                      | ShadowOriginStrategy.SceneCenter -> Vector3.Zero
+                      | ShadowOriginStrategy.Custom f -> f activeCamera
 
                     // Grid snapping: quantize shadow origin to eliminate per-frame flickering.
                     // Shadow map only re-renders when player crosses a grid boundary.
-                    let gridSize = 2.0f
+                    let gridSize = atlasCfg.GridSnapSize
 
                     let snappedX =
-                      MathF.Round(rawOrigin.X / gridSize) * gridSize
+                      if gridSize > 0.0f then
+                        MathF.Round(rawOrigin.X / gridSize) * gridSize
+                      else
+                        rawOrigin.X
 
                     let snappedZ =
-                      MathF.Round(rawOrigin.Z / gridSize) * gridSize
+                      if gridSize > 0.0f then
+                        MathF.Round(rawOrigin.Z / gridSize) * gridSize
+                      else
+                        rawOrigin.Z
 
                     let shadowOrigin = Vector3(snappedX, rawOrigin.Y, snappedZ)
 
-                    let lightPos = shadowOrigin + lightFromDir * 100.0f
+                    // Derive light distance from config or use default
+                    let lightDistance =
+                      match atlasCfg.DirectionalLightDistance with
+                      | ValueSome d -> d
+                      | ValueNone -> 100.0f // Default: 100 units behind origin
+
+                    let lightPos = shadowOrigin + lightFromDir * lightDistance
 
                     let safeUp =
                       if abs caster.LightDirection.Y > 0.99f then
@@ -914,11 +932,17 @@ type ForwardPbrPipeline
                       else
                         Vector3.UnitY
 
+                    // Derive ortho size from config or use default
+                    let orthoSize =
+                      match atlasCfg.DirectionalLightSize with
+                      | ValueSome s -> s
+                      | ValueNone -> 50.0f // Default: 50 unit coverage
+
                     Camera3D(
                       Position = lightPos,
                       Target = shadowOrigin,
                       Up = safeUp,
-                      FovY = 50.0f,
+                      FovY = orthoSize,
                       Projection = CameraProjection.Orthographic
                     )
                   | _ ->

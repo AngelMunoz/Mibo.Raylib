@@ -21,7 +21,14 @@ type DirectionalLight3D = {
   Color: Color
   /// <summary>Intensity multiplier.</summary>
   Intensity: float32
-  /// <summary>Whether this directional light casts CSM shadows.</summary>
+  /// <summary>
+  /// Whether this directional light casts shadows.
+  /// </summary>
+  /// <remarks>
+  /// <b>Pipeline-dependent:</b> Not all rendering pipelines support shadow casting.
+  /// Pipelines that don't support shadows will ignore this field.
+  /// Check your pipeline's documentation for shadow support details.
+  /// </remarks>
   CastsShadows: bool
 }
 
@@ -34,9 +41,23 @@ type PointLight3D = {
   Color: Color
   /// <summary>Maximum radius of influence.</summary>
   Radius: float32
-  /// <summary>Whether this point light casts cubemap shadows.</summary>
+  /// <summary>
+  /// Whether this point light casts shadows.
+  /// </summary>
+  /// <remarks>
+  /// <b>Pipeline-dependent:</b> Not all rendering pipelines support shadow casting.
+  /// Pipelines that don't support shadows will ignore this field.
+  /// Check your pipeline's documentation for shadow support details.
+  /// </remarks>
   CastsShadows: bool
-  /// <summary>Per-caster shadow bias override (None = use global default).</summary>
+  /// <summary>
+  /// Per-light shadow bias override. When None, uses the pipeline's global bias setting.
+  /// </summary>
+  /// <remarks>
+  /// <b>Pipeline-dependent:</b> Only used by pipelines that support shadow casting.
+  /// Adjust this value to fix shadow acne (too low) or peter-panning (too high).
+  /// Typical range: 0.001 to 0.01.
+  /// </remarks>
   ShadowBias: float32 voption
 }
 
@@ -57,8 +78,22 @@ type SpotLight3D = {
   InnerCutoff: float32
   /// <summary>Cosine of the outer cone half-angle (fade to zero).</summary>
   OuterCutoff: float32
-  /// <summary>Whether this spot light casts shadows.</summary>
+  /// <summary>
+  /// Whether this spot light casts shadows.
+  /// </summary>
+  /// <remarks>
+  /// <b>Pipeline-dependent:</b> Not all rendering pipelines support shadow casting.
+  /// Pipelines that don't support shadows will ignore this field.
+  /// Check your pipeline's documentation for shadow support details.
+  /// </remarks>
   CastsShadows: bool
-  /// <summary>Per-caster shadow bias override (None = use global default).</summary>
+  /// <summary>
+  /// Per-light shadow bias override. When None, uses the pipeline's global bias setting.
+  /// </summary>
+  /// <remarks>
+  /// <b>Pipeline-dependent:</b> Only used by pipelines that support shadow casting.
+  /// Adjust this value to fix shadow acne (too low) or peter-panning (too high).
+  /// Typical range: 0.001 to 0.01.
+  /// </remarks>
   ShadowBias: float32 voption
 }

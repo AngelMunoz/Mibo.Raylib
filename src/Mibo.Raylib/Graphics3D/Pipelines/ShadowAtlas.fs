@@ -50,7 +50,27 @@ type ShadowCasterData = {
 // Shadow Atlas Configuration
 // ------------------------------------------------------------------
 
+/// <summary>Strategy for determining the origin point of shadow maps.</summary>
+/// <remarks>
+/// The shadow origin determines where shadow maps are centered. This affects
+/// which parts of the scene receive shadows and how shadows move with the camera.
+/// </remarks>
+type ShadowOriginStrategy =
+  /// <summary>Use the camera's target point as shadow origin. Good for third-person games.</summary>
+  | CameraTarget
+  /// <summary>Use world origin (0,0,0) as shadow origin. Good for fixed scenes.</summary>
+  | SceneCenter
+  /// <summary>Use a custom function to compute shadow origin from camera state.</summary>
+  | Custom of (Camera3D -> Vector3)
+
 /// <summary>Configuration for the shadow atlas system.</summary>
+/// <remarks>
+/// <para>
+/// This configuration controls both the atlas texture layout and shadow rendering behavior.
+/// Some fields (marked as "ForwardPbr-specific") are only used by the ForwardPbrPipeline
+/// implementation. Other pipelines may ignore these fields or use different strategies.
+/// </para>
+/// </remarks>
 [<Struct>]
 type ShadowAtlasConfig = {
   /// <summary>Resolution of the atlas texture (square). Default 2048.</summary>
@@ -59,6 +79,45 @@ type ShadowAtlasConfig = {
   MaxCasters: int
   /// <summary>Whether to show debug overlay. Default false.</summary>
   ShowDebugOverlay: bool
+
+  /// <summary>
+  /// Strategy for determining shadow map origin. Default: CameraTarget.
+  /// </summary>
+  /// <remarks>
+  /// <b>ForwardPbr-specific:</b> Controls where directional light shadows are centered.
+  /// CameraTarget works well for third-person games where the camera follows a player.
+  /// SceneCenter works for fixed scenes. Use Custom for first-person or special cases.
+  /// </remarks>
+  OriginStrategy: ShadowOriginStrategy
+
+  /// <summary>
+  /// Distance to place directional light camera behind the shadow origin. Default: auto-derived.
+  /// </summary>
+  /// <remarks>
+  /// <b>ForwardPbr-specific:</b> Larger values capture more of the scene but reduce shadow precision.
+  /// When None, derived from camera far plane (far * 0.5). Typical range: 50-200 units.
+  /// </remarks>
+  DirectionalLightDistance: float32 voption
+
+  /// <summary>
+  /// Half-size of directional light orthographic projection. Default: auto-derived.
+  /// </summary>
+  /// <remarks>
+  /// <b>ForwardPbr-specific:</b> Controls the coverage area of directional shadows.
+  /// Larger values cast shadows over a wider area but reduce resolution.
+  /// When None, derived from camera frustum at mid-distance. Typical range: 20-100 units.
+  /// </remarks>
+  DirectionalLightSize: float32 voption
+
+  /// <summary>
+  /// Grid snap size for shadow origin to reduce flickering. Default: 2.0.
+  /// </summary>
+  /// <remarks>
+  /// <b>ForwardPbr-specific:</b> Snaps the shadow origin to a grid to prevent shadow shimmer
+  /// as the camera moves. Larger values = more stable but less precise shadows.
+  /// Set to 0 to disable snapping. Typical range: 1.0-5.0 units.
+  /// </remarks>
+  GridSnapSize: float32
 }
 
 /// <summary>Global shadow bias configuration.</summary>
@@ -79,6 +138,10 @@ module ShadowAtlasConfig =
     Resolution = 2048
     MaxCasters = 16
     ShowDebugOverlay = false
+    OriginStrategy = CameraTarget
+    DirectionalLightDistance = ValueNone
+    DirectionalLightSize = ValueNone
+    GridSnapSize = 2.0f
   }
 
 module ShadowBiasConfig =
