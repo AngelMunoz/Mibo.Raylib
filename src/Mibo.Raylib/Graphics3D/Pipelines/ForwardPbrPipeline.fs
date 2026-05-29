@@ -177,6 +177,7 @@ type private PipelineContext
 
   let mutable lastMaterialKey = Unchecked.defaultof<MaterialKey>
   let mutable hasLastMaterial = false
+  let mutable lastRaylibMaterial = Unchecked.defaultof<Material>
 
   let mutable locsCached = false
   let mutable locAlbedoColor = -1
@@ -397,9 +398,16 @@ type private PipelineContext
   let getOrCreateMaterial(mat3d: Material3D) : Material =
     let key = MaterialKey.fromMaterial3D mat3d
 
-    match materialCache.TryGetValue key with
-    | true, mat -> mat
-    | false, _ ->
+    if hasLastMaterial && key = lastMaterialKey then
+      lastRaylibMaterial
+    else
+      match materialCache.TryGetValue key with
+      | true, mat ->
+        lastMaterialKey <- key
+        lastRaylibMaterial <- mat
+        hasLastMaterial <- true
+        mat
+      | false, _ ->
       let mutable mat = Raylib.LoadMaterialDefault()
       mat.Shader <- forwardShader
 
@@ -429,6 +437,9 @@ type private PipelineContext
       | ValueNone -> ()
 
       materialCache[key] <- mat
+      lastMaterialKey <- key
+      lastRaylibMaterial <- mat
+      hasLastMaterial <- true
       mat
 
   let setMaterialUniforms(normalMatrix: Matrix4x4) (mat3d: Material3D) =
