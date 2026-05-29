@@ -192,6 +192,7 @@ type ShadowAtlas(config: ShadowAtlasConfig, biasConfig: ShadowBiasConfig) =
   let lightPositions = Array.zeroCreate<Vector3> config.MaxCasters
   let biases = Array.zeroCreate<float32> config.MaxCasters
   let casterTypes = Array.zeroCreate<int> config.MaxCasters
+  let mutable activeCasterCount = 0
 
   /// <summary>Grid size (rows/columns) of the atlas.</summary>
   member _.GridSize = gridSize
@@ -472,6 +473,8 @@ type ShadowAtlas(config: ShadowAtlasConfig, biasConfig: ShadowBiasConfig) =
       biases[i] <- 0.0f
       casterTypes[i] <- -1
 
+    activeCasterCount <- index
+
   /// <summary>Get prepared uniform arrays (call after PrepareUniforms).</summary>
   member _.ViewProjs = viewProjsUniforms
   member _.UVOffsets = uvOffsets
@@ -479,17 +482,8 @@ type ShadowAtlas(config: ShadowAtlasConfig, biasConfig: ShadowBiasConfig) =
   member _.Biases = biases
   member _.CasterTypes = casterTypes
 
-  /// <summary>Get the number of active casters.</summary>
-  member _.ActiveCasterCount =
-    let mutable count = 0
-
-    for kvp in casters do
-      let c = kvp.Value
-
-      if c.Enabled then
-        count <- count + c.RegionCount
-
-    count
+  /// <summary>Get the number of active caster regions (computed by PrepareUniforms).</summary>
+  member _.ActiveCasterCount = activeCasterCount
 
   /// <summary>
   /// Render the debug overlay showing atlas regions.
