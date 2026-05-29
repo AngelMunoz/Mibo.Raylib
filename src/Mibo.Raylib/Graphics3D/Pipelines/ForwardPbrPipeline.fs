@@ -175,6 +175,9 @@ type private PipelineContext
 
   let mutable activeLightViewProj = Matrix4x4.Identity
 
+  let mutable lastMaterialKey = Unchecked.defaultof<MaterialKey>
+  let mutable hasLastMaterial = false
+
   let mutable locsCached = false
   let mutable locAlbedoColor = -1
   let mutable locRoughness = -1
@@ -432,24 +435,30 @@ type private PipelineContext
     cacheLocations()
     ensureShaderActive()
 
-    setShaderVec4 forwardShader locAlbedoColor (colorToVec4 mat3d.AlbedoColor)
-    setShaderFloat forwardShader locRoughness mat3d.Roughness
-    setShaderFloat forwardShader locMetallic mat3d.Metallic
+    let key = MaterialKey.fromMaterial3D mat3d
 
-    setShaderVec4
-      forwardShader
-      locEmissionColor
-      (colorToVec4 mat3d.EmissionColor)
+    if not hasLastMaterial || key <> lastMaterialKey then
+      setShaderVec4 forwardShader locAlbedoColor (colorToVec4 mat3d.AlbedoColor)
+      setShaderFloat forwardShader locRoughness mat3d.Roughness
+      setShaderFloat forwardShader locMetallic mat3d.Metallic
 
-    setShaderFloat forwardShader locOpacity mat3d.Opacity
-    setShaderVec2 forwardShader locTiling mat3d.Tiling
+      setShaderVec4
+        forwardShader
+        locEmissionColor
+        (colorToVec4 mat3d.EmissionColor)
 
-    let useNormal =
-      match mat3d.NormalMap with
-      | ValueSome _ -> 1
-      | ValueNone -> 0
+      setShaderFloat forwardShader locOpacity mat3d.Opacity
+      setShaderVec2 forwardShader locTiling mat3d.Tiling
 
-    setShaderInt forwardShader locUseNormalMap useNormal
+      let useNormal =
+        match mat3d.NormalMap with
+        | ValueSome _ -> 1
+        | ValueNone -> 0
+
+      setShaderInt forwardShader locUseNormalMap useNormal
+      lastMaterialKey <- key
+      hasLastMaterial <- true
+
     Raylib.SetShaderValueMatrix(forwardShader, locNormalMatrix, normalMatrix)
 
   let drawMeshCore (mesh: Mesh) (transform: Matrix4x4) (normalMatrix: Matrix4x4) (material: Material3D) =
@@ -654,6 +663,7 @@ type private PipelineContext
     pointLights.Clear()
     spotLights.Clear()
     lightsDirty <- true
+    hasLastMaterial <- false
     cameraActive <- false
     shaderActive <- false
 
