@@ -364,10 +364,8 @@ void main()
     vec3 albedo = texColor.rgb;
     vec3 normal = getNormal();
 
-    float r = texture(texture3, uv).r * roughness + (1.0 - texture(texture3, uv).r) * roughness;
-    r = clamp(r, 0.04, 1.0);
-    float m = texture(texture1, uv).r * metallic + (1.0 - texture(texture1, uv).r) * metallic;
-    m = clamp(m, 0.0, 1.0);
+    float r = clamp(roughness, 0.04, 1.0);
+    float m = clamp(metallic, 0.0, 1.0);
 
     vec3 V = normalize(cameraPos - fragWorldPos);
 
