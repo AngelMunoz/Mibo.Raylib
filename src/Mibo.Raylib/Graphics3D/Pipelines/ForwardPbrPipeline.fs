@@ -706,7 +706,20 @@ module private ShadowPassHelpers =
 
   let collectMeshDraws(buffer: RenderBuffer3D) =
     let pool = System.Buffers.ArrayPool<MeshDraw>.Shared
-    let arr = pool.Rent(buffer.Count)
+
+    // Pre-scan to count actual mesh draws for precise allocation
+    let mutable meshCount = 0
+
+    for i = 0 to buffer.Count - 1 do
+      match buffer[i] with
+      | Command3D.DrawMesh _ -> meshCount <- meshCount + 1
+      | Command3D.DrawSkinnedMesh _ -> meshCount <- meshCount + 1
+      | Command3D.DrawModel(model, _) -> meshCount <- meshCount + model.MeshCount
+      | Command3D.DrawMeshInstanced(_, _, _, instanceCount) ->
+        meshCount <- meshCount + instanceCount
+      | _ -> ()
+
+    let arr = pool.Rent(max meshCount 1)
     let mutable count = 0
 
     for i = 0 to buffer.Count - 1 do
