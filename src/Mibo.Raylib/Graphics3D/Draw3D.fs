@@ -162,59 +162,6 @@ module Draw3D =
     buffer
 
   // ──────────────────────────────────────────────
-  // Debug Drawing
-  // ──────────────────────────────────────────────
-
-  /// Draws a ground grid centered at world origin.
-  /// Uses <see cref="M:Raylib_cs.Raylib.DrawGrid"/> internally via
-  /// the pipeline's draw-immediate path.
-  let inline drawGrid
-    (slices: int)
-    (spacing: float32)
-    (buffer: RenderBuffer3D)
-    =
-    buffer.Add(Command3D.drawGrid slices spacing)
-    buffer
-
-  /// <summary>
-  /// Draws a ground grid with a custom color.
-  /// Uses <see cref="M:Raylib_cs.Raylib.DrawGrid"/> internally.
-  /// Note: raylib's DrawGrid ignores the color parameter;
-  /// it is included for API consistency.
-  /// </summary>
-  let inline drawGridWithColor
-    (slices: int)
-    (spacing: float32)
-    (color: Color)
-    (buffer: RenderBuffer3D)
-    =
-    buffer.Add(Command3D.drawGridWithColor slices spacing color)
-    buffer
-
-  /// <summary>Draws a bounding box wireframe for debugging.</summary>
-  let inline drawBoundingBox
-    (box: BoundingBox)
-    (color: Color)
-    (buffer: RenderBuffer3D)
-    =
-    buffer.Add(Command3D.drawBoundingBox box color)
-    buffer
-
-  /// <summary>Draws a single point in 3D space for debugging.</summary>
-  let inline drawPoint3D
-    (position: Vector3)
-    (color: Color)
-    (buffer: RenderBuffer3D)
-    =
-    buffer.Add(Command3D.drawPoint3D position color)
-    buffer
-
-  /// <summary>Draws a ray visualization for debugging.</summary>
-  let inline drawRay (ray: Ray) (color: Color) (buffer: RenderBuffer3D) =
-    buffer.Add(Command3D.drawRay ray color)
-    buffer
-
-  // ──────────────────────────────────────────────
   // Escape Hatches
   // ──────────────────────────────────────────────
 

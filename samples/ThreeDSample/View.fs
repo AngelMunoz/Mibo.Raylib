@@ -53,7 +53,6 @@ let view (ctx: GameContext) (model: GameModel) (buffer: RenderBuffer3D) =
   }
   |> ignore
 
-  let mutable drawCount = 0
   let maxRenderDistSq = 900.0f  // 30^2
   let camPos = model.CameraPosition
 
@@ -93,9 +92,7 @@ let view (ctx: GameContext) (model: GameModel) (buffer: RenderBuffer3D) =
                     CastsShadows = true
                     ShadowBias = ValueNone
                   }
-                ) |> ignore
-
-              drawCount <- drawCount + 1)
+                ) |> ignore)
 
   // Player model
   let playerModel = loadOrGetModel model.ModelCache KenneyModels.characterOobi ctx
@@ -107,13 +104,12 @@ let view (ctx: GameContext) (model: GameModel) (buffer: RenderBuffer3D) =
 
   buffer.Add(Command3D.drawModel playerModel playerTransform) |> ignore
 
-  buffer.Add(Command3D.drawGrid 20 1.0f) |> ignore
   buffer |> Draw3D.endCamera |> ignore
 
   buffer.Add(
     Command3D.drawImmediate(fun () ->
       Raylib.DrawText(
-        $"FPS: {Raylib.GetFPS()}  Models: {drawCount}  Chunks: {model.Chunks.Count}  Score: {model.Score}",
+        $"FPS: {Raylib.GetFPS()}  Chunks: {model.Chunks.Count}  Score: {model.Score}",
         10, 10, 20, Color.Yellow
       )
 

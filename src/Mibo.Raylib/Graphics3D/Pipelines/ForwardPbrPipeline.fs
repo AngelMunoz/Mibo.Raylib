@@ -1177,14 +1177,6 @@ type ForwardPbrPipeline
           context.AddDirectionalLight(light)
         | Command3D.AddPointLight light -> context.AddPointLight(light)
         | Command3D.AddSpotLight light -> context.AddSpotLight(light)
-        | Command3D.DrawGrid(slices, spacing, _color) ->
-          context.DrawImmediate(fun () -> Raylib.DrawGrid(slices, spacing))
-        | Command3D.DrawBoundingBox(box, color) ->
-          context.DrawImmediate(fun () -> Raylib.DrawBoundingBox(box, color))
-        | Command3D.DrawPoint3D(position, color) ->
-          context.DrawImmediate(fun () -> Raylib.DrawPoint3D(position, color))
-        | Command3D.DrawRay(ray, color) ->
-          context.DrawImmediate(fun () -> Raylib.DrawRay(ray, color))
         | Command3D.DrawImmediate action -> context.DrawImmediate(action)
 
       match ppConfig.Passes with

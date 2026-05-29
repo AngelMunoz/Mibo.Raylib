@@ -42,10 +42,6 @@ type Command3D =
   | AddDirectionalLight of AddDlight: DirectionalLight3D
   | AddPointLight of AddPlight: PointLight3D
   | AddSpotLight of AddSlight: SpotLight3D
-  | DrawGrid of slices: int * spacing: float32 * color: Color
-  | DrawBoundingBox of box: BoundingBox * color: Color
-  | DrawPoint3D of position: Vector3 * color: Color
-  | DrawRay of ray: Ray * color: Color
   | DrawImmediate of action: (unit -> unit)
 
 /// <summary>
@@ -115,20 +111,6 @@ module Command3D =
 
   let inline addPointLight(light: PointLight3D) = Command3D.AddPointLight(light)
   let inline addSpotLight(light: SpotLight3D) = Command3D.AddSpotLight(light)
-
-  let inline drawGrid (slices: int) (spacing: float32) =
-    Command3D.DrawGrid(slices, spacing, Color.Gray)
-
-  let inline drawGridWithColor (slices: int) (spacing: float32) (color: Color) =
-    Command3D.DrawGrid(slices, spacing, color)
-
-  let inline drawBoundingBox (box: BoundingBox) (color: Color) =
-    Command3D.DrawBoundingBox(box, color)
-
-  let inline drawPoint3D (position: Vector3) (color: Color) =
-    Command3D.DrawPoint3D(position, color)
-
-  let inline drawRay (ray: Ray) (color: Color) = Command3D.DrawRay(ray, color)
 
   let inline drawImmediate(action: unit -> unit) =
     Command3D.DrawImmediate(action)
