@@ -4,58 +4,13 @@ open Raylib_cs
 open Mibo.Elmish.Graphics2D
 
 // ═══════════════════════════════════════════════════════════════════
-// Struct Commands
-// ═══════════════════════════════════════════════════════════════════
-
-/// <summary>No-op placeholder that reserves a layer slot for light ordering.</summary>
-[<Struct>]
-type NoopLightCommand(cmdLayer: int<RenderLayer>) =
-  interface IRenderCommand2D with
-    member _.Layer = cmdLayer
-    member _.Render _ = ()
-
-[<Struct>]
-type LitSpriteCommand(lightCtx: LightContext2D, sprite: Command2D.SpriteState) =
-  interface IRenderCommand2D with
-    member _.Layer = sprite.Layer
-
-    member _.Render ctx =
-      if not lightCtx.ShaderActive then
-        ctx.BeginShader(lightCtx.Shader)
-        lightCtx.ShaderActive <- true
-
-      if lightCtx.UniformsDirty then
-        lightCtx.UploadUniforms()
-        lightCtx.UniformsDirty <- false
-
-      Raylib.DrawTexturePro(
-        sprite.Texture,
-        sprite.Source,
-        sprite.Dest,
-        sprite.Origin,
-        sprite.Rotation,
-        sprite.Color
-      )
-
-[<Struct>]
-type EndLightingCommand(lightCtx: LightContext2D, cmdLayer: int<RenderLayer>) =
-  interface IRenderCommand2D with
-    member _.Layer = cmdLayer
-
-    member _.Render ctx =
-      if lightCtx.ShaderActive then
-        ctx.EndShader()
-        lightCtx.ShaderActive <- false
-        lightCtx.UniformsDirty <- true
-
-// ═══════════════════════════════════════════════════════════════════
 // Command2D Factory Functions
 // ═══════════════════════════════════════════════════════════════════
 
 /// <summary>
 /// Factory functions for lighting-related render commands.
 /// Each function mutates the <see cref="T:Mibo.Elmish.Graphics2D.Lighting.LightContext2D"/> immediately
-/// (during view population) and returns an <see cref="T:Mibo.Elmish.Graphics2D.IRenderCommand2D"/>
+/// (during view population) and returns a <see cref="T:Mibo.Elmish.Graphics2D.Command2D"/>
 /// for layer ordering.
 /// </summary>
 module LightCommands =
@@ -68,9 +23,9 @@ module LightCommands =
   let inline setAmbient
     (lightCtx: LightContext2D)
     (layer: int<RenderLayer>, ambient: AmbientLight2D)
-    : IRenderCommand2D =
+    =
     lightCtx.Ambient <- ambient.Color
-    NoopLightCommand(layer)
+    Command2D.NoopLight(layer)
 
   /// <summary>
   /// Adds a point light for the current frame.
@@ -80,9 +35,9 @@ module LightCommands =
     (lightCtx: LightContext2D)
     (layer: int<RenderLayer>)
     (light: PointLight2D)
-    : IRenderCommand2D =
+    =
     lightCtx.PointLights.Add(light)
-    NoopLightCommand(layer)
+    Command2D.NoopLight(layer)
 
   /// <summary>
   /// Adds a directional light for the current frame.
@@ -92,9 +47,9 @@ module LightCommands =
     (lightCtx: LightContext2D)
     (layer: int<RenderLayer>)
     (light: DirectionalLight2D)
-    : IRenderCommand2D =
+    =
     lightCtx.DirLights.Add(light)
-    NoopLightCommand(layer)
+    Command2D.NoopLight(layer)
 
   /// <summary>
   /// Adds an occluder segment for the current frame. Used by the shadow system.
@@ -104,9 +59,9 @@ module LightCommands =
     (lightCtx: LightContext2D)
     (layer: int<RenderLayer>)
     (occluder: Occluder2D)
-    : IRenderCommand2D =
+    =
     lightCtx.Occluders.Add(occluder)
-    NoopLightCommand(layer)
+    Command2D.NoopLight(layer)
 
   /// <summary>
   /// Draws a sprite with the current lighting state from the given light context.
@@ -115,18 +70,24 @@ module LightCommands =
   let inline litSprite
     (lightCtx: LightContext2D)
     (sprite: Command2D.SpriteState)
-    : IRenderCommand2D =
-    LitSpriteCommand(lightCtx, sprite)
+    =
+    Command2D.LitSprite(
+      lightCtx,
+      sprite.Texture,
+      sprite.Dest,
+      sprite.Source,
+      sprite.Origin,
+      sprite.Rotation,
+      sprite.Color,
+      sprite.Layer
+    )
 
   /// <summary>
   /// Ends the current lighting pass. Deactivates the lit shader.
   /// Sprites after this point are unlit. Call again to re-enable lighting.
   /// </summary>
-  let inline endLighting
-    (lightCtx: LightContext2D)
-    (layer: int<RenderLayer>)
-    : IRenderCommand2D =
-    EndLightingCommand(lightCtx, layer)
+  let inline endLighting (lightCtx: LightContext2D) (layer: int<RenderLayer>) =
+    Command2D.EndLighting(lightCtx, layer)
 
 // ═══════════════════════════════════════════════════════════════════
 // Draw Module Wrappers (buffer-returning, pipe-friendly)

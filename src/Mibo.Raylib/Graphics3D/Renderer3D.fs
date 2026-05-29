@@ -87,18 +87,3 @@ module Renderer3D =
     (view: GameContext -> 'Model -> RenderBuffer3D -> unit)
     : IRenderer<'Model> =
     new Renderer3D<'Model>(view, pipeline, Renderer3DConfig.defaults)
-
-  /// <summary>
-  /// Creates a renderer with the specified configuration.
-  /// </summary>
-  /// <param name="config">Renderer configuration including clear color.</param>
-  /// <param name="pipeline">The 3D rendering pipeline that interprets commands.</param>
-  /// <param name="view">
-  /// The view function that populates the render buffer each frame.
-  /// </param>
-  let createWithConfig
-    (config: Renderer3DConfig)
-    (pipeline: IRenderPipeline3D)
-    (view: GameContext -> 'Model -> RenderBuffer3D -> unit)
-    : IRenderer<'Model> =
-    new Renderer3D<'Model>(view, pipeline, config)

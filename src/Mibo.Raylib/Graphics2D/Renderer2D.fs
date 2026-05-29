@@ -4,16 +4,7 @@ open System
 open System.Numerics
 open Raylib_cs
 open Mibo.Elmish
-
-/// <summary>Configuration for a single-pass tint post-processing effect. Used by the legacy 3D renderer.</summary>
-type PostProcessConfig = {
-  /// <summary>Shader applied to the scene render texture.</summary>
-  Shader: Shader
-  /// <summary>Color tint mixed with the scene.</summary>
-  TintColor: Color
-  /// <summary>Blend amount between the scene and the tint color. 0 = scene only, 1 = tint only.</summary>
-  TintAmount: float32
-}
+open Mibo.Elmish.Graphics2D.Lighting
 
 /// <summary>A single post-processing pass applied to the rendered scene.</summary>
 [<Struct>]
@@ -62,13 +53,12 @@ module Renderer2DConfig =
 
 /// <summary>
 /// A deferred 2D renderer that sorts commands by layer and executes them
-/// through the <see cref="T:Mibo.Elmish.Graphics2D.IRenderContext"/> state tracker.
+/// via pattern matching on <see cref="T:Mibo.Elmish.Graphics2D.Command2D"/>.
 /// </summary>
 /// <remarks>
 /// <para>
 /// Commands are accumulated each frame via the <c>view</c> function into a
-/// <see cref="T:Mibo.Elmish.Graphics2D.RenderBuffer2D"/>, sorted by
-/// <see cref="P:Mibo.Elmish.Graphics2D.IRenderCommand2D.Layer"/>, then executed
+/// <see cref="T:Mibo.Elmish.Graphics2D.RenderBuffer2D"/>, sorted by layer, then executed
 /// in order. raylib handles internal draw-call batching automatically.
 /// </para>
 /// <para>
@@ -95,83 +85,271 @@ type Renderer2D<'Model>
   let buffer = RenderBuffer2D(capacity = 4096)
   let rtPool: IRenderTargetPool = new RenderTargetPool()
 
-  let mutable _ctx: GameContext = Unchecked.defaultof<GameContext>
   let mutable _camera: Camera2D voption = ValueNone
   let mutable _shader: Shader voption = ValueNone
 
-  let internalRenderContext =
-    { new IRenderContext with
-        member _.GameContext = _ctx
-        member _.CurrentCamera = _camera
+  let beginCamera(c: Camera2D) =
+    Rlgl.DrawRenderBatchActive()
 
-        member _.BeginCamera(c) =
-          Rlgl.DrawRenderBatchActive()
+    if _camera.IsSome then
+      Raylib.EndMode2D()
 
-          if _camera.IsSome then
-            Raylib.EndMode2D()
+    Raylib.BeginMode2D(c)
+    _camera <- ValueSome c
 
-          Raylib.BeginMode2D(c)
-          _camera <- ValueSome c
+  let endCamera() =
+    if _camera.IsSome then
+      Rlgl.DrawRenderBatchActive()
+      Raylib.EndMode2D()
+      _camera <- ValueNone
 
-        member _.EndCamera() =
-          if _camera.IsSome then
-            Rlgl.DrawRenderBatchActive()
-            Raylib.EndMode2D()
-            _camera <- ValueNone
+  let beginShader(s: Shader) =
+    match _shader with
+    | ValueSome cur when cur.Id = s.Id -> ()
+    | _ ->
+      Rlgl.DrawRenderBatchActive()
 
-        member _.BeginShader(s) =
-          match _shader with
-          | ValueSome cur when cur.Id = s.Id -> ()
-          | _ ->
-            Rlgl.DrawRenderBatchActive()
+      if _shader.IsSome then
+        Raylib.EndShaderMode()
 
-            if _shader.IsSome then
-              Raylib.EndShaderMode()
+      Raylib.BeginShaderMode(s)
+      _shader <- ValueSome s
 
-            Raylib.BeginShaderMode(s)
-            _shader <- ValueSome s
+  let endShader() =
+    if _shader.IsSome then
+      Rlgl.DrawRenderBatchActive()
+      Raylib.EndShaderMode()
+      _shader <- ValueNone
 
-        member _.EndShader() =
-          if _shader.IsSome then
-            Rlgl.DrawRenderBatchActive()
-            Raylib.EndShaderMode()
-            _shader <- ValueNone
+  let drawImmediate(action: unit -> unit) =
+    Rlgl.DrawRenderBatchActive()
+    let savedCam = _camera
+    let savedShader = _shader
 
-        member _.DrawImmediate(action) =
-          Rlgl.DrawRenderBatchActive()
-          let savedCam = _camera
-          let savedShader = _shader
+    if _shader.IsSome then
+      Raylib.EndShaderMode()
+      _shader <- ValueNone
 
-          if _shader.IsSome then
-            Raylib.EndShaderMode()
-            _shader <- ValueNone
+    if _camera.IsSome then
+      Raylib.EndMode2D()
+      _camera <- ValueNone
 
-          if _camera.IsSome then
-            Raylib.EndMode2D()
-            _camera <- ValueNone
+    try
+      action()
+    finally
+      match savedCam with
+      | ValueSome c ->
+        Raylib.BeginMode2D(c)
+        _camera <- savedCam
+      | ValueNone -> ()
 
-          try
-            action()
-          finally
-            match savedCam with
-            | ValueSome c ->
-              Raylib.BeginMode2D(c)
-              _camera <- savedCam
-            | ValueNone -> ()
-
-            match savedShader with
-            | ValueSome s ->
-              Raylib.BeginShaderMode(s)
-              _shader <- savedShader
-            | ValueNone -> ()
-    }
+      match savedShader with
+      | ValueSome s ->
+        Raylib.BeginShaderMode(s)
+        _shader <- savedShader
+      | ValueNone -> ()
 
   let executeCommands() =
     for i = 0 to buffer.Count - 1 do
-      buffer[i].Render(internalRenderContext)
+      match buffer[i] with
+      | Command2D.Sprite(texture, dest, source, origin, rotation, color, _) ->
+        Raylib.DrawTexturePro(texture, source, dest, origin, rotation, color)
+      | Command2D.Text(font, text, position, fontSize, spacing, color, _) ->
+        Raylib.DrawTextEx(font, text, position, fontSize, spacing, color)
+      | Command2D.FillRect(rect, color, _) ->
+        Raylib.DrawRectangleRec(rect, color)
+      | Command2D.RectOutline(rect, thickness, color, _) ->
+        Raylib.DrawRectangleLinesEx(rect, thickness, color)
+      | Command2D.FillRectRounded(rect, roundness, segments, color, _) ->
+        Raylib.DrawRectangleRounded(rect, roundness, segments, color)
+      | Command2D.RectRoundedOutline(rect,
+                                     roundness,
+                                     segments,
+                                     thickness,
+                                     color,
+                                     _) ->
+        Raylib.DrawRectangleRoundedLinesEx(
+          rect,
+          roundness,
+          segments,
+          thickness,
+          color
+        )
+      | Command2D.RectGradientV(x, y, w, h, top, bottom, _) ->
+        Raylib.DrawRectangleGradientV(x, y, w, h, top, bottom)
+      | Command2D.RectGradientH(x, y, w, h, left, right, _) ->
+        Raylib.DrawRectangleGradientH(x, y, w, h, left, right)
+      | Command2D.RectGradient(rect, tl, bl, tr, br, _) ->
+        Raylib.DrawRectangleGradientEx(rect, tl, bl, tr, br)
+      | Command2D.FillCircle(center, radius, color, _) ->
+        Raylib.DrawCircleV(center, radius, color)
+      | Command2D.CircleOutline(center, radius, color, _) ->
+        Raylib.DrawCircleLinesV(center, radius, color)
+      | Command2D.CircleSector(center,
+                               radius,
+                               startAngle,
+                               endAngle,
+                               segments,
+                               color,
+                               _) ->
+        Raylib.DrawCircleSector(
+          center,
+          radius,
+          startAngle,
+          endAngle,
+          segments,
+          color
+        )
+      | Command2D.CircleSectorOutline(center,
+                                      radius,
+                                      startAngle,
+                                      endAngle,
+                                      segments,
+                                      color,
+                                      _) ->
+        Raylib.DrawCircleSectorLines(
+          center,
+          radius,
+          startAngle,
+          endAngle,
+          segments,
+          color
+        )
+      | Command2D.CircleGradient(centerX, centerY, radius, inner, outer, _) ->
+        Raylib.DrawCircleGradient(
+          Vector2(float32 centerX, float32 centerY),
+          radius,
+          inner,
+          outer
+        )
+      | Command2D.FillRing(center,
+                           innerR,
+                           outerR,
+                           startAngle,
+                           endAngle,
+                           segments,
+                           color,
+                           _) ->
+        Raylib.DrawRing(
+          center,
+          innerR,
+          outerR,
+          startAngle,
+          endAngle,
+          segments,
+          color
+        )
+      | Command2D.RingOutline(center,
+                              innerR,
+                              outerR,
+                              startAngle,
+                              endAngle,
+                              segments,
+                              color,
+                              _) ->
+        Raylib.DrawRingLines(
+          center,
+          innerR,
+          outerR,
+          startAngle,
+          endAngle,
+          segments,
+          color
+        )
+      | Command2D.FillEllipse(centerX, centerY, radiusH, radiusV, color, _) ->
+        Raylib.DrawEllipse(centerX, centerY, radiusH, radiusV, color)
+      | Command2D.EllipseOutline(centerX, centerY, radiusH, radiusV, color, _) ->
+        Raylib.DrawEllipseLines(centerX, centerY, radiusH, radiusV, color)
+      | Command2D.Line(start, finish, color, _) ->
+        Raylib.DrawLineV(start, finish, color)
+      | Command2D.LineThick(start, finish, thickness, color, _) ->
+        Raylib.DrawLineEx(start, finish, thickness, color)
+      | Command2D.LineStrip(points, color, _) ->
+        Raylib.DrawLineStrip(points, points.Length, color)
+      | Command2D.Bezier(start, control, finish, thickness, color, _) ->
+        Raylib.DrawLineBezier(start, finish, thickness, color)
+      | Command2D.Triangle(v1, v2, v3, color, _) ->
+        Raylib.DrawTriangle(v1, v2, v3, color)
+      | Command2D.TriangleFan(points, color, _) ->
+        Raylib.DrawTriangleFan(points, points.Length, color)
+      | Command2D.TriangleStrip(points, color, _) ->
+        Raylib.DrawTriangleStrip(points, points.Length, color)
+      | Command2D.FillPoly(center, sides, radius, rotation, color, _) ->
+        Raylib.DrawPoly(center, sides, radius, rotation, color)
+      | Command2D.PolyOutline(center,
+                              sides,
+                              radius,
+                              rotation,
+                              thickness,
+                              color,
+                              _) ->
+        Raylib.DrawPolyLinesEx(
+          center,
+          sides,
+          radius,
+          rotation,
+          thickness,
+          color
+        )
+      | Command2D.BeginCamera(camera, _) -> beginCamera camera
+      | Command2D.EndCamera _ -> endCamera()
+      | Command2D.BeginShader(shader, _) -> beginShader shader
+      | Command2D.EndShader _ -> endShader()
+      | Command2D.BeginTarget(target, _) -> Raylib.BeginTextureMode(target)
+      | Command2D.EndTarget _ -> Raylib.EndTextureMode()
+      | Command2D.SetBlend(mode, _) -> Rlgl.SetBlendMode(mode)
+      | Command2D.SetScissor(x, y, w, h, _) ->
+        Rlgl.EnableScissorTest()
+        Rlgl.Scissor(x, y, w, h)
+      | Command2D.ClearScissor _ -> Rlgl.DisableScissorTest()
+      | Command2D.SetLineWidth(width, _) -> Rlgl.SetLineWidth(width)
+      | Command2D.SetViewport(x, y, w, h, _) -> Rlgl.Viewport(x, y, w, h)
+      | Command2D.DrawImmediate(action, _) -> drawImmediate action
+      | Command2D.Clear(color, _) -> Raylib.ClearBackground(color)
+      | Command2D.NoopLight _ -> ()
+      | Command2D.LitSprite(lightCtx,
+                            texture,
+                            dest,
+                            source,
+                            origin,
+                            rotation,
+                            color,
+                            _) ->
+        if not lightCtx.ShaderActive then
+          beginShader lightCtx.Shader
+          lightCtx.ShaderActive <- true
 
-    internalRenderContext.EndShader()
-    internalRenderContext.EndCamera()
+        if lightCtx.UniformsDirty then
+          lightCtx.UploadUniforms()
+          lightCtx.UniformsDirty <- false
+
+        Raylib.DrawTexturePro(texture, source, dest, origin, rotation, color)
+      | Command2D.EndLighting(lightCtx, _) ->
+        if lightCtx.ShaderActive then
+          endShader()
+          lightCtx.ShaderActive <- false
+          lightCtx.UniformsDirty <- true
+      | Command2D.Particle(texture, particles, count, _) ->
+        for j = 0 to count - 1 do
+          let p = particles[j]
+          let halfW = p.Size.X * 0.5f
+          let halfH = p.Size.Y * 0.5f
+
+          let src =
+            Rectangle(0.f, 0.f, float32 texture.Width, float32 texture.Height)
+
+          let dst =
+            Rectangle(
+              p.Position.X - halfW,
+              p.Position.Y - halfH,
+              p.Size.X,
+              p.Size.Y
+            )
+
+          Raylib.DrawTexturePro(texture, src, dst, Vector2.Zero, 0.f, p.Color)
+
+    endShader()
+    endCamera()
 
   let applyPostProcess
     (ctx: GameContext, sceneTarget: RenderTexture2D, passes: PostProcessPass[])
@@ -227,8 +405,6 @@ type Renderer2D<'Model>
     member _.Draw(ctx, model, _gameTime) =
       buffer.Clear()
 
-      _ctx <- ctx
-
       view ctx model buffer
       buffer.Sort()
 
@@ -276,16 +452,3 @@ module Renderer2D =
     (view: GameContext -> 'Model -> RenderBuffer2D -> unit)
     : IRenderer<'Model> =
     new Renderer2D<'Model>(view, Renderer2DConfig.defaults) :> IRenderer<'Model>
-
-  /// <summary>
-  /// Creates a renderer with the specified configuration.
-  /// </summary>
-  /// <param name="config">Renderer configuration including post-process passes and clear color.</param>
-  /// <param name="view">
-  /// The view function that populates the render buffer each frame.
-  /// </param>
-  let createWithConfig
-    (config: Renderer2DConfig)
-    (view: GameContext -> 'Model -> RenderBuffer2D -> unit)
-    : IRenderer<'Model> =
-    new Renderer2D<'Model>(view, config) :> IRenderer<'Model>
