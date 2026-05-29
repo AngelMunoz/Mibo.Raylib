@@ -5,6 +5,7 @@ namespace Mibo.Elmish.Graphics3D
 open System
 open System.Numerics
 open Raylib_cs
+open Mibo.Elmish
 
 /// <summary>
 /// Closed set of 3D render commands. Stored in <see cref="T:Mibo.Elmish.Graphics3D.RenderBuffer3D"/>
@@ -37,7 +38,9 @@ type Command3D =
     colors: Color[] *
     count: int
   | BeginCamera of camera: Camera3D
+  | BeginCameraConfig of config: Camera3DConfig
   | EndCamera
+  | SetShadowOrigin of origin: Vector3
   | SetAmbientLight of aLight: AmbientLight3D
   | AddDirectionalLight of AddDlight: DirectionalLight3D
   | AddPointLight of AddPlight: PointLight3D
@@ -101,7 +104,9 @@ module Command3D =
     Command3D.DrawBillboardBatch(textures, positions, sizes, colors, count)
 
   let inline beginCamera(camera: Camera3D) = Command3D.BeginCamera(camera)
+  let inline beginCameraConfig(config: Camera3DConfig) = Command3D.BeginCameraConfig(config)
   let inline endCamera() = Command3D.EndCamera
+  let inline setShadowOrigin(origin: Vector3) = Command3D.SetShadowOrigin(origin)
 
   let inline setAmbientLight(light: AmbientLight3D) =
     Command3D.SetAmbientLight(light)

@@ -800,11 +800,47 @@ type private PipelineContext
     cameraActive <- true
     currentCamera <- cam
 
+  member _.BeginCameraConfig(cfg: Camera3DConfig, windowWidth: int, windowHeight: int) =
+    if cameraActive then
+      ensureShaderInactive()
+      Raylib.EndMode3D()
+
+    // Apply viewport and clear
+    match cfg.Viewport with
+    | ValueSome vp ->
+      let x = int (vp.X * float32 windowWidth)
+      let y = int (vp.Y * float32 windowHeight)
+      let w = int (vp.Width * float32 windowWidth)
+      let h = int (vp.Height * float32 windowHeight)
+
+      // Scissor-clear so we only clear the viewport region
+      match cfg.ClearColor with
+      | ValueSome color ->
+        Rlgl.EnableScissorTest()
+        Rlgl.Scissor(x, y, w, h)
+        Raylib.ClearBackground(color)
+        Rlgl.DisableScissorTest()
+      | ValueNone -> ()
+
+      Rlgl.Viewport(x, y, w, h)
+    | ValueNone ->
+      // Fullscreen — clear the whole screen
+      match cfg.ClearColor with
+      | ValueSome color -> Raylib.ClearBackground(color)
+      | ValueNone -> ()
+
+    Raylib.BeginMode3D cfg.Camera
+    cameraActive <- true
+    currentCamera <- cfg.Camera
+
   member _.EndCamera() =
     if cameraActive then
       ensureShaderInactive()
       Raylib.EndMode3D()
       cameraActive <- false
+
+    // Restore viewport to full window
+    Rlgl.Viewport(0, 0, gameCtx.WindowWidth, gameCtx.WindowHeight)
 
   member _.DrawMesh(mesh, transform, material) =
     let normalMatrix = computeNormalMatrix transform
@@ -1302,18 +1338,26 @@ type ForwardPbrPipeline
 
     member _.Execute gameCtx buffer rtPool =
       // ------------------------------------------------------------------
-      // Pre-pass: collect camera, lights, and mesh draws for shadow mapping
+      // Pre-pass: collect camera, lights, shadow origin, and mesh draws
       // ------------------------------------------------------------------
       let mutable activeCamera = Unchecked.defaultof<Camera3D>
       let mutable cameraFound = false
+      let mutable explicitShadowOrigin = ValueNone
 
       context.ClearLights()
 
       for i = 0 to buffer.Count - 1 do
         match buffer[i] with
         | Command3D.BeginCamera cam ->
-          activeCamera <- cam
-          cameraFound <- true
+          if not cameraFound then
+            activeCamera <- cam
+            cameraFound <- true
+        | Command3D.BeginCameraConfig cfg ->
+          if not cameraFound then
+            activeCamera <- cfg.Camera
+            cameraFound <- true
+        | Command3D.SetShadowOrigin origin ->
+          explicitShadowOrigin <- ValueSome origin
         | Command3D.AddDirectionalLight light -> context.DirLights.Add light
         | Command3D.AddPointLight light -> context.PointLights.Add light
         | Command3D.AddSpotLight light -> context.SpotLights.Add light
@@ -1478,10 +1522,13 @@ type ForwardPbrPipeline
                     let lightFromDir = Vector3.Normalize(-caster.LightDirection)
 
                     let rawOrigin =
-                      match atlasCfg.OriginStrategy with
-                      | ShadowOriginStrategy.CameraTarget -> activeCamera.Target
-                      | ShadowOriginStrategy.SceneCenter -> Vector3.Zero
-                      | ShadowOriginStrategy.Custom f -> f activeCamera
+                      match explicitShadowOrigin with
+                      | ValueSome origin -> origin
+                      | ValueNone ->
+                        match atlasCfg.OriginStrategy with
+                        | ShadowOriginStrategy.CameraTarget -> activeCamera.Target
+                        | ShadowOriginStrategy.SceneCenter -> Vector3.Zero
+                        | ShadowOriginStrategy.Custom f -> f activeCamera
 
                     let gridSize = atlasCfg.GridSnapSize
 
@@ -1678,7 +1725,9 @@ type ForwardPbrPipeline
         | Command3D.DrawBillboardBatch(textures, positions, sizes, colors, count) ->
           context.DrawBillboardBatch(textures, positions, sizes, colors, count)
         | Command3D.BeginCamera cam -> context.BeginCamera(cam)
+        | Command3D.BeginCameraConfig cfg -> context.BeginCameraConfig(cfg, gameCtx.WindowWidth, gameCtx.WindowHeight)
         | Command3D.EndCamera -> context.EndCamera()
+        | Command3D.SetShadowOrigin _ -> () // handled in pre-pass
         | Command3D.SetAmbientLight light -> context.SetAmbientLight(light)
         | Command3D.AddDirectionalLight light ->
           context.AddDirectionalLight(light)

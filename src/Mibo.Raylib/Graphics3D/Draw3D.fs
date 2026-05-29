@@ -2,6 +2,7 @@ namespace Mibo.Elmish.Graphics3D
 
 open System.Numerics
 open Raylib_cs
+open Mibo.Elmish
 
 /// <summary>
 /// Pipe-friendly drawing DSL for 3D rendering. Each function takes a
@@ -129,9 +130,19 @@ module Draw3D =
     buffer.Add(Command3D.beginCamera camera)
     buffer
 
+  /// <summary>Begins a 3D camera with explicit rendering config (viewport, clear, post-process).</summary>
+  let inline beginCameraWith (config: Camera3DConfig) (buffer: RenderBuffer3D) =
+    buffer.Add(Command3D.beginCameraConfig config)
+    buffer
+
   /// <summary>Ends the current 3D camera transform.</summary>
   let inline endCamera(buffer: RenderBuffer3D) =
     buffer.Add(Command3D.endCamera())
+    buffer
+
+  /// <summary>Sets the shadow origin for this frame's shadow pass.</summary>
+  let inline setShadowOrigin (origin: Vector3) (buffer: RenderBuffer3D) =
+    buffer.Add(Command3D.setShadowOrigin origin)
     buffer
 
   // ──────────────────────────────────────────────
