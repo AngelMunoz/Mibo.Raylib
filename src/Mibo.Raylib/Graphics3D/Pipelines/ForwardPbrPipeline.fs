@@ -561,26 +561,47 @@ type private PipelineContext
       count: int
     ) =
     if cameraActive then
-      for i = 0 to count - 1 do
-        let transform =
-          Matrix4x4.CreateBillboard(
-            positions[i],
-            currentCamera.Position,
-            Vector3.UnitY,
-            Vector3.UnitY
-          )
+      // Group billboards by texture to minimize draw calls
+      let mutable batchStart = 0
 
-        let scaled = Matrix4x4.CreateScale(sizes[i].X, sizes[i].Y, 1.0f)
-        let final = scaled * transform
+      while batchStart < count do
+        let batchTexture = textures[batchStart]
+        let mutable batchEnd = batchStart + 1
+
+        while batchEnd < count && textures[batchEnd].Id = batchTexture.Id do
+          batchEnd <- batchEnd + 1
+
+        let batchSize = batchEnd - batchStart
+        let transforms = Array.zeroCreate<Matrix4x4> batchSize
+
+        for i = 0 to batchSize - 1 do
+          let idx = batchStart + i
+          let billboard =
+            Matrix4x4.CreateBillboard(
+              positions[idx],
+              currentCamera.Position,
+              Vector3.UnitY,
+              Vector3.UnitY
+            )
+
+          transforms[i] <- Matrix4x4.CreateScale(sizes[idx].X, sizes[idx].Y, 1.0f) * billboard
 
         let mat = {
           Material3D.defaults with
-              AlbedoColor = colors[i]
-              AlbedoMap = ValueSome textures[i]
+              AlbedoColor = colors[batchStart]
+              AlbedoMap = ValueSome batchTexture
         }
 
-        let normalMatrix = computeNormalMatrix final
-        drawMeshCore Primitive3D.plane final normalMatrix mat
+        let normalMatrix = computeNormalMatrix transforms[0]
+
+        if lightsDirty then
+          uploadLights()
+
+        setMaterialUniforms normalMatrix mat
+        let raylibMat = getOrCreateMaterial mat
+        Raylib.DrawMeshInstanced(Primitive3D.plane, raylibMat, transforms, batchSize)
+
+        batchStart <- batchEnd
 
   member _.AddPointLight(light: PointLight3D) =
     pointLights.Add light
