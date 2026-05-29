@@ -259,9 +259,10 @@ float computeShadowFromAtlas(vec3 worldPos, int casterIndex)
     vec3 projCoord = shadowCoord.xyz / shadowCoord.w;
     projCoord = projCoord * 0.5 + 0.5;
 
-    if (projCoord.z > 1.0) return 0.0;
+    // Outside shadow frustum → fully lit (no shadow)
+    if (projCoord.z > 1.0) return 1.0;
     if (projCoord.x < 0.0 || projCoord.x > 1.0 || projCoord.y < 0.0 || projCoord.y > 1.0)
-        return 0.0;
+        return 1.0;
 
     // Apply UV offset/scale for atlas region
     vec2 atlasUV = projCoord.xy * shadowUVOffsets[casterIndex].zw + shadowUVOffsets[casterIndex].xy;
@@ -289,9 +290,10 @@ float computePointShadow(vec3 worldPos, int casterIndex)
     vec3 projCoord = shadowCoord.xyz / shadowCoord.w;
     projCoord = projCoord * 0.5 + 0.5;
 
-    if (projCoord.z > 1.0) return 0.0;
+    // Outside shadow frustum → fully lit (no shadow)
+    if (projCoord.z > 1.0) return 1.0;
     if (projCoord.x < 0.0 || projCoord.x > 1.0 || projCoord.y < 0.0 || projCoord.y > 1.0)
-        return 0.0;
+        return 1.0;
 
     vec2 atlasUV = projCoord.xy * shadowUVOffsets[casterIndex].zw + shadowUVOffsets[casterIndex].xy;
 
@@ -316,9 +318,10 @@ float computeSpotShadow(vec3 worldPos, int casterIndex)
     vec3 projCoord = shadowCoord.xyz / shadowCoord.w;
     projCoord = projCoord * 0.5 + 0.5;
 
-    if (projCoord.z > 1.0) return 0.0;
+    // Outside shadow frustum → fully lit (no shadow)
+    if (projCoord.z > 1.0) return 1.0;
     if (projCoord.x < 0.0 || projCoord.x > 1.0 || projCoord.y < 0.0 || projCoord.y > 1.0)
-        return 0.0;
+        return 1.0;
 
     vec2 atlasUV = projCoord.xy * shadowUVOffsets[casterIndex].zw + shadowUVOffsets[casterIndex].xy;
 

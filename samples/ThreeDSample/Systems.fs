@@ -10,7 +10,10 @@ open ThreeDSample.Types
 open ThreeDSample.Physics
 open ThreeDSample.WorldGen
 
-let inputSystem (dt: float32) (model: GameModel) : struct (GameModel * Cmd<Msg>) =
+let inputSystem
+  (dt: float32)
+  (model: GameModel)
+  : struct (GameModel * Cmd<Msg>) =
   let mutable yaw = model.CameraYaw
   let mutable pitch = model.CameraPitch
 
@@ -30,7 +33,10 @@ let inputSystem (dt: float32) (model: GameModel) : struct (GameModel * Cmd<Msg>)
   model.CameraPitch <- Math.Clamp(pitch, -0.5f, 1.3f)
   struct (model, Cmd.none)
 
-let physicsSystem (dt: float32) (model: GameModel) : struct (GameModel * Cmd<Msg>) =
+let physicsSystem
+  (dt: float32)
+  (model: GameModel)
+  : struct (GameModel * Cmd<Msg>) =
   let moveDir = computeMoveDirection model.Actions model.CameraYaw
 
   let vel =
@@ -81,17 +87,22 @@ let physicsSystem (dt: float32) (model: GameModel) : struct (GameModel * Cmd<Msg
   model.CameraPosition <-
     Vector3.Lerp(model.CameraPosition, desiredCamPos, lerpFactor)
 
-  model.CameraTarget <-
-    Vector3.Lerp(model.CameraTarget, target, lerpFactor)
+  model.CameraTarget <- Vector3.Lerp(model.CameraTarget, target, lerpFactor)
 
   struct (model, Cmd.none)
 
-let chunkSystem (dt: float32) (model: GameModel) : struct (GameModel * Cmd<Msg>) =
+let chunkSystem
+  (dt: float32)
+  (model: GameModel)
+  : struct (GameModel * Cmd<Msg>) =
   loadChunks model.PlayerPosition model.Chunks model.Seed
   evictDistantChunks model.PlayerPosition model.Chunks model.KeysToRemove
   struct (model, Cmd.none)
 
-let dayNightSystem (dt: float32) (model: GameModel) : struct (GameModel * Cmd<Msg>) =
+let dayNightSystem
+  (dt: float32)
+  (model: GameModel)
+  : struct (GameModel * Cmd<Msg>) =
   let newTime =
     (model.DayNightTimeOfDay + dt * (24.0f / model.DayNightDuration)) % 24.0f
 

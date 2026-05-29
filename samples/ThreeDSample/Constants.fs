@@ -7,8 +7,10 @@ let cellSize = 1.0f
 
 [<Literal>]
 let chunkWidth = 32
+
 [<Literal>]
 let chunkHeight = 16
+
 [<Literal>]
 let chunkDepth = 32
 
@@ -17,30 +19,40 @@ let chunkWorldDepth = float32 chunkDepth * cellSize
 
 [<Literal>]
 let playerHeight = 1.8f
+
 [<Literal>]
 let playerRadius = 0.3f
 
 [<Literal>]
 let gravity = -20.0f
+
 [<Literal>]
 let jumpSpeed = 12.0f
+
 [<Literal>]
 let moveSpeed = 8.0f
+
 [<Literal>]
 let acceleration = 25.0f
+
 [<Literal>]
 let friction = 8.0f
+
 [<Literal>]
 let fallLimit = -30.0f
 
 [<Literal>]
 let cameraDistance = 8.0f
+
 [<Literal>]
 let cameraHeightOffset = 2.0f
+
 [<Literal>]
 let cameraLerpSpeed = 10.0f
+
 [<Literal>]
 let cameraDefaultPitch = 0.15f
+
 [<Literal>]
 let cameraDefaultYaw = System.MathF.PI / 4.0f
 
@@ -49,15 +61,18 @@ let mouseSensitivity = 0.003f
 
 [<Literal>]
 let viewportWidth = 1280.0f
+
 [<Literal>]
 let viewportHeight = 720.0f
 
 [<Literal>]
 let chunkLoadRadius = 1
+
 [<Literal>]
 let chunkEvictRadius = 4
 
-let spawnPosition = Vector3(float32 chunkWidth / 2.0f, 10.0f, float32 chunkDepth / 2.0f)
+let spawnPosition =
+  Vector3(float32 chunkWidth / 2.0f, 10.0f, float32 chunkDepth / 2.0f)
 
 module KenneyModels =
   let basePath = "assets/kenney_platformer-kit/Models/"

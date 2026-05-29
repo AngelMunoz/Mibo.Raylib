@@ -31,32 +31,47 @@ let inline lerpColor (a: Color) (b: Color) (t: float32) =
   )
 
 let getSkyColor time : Color =
-  if time < 6.0f then Color(10uy, 10uy, 30uy)
+  if time < 6.0f then
+    Color(10uy, 10uy, 30uy)
   elif time < 8.0f then
-    lerpColor (Color(10uy, 10uy, 30uy)) (Color(100uy, 149uy, 237uy)) ((time - 6.0f) / 2.0f)
-  elif time < 16.0f then Color(100uy, 149uy, 237uy)
+    lerpColor
+      (Color(10uy, 10uy, 30uy))
+      (Color(100uy, 149uy, 237uy))
+      ((time - 6.0f) / 2.0f)
+  elif time < 16.0f then
+    Color(100uy, 149uy, 237uy)
   elif time < 18.0f then
-    lerpColor (Color(100uy, 149uy, 237uy)) (Color(50uy, 50uy, 100uy)) ((time - 16.0f) / 2.0f)
+    lerpColor
+      (Color(100uy, 149uy, 237uy))
+      (Color(50uy, 50uy, 100uy))
+      ((time - 16.0f) / 2.0f)
   elif time < 20.0f then
-    lerpColor (Color(50uy, 50uy, 100uy)) (Color(10uy, 10uy, 30uy)) ((time - 18.0f) / 2.0f)
-  else Color(10uy, 10uy, 30uy)
+    lerpColor
+      (Color(50uy, 50uy, 100uy))
+      (Color(10uy, 10uy, 30uy))
+      ((time - 18.0f) / 2.0f)
+  else
+    Color(10uy, 10uy, 30uy)
 
 let getAmbientColor time : Color =
-  if time < 5.0f || time > 19.0f then Color(40uy, 50uy, 120uy)
+  if time < 5.0f || time > 19.0f then
+    Color(40uy, 50uy, 120uy)
   elif time < 7.0f then
     let t = (time - 5.0f) / 2.0f
     let r = byte(int(15.0f + t * 80.0f))
     let g = byte(int(20.0f + t * 100.0f))
     let b = byte(int(45.0f + t * 110.0f))
     Color(r, g, b)
-  elif time < 17.0f then Color(95uy, 130uy, 155uy)
+  elif time < 17.0f then
+    Color(95uy, 130uy, 155uy)
   elif time < 19.0f then
     let t = (time - 17.0f) / 2.0f
     let r = byte(int(95.0f + t * 40.0f))
     let g = byte(int(130.0f + t * 50.0f))
     let b = byte(int(155.0f + t * 60.0f))
     Color(r, g, b)
-  else Color(40uy, 50uy, 120uy)
+  else
+    Color(40uy, 50uy, 120uy)
 
 let getAmbientIntensity time : float32 =
   let color = getAmbientColor time
@@ -71,18 +86,20 @@ let getAmbientIntensity time : float32 =
 // the direction flip between opposite horizons is invisible.
 // ---------------------------------------------------------------------------
 
-let private sunArc (time: float32) : Vector3 =
-  let t = (time - 6.0f) / 12.0f       // 0 at dawn, 1 at dusk
-  let angle = t * MathF.PI             // 0 → π
+let private sunArc(time: float32) : Vector3 =
+  let t = (time - 6.0f) / 12.0f // 0 at dawn, 1 at dusk
+  let angle = t * MathF.PI // 0 → π
+
   Vector3(
-    MathF.Cos(angle) * 0.8f,           // +1 east → -1 west
-    -MathF.Sin(angle) * 0.6f,          // 0 horizon → -1 overhead → 0 horizon
+    MathF.Cos(angle) * 0.8f, // +1 east → -1 west
+    -MathF.Sin(angle) * 0.6f, // 0 horizon → -1 overhead → 0 horizon
     MathF.Sin(angle * 0.5f) * 0.5f
   )
 
-let private moonArc (time: float32) : Vector3 =
-  let t = ((time - 18.0f + 24.0f) % 24.0f) / 12.0f  // 0 at moonrise (18h), 1 at moonset (6h)
+let private moonArc(time: float32) : Vector3 =
+  let t = ((time - 18.0f + 24.0f) % 24.0f) / 12.0f // 0 at moonrise (18h), 1 at moonset (6h)
   let angle = t * MathF.PI
+
   Vector3(
     MathF.Cos(angle) * 0.8f,
     -MathF.Sin(angle) * 0.6f,
@@ -91,22 +108,32 @@ let private moonArc (time: float32) : Vector3 =
 
 /// Primary light direction — sun (6h–18h) or moon (18h–6h).
 /// Both are above the horizon on their respective arcs.
-let getPrimaryLightDirection (time: float32) : Vector3 =
-  if time >= 6.0f && time <= 18.0f then sunArc time else moonArc time
+let getPrimaryLightDirection(time: float32) : Vector3 =
+  if time >= 6.0f && time <= 18.0f then
+    sunArc time
+  else
+    moonArc time
 
-let getPrimaryLightColor (time: float32) : Color =
+let getPrimaryLightColor(time: float32) : Color =
   if time >= 6.0f && time <= 18.0f then
     // Daytime: warm sun
     if time < 8.0f then
-      lerpColor (Color(255uy, 150uy, 80uy)) (Color(255uy, 245uy, 210uy)) ((time - 6.0f) / 2.0f)
-    elif time < 16.0f then Color(255uy, 245uy, 210uy)
+      lerpColor
+        (Color(255uy, 150uy, 80uy))
+        (Color(255uy, 245uy, 210uy))
+        ((time - 6.0f) / 2.0f)
+    elif time < 16.0f then
+      Color(255uy, 245uy, 210uy)
     else
-      lerpColor (Color(255uy, 245uy, 210uy)) (Color(255uy, 120uy, 60uy)) ((time - 16.0f) / 2.0f)
+      lerpColor
+        (Color(255uy, 245uy, 210uy))
+        (Color(255uy, 120uy, 60uy))
+        ((time - 16.0f) / 2.0f)
   else
     // Nighttime: cool blue moonlight
     Color(160uy, 190uy, 230uy)
 
-let getPrimaryLightIntensity (time: float32) : float32 =
+let getPrimaryLightIntensity(time: float32) : float32 =
   if time >= 6.0f && time <= 18.0f then
     // Daytime: ramp up at dawn, full at noon, ramp down at dusk
     if time < 8.0f then (time - 6.0f) / 2.0f

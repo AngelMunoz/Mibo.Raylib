@@ -29,13 +29,16 @@ let loadOrGetModel
       m
 
 // Persistent mesh/material cache keyed by model path.
-let private meshMaterialCache = Dictionary<string, struct (Raylib_cs.Mesh * Material3D)[]>()
+let private meshMaterialCache =
+  Dictionary<string, struct (Raylib_cs.Mesh * Material3D)[]>()
 
 // Per-frame mutable context set once before rendering.
-let mutable private currentModelCache = Unchecked.defaultof<Dictionary<string, Model>>
+let mutable private currentModelCache =
+  Unchecked.defaultof<Dictionary<string, Model>>
+
 let mutable private currentGameContext = Unchecked.defaultof<GameContext>
 
-let private resolveMeshesAndMaterial (blockType: BlockType) =
+let private resolveMeshesAndMaterial(blockType: BlockType) =
   let path = BlockType.modelPath blockType
 
   match meshMaterialCache.TryGetValue path with
@@ -47,11 +50,11 @@ let private resolveMeshesAndMaterial (blockType: BlockType) =
       if m.MeshCount > 0 then
         [|
           for mi = 0 to m.MeshCount - 1 do
-          #nowarn "9"
+            #nowarn 9
             let mesh = NativePtr.get m.Meshes mi
             let matIdx = NativePtr.get m.MeshMaterial mi
             let raylibMat = NativePtr.get m.Materials matIdx
-          #warnon "9"
+            #warnon 9
             struct (mesh, Material3D.fromRaylibMaterial raylibMat)
         |]
       else
@@ -65,25 +68,31 @@ let private instancedCtx =
   InstancedRenderContext<BlockType, string>(
     getKey = BlockType.modelPath,
     getMeshesAndMaterial = resolveMeshesAndMaterial,
-    getTransform = fun worldPos blockType ->
-      let rotAngle = BlockType.modelRotation blockType * MathF.PI / 180.0f
-      let yOff = BlockType.modelVerticalOffset blockType
+    getTransform =
+      fun worldPos blockType ->
+        let rotAngle = BlockType.modelRotation blockType * MathF.PI / 180.0f
+        let yOff = BlockType.modelVerticalOffset blockType
 
-      if rotAngle = 0.0f && yOff = 0.0f then
-        Raymath.MatrixTranslate(worldPos.X, worldPos.Y, worldPos.Z)
-      elif rotAngle = 0.0f then
-        Raymath.MatrixTranslate(worldPos.X, worldPos.Y + yOff, worldPos.Z)
-      else
-        let rot = Raymath.MatrixRotateY(rotAngle)
-        let trans = Raymath.MatrixTranslate(worldPos.X, worldPos.Y + yOff, worldPos.Z)
-        Raymath.MatrixMultiply(rot, trans)
+        if rotAngle = 0.0f && yOff = 0.0f then
+          Raymath.MatrixTranslate(worldPos.X, worldPos.Y, worldPos.Z)
+        elif rotAngle = 0.0f then
+          Raymath.MatrixTranslate(worldPos.X, worldPos.Y + yOff, worldPos.Z)
+        else
+          let rot = Raymath.MatrixRotateY(rotAngle)
+
+          let trans =
+            Raymath.MatrixTranslate(worldPos.X, worldPos.Y + yOff, worldPos.Z)
+
+          Raymath.MatrixMultiply(rot, trans)
   )
 
 let view (ctx: GameContext) (model: GameModel) (buffer: RenderBuffer3D) =
   let time = 12.0f // DEBUG: fixed noon
   let skyColor = DayNight.getSkyColor time
 
-  buffer.Add(Command3D.drawImmediate(fun () -> Raylib.ClearBackground(skyColor)))
+  buffer.Add(
+    Command3D.drawImmediate(fun () -> Raylib.ClearBackground(skyColor))
+  )
 
   let camera =
     Camera3D(
@@ -94,7 +103,11 @@ let view (ctx: GameContext) (model: GameModel) (buffer: RenderBuffer3D) =
       CameraProjection.Perspective
     )
 
-  let ambient = { Color = DayNight.getAmbientColor time; Intensity = 0.6f }
+  let ambient = {
+    Color = DayNight.getAmbientColor time
+    Intensity = 0.6f
+  }
+
   let lightDir = Vector3(0.0f, -1.0f, 0.0f)
 
   buffer
@@ -162,11 +175,19 @@ let view (ctx: GameContext) (model: GameModel) (buffer: RenderBuffer3D) =
             |> ignore)
 
   // Player model
-  let playerModel = loadOrGetModel model.ModelCache KenneyModels.characterOobi ctx
+  let playerModel =
+    loadOrGetModel model.ModelCache KenneyModels.characterOobi ctx
 
   let playerTransform =
     let rot = Raymath.MatrixRotateY(model.PlayerFacing)
-    let trans = Raymath.MatrixTranslate(model.PlayerPosition.X, model.PlayerPosition.Y, model.PlayerPosition.Z)
+
+    let trans =
+      Raymath.MatrixTranslate(
+        model.PlayerPosition.X,
+        model.PlayerPosition.Y,
+        model.PlayerPosition.Z
+      )
+
     Raymath.MatrixMultiply(rot, trans)
 
   buffer.Add(Command3D.drawModel playerModel playerTransform) |> ignore
@@ -177,11 +198,18 @@ let view (ctx: GameContext) (model: GameModel) (buffer: RenderBuffer3D) =
     Command3D.drawImmediate(fun () ->
       Raylib.DrawText(
         $"FPS: {Raylib.GetFPS()}  Chunks: {model.Chunks.Count}  Score: {model.Score}",
-        10, 10, 20, Color.Yellow
+        10,
+        10,
+        20,
+        Color.Yellow
       )
+
       Raylib.DrawText(
         $"Time: {model.DayNightTimeOfDay:F1}h  Pos: ({model.PlayerPosition.X:F0},{model.PlayerPosition.Y:F0},{model.PlayerPosition.Z:F0})  Grounded: {model.IsGrounded}",
-        10, 35, 20, Color.Yellow
+        10,
+        35,
+        20,
+        Color.Yellow
       ))
   )
   |> ignore

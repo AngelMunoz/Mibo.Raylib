@@ -12,20 +12,20 @@ open ThreeDSample.Types
 open ThreeDSample.WorldGen
 open ThreeDSample.Physics
 
-let loadInitialChunks (model: GameModel) =
+let loadInitialChunks(model: GameModel) =
   let spawnPos = spawnPosition
   let pcx = int(Math.Floor(float spawnPos.X / float chunkWorldWidth))
   let pcz = int(Math.Floor(float spawnPos.Z / float chunkWorldDepth))
 
-  for x in pcx - chunkLoadRadius..pcx + chunkLoadRadius do
-    for z in pcz - chunkLoadRadius..pcz + chunkLoadRadius do
+  for x in pcx - chunkLoadRadius .. pcx + chunkLoadRadius do
+    for z in pcz - chunkLoadRadius .. pcz + chunkLoadRadius do
       let key = struct (x, z)
 
-      if not (model.Chunks.ContainsKey key) then
+      if not(model.Chunks.ContainsKey key) then
         model.Chunks[key] <- generateChunk x z model.Seed
 
-let init (ctx: GameContext) =
-  let inputMap : InputMap<GameAction> =
+let init(ctx: GameContext) =
+  let inputMap: InputMap<GameAction> =
     InputMap.empty
     |> InputMap.key GameAction.MoveLeft KeyboardKey.A
     |> InputMap.key GameAction.MoveLeft KeyboardKey.Left

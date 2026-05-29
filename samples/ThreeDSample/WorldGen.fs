@@ -13,7 +13,10 @@ let chunkSeed cx cz worldSeed =
 
 let generateChunk cx cz worldSeed : Chunk =
   let rng = Random(chunkSeed cx cz worldSeed)
-  let origin = Vector3(float32 cx * chunkWorldWidth, 0.0f, float32 cz * chunkWorldDepth)
+
+  let origin =
+    Vector3(float32 cx * chunkWorldWidth, 0.0f, float32 cz * chunkWorldDepth)
+
   let isSnow = (abs cx + abs cz) % 3 = 0
 
   let grid =
@@ -25,13 +28,23 @@ let generateChunk cx cz worldSeed : Chunk =
       origin
 
   // ── Ground floor via DSL ──
-  Layout3D.run (fun s -> s |> Layout3D.floorXZ 0 0 0 chunkWidth chunkDepth (if isSnow then BlockType.SnowGround else BlockType.Ground)) grid
+  Layout3D.run
+    (fun s ->
+      s
+      |> Layout3D.floorXZ
+        0
+        0
+        0
+        chunkWidth
+        chunkDepth
+        (if isSnow then BlockType.SnowGround else BlockType.Ground))
+    grid
   |> ignore
 
   // ── Pits (gaps in ground) ──
   let pitCount = rng.Next(2, 6)
 
-  for _ in 0 .. pitCount do
+  for _ in 0..pitCount do
     let px = rng.Next(1, chunkWidth - 6)
     let pz = rng.Next(1, chunkDepth - 6)
     let pw = rng.Next(2, 5)
@@ -42,14 +55,16 @@ let generateChunk cx cz worldSeed : Chunk =
   // ── Mid-level platforms via DSL fill ──
   let platformCount = rng.Next(2, 5)
 
-  for _ in 0 .. platformCount do
+  for _ in 0..platformCount do
     let px = rng.Next(1, chunkWidth - 8)
     let pz = rng.Next(1, chunkDepth - 8)
     let py = 3 + rng.Next(0, 3)
     let pw = rng.Next(2, 7)
     let pd = rng.Next(2, 7)
 
-    Layout3D.run (fun s -> s |> Layout3D.floorXZ px py pz pw pd BlockType.Platform) grid
+    Layout3D.run
+      (fun s -> s |> Layout3D.floorXZ px py pz pw pd BlockType.Platform)
+      grid
     |> ignore
 
   // ── Stairs (procedural) ──
@@ -68,18 +83,22 @@ let generateChunk cx cz worldSeed : Chunk =
     let pw = rng.Next(2, 5)
     let pd = rng.Next(2, 5)
 
-    Layout3D.run (fun s -> s |> Layout3D.floorXZ px py pz pw pd BlockType.Platform) grid
+    Layout3D.run
+      (fun s -> s |> Layout3D.floorXZ px py pz pw pd BlockType.Platform)
+      grid
     |> ignore
 
   // ── Pillars via DSL column ──
   let pillarCount = rng.Next(0, 3)
 
-  for _ in 0 .. pillarCount do
+  for _ in 0..pillarCount do
     let px = rng.Next(1, chunkWidth - 3)
     let pz = rng.Next(1, chunkDepth - 3)
     let ph = rng.Next(2, 6)
 
-    Layout3D.run (fun s -> s |> Layout3D.column px 0 pz ph BlockType.Ground) grid
+    Layout3D.run
+      (fun s -> s |> Layout3D.column px 0 pz ph BlockType.Ground)
+      grid
     |> ignore
 
   // ── Spikes ──
@@ -89,40 +108,49 @@ let generateChunk cx cz worldSeed : Chunk =
     let sw = rng.Next(1, 4)
     let sd = rng.Next(1, 4)
 
-    Layout3D.run (fun s -> s |> Layout3D.floorXZ sx 1 sz sw sd BlockType.Spikes) grid
+    Layout3D.run
+      (fun s -> s |> Layout3D.floorXZ sx 1 sz sw sd BlockType.Spikes)
+      grid
     |> ignore
 
   // ── Decorations via scatter ──
   let treeCount = rng.Next(1, 4)
   let treeType = if isSnow then BlockType.TreeSnow else BlockType.TreePine
 
-  Layout3D.run (fun s ->
-    s
-    |> Layout3D.scatterXZ 1 treeCount (rng.Next()) treeType) grid |> ignore
+  Layout3D.run
+    (fun s -> s |> Layout3D.scatterXZ 1 treeCount (rng.Next()) treeType)
+    grid
+  |> ignore
 
   let rockCount = rng.Next(0, 3)
 
-  Layout3D.run (fun s ->
-    s
-    |> Layout3D.scatterXZ 1 rockCount (rng.Next()) BlockType.Rock) grid |> ignore
+  Layout3D.run
+    (fun s -> s |> Layout3D.scatterXZ 1 rockCount (rng.Next()) BlockType.Rock)
+    grid
+  |> ignore
 
   let grassCount = rng.Next(2, 8)
 
-  Layout3D.run (fun s ->
-    s
-    |> Layout3D.scatterXZ 1 grassCount (rng.Next()) BlockType.GrassTuft) grid |> ignore
+  Layout3D.run
+    (fun s ->
+      s |> Layout3D.scatterXZ 1 grassCount (rng.Next()) BlockType.GrassTuft)
+    grid
+  |> ignore
 
   // ── Glowing mushrooms (light sources) ──
   let lanternCount = rng.Next(1, 3)
 
-  Layout3D.run (fun s ->
-    s
-    |> Layout3D.scatterXZ 1 lanternCount (rng.Next()) BlockType.MushroomLight) grid |> ignore
+  Layout3D.run
+    (fun s ->
+      s
+      |> Layout3D.scatterXZ 1 lanternCount (rng.Next()) BlockType.MushroomLight)
+    grid
+  |> ignore
 
   // ── Coins on elevated platforms (procedural — needs neighbor checks) ──
   let coinCount = rng.Next(2, 8)
 
-  for _ in 0 .. coinCount do
+  for _ in 0..coinCount do
     let cx' = rng.Next(2, chunkWidth - 3)
     let cz' = rng.Next(2, chunkDepth - 3)
 
@@ -164,7 +192,11 @@ let generateChunk cx cz worldSeed : Chunk =
       BoundingBox(
         origin,
         origin
-        + Vector3(chunkWorldWidth, float32 chunkHeight * cellSize, chunkWorldDepth)
+        + Vector3(
+          chunkWorldWidth,
+          float32 chunkHeight * cellSize,
+          chunkWorldDepth
+        )
       )
     OriginX = cx
     OriginZ = cz
@@ -178,11 +210,11 @@ let loadChunks
   let pcx = int(Math.Floor(float playerPos.X / float chunkWorldWidth))
   let pcz = int(Math.Floor(float playerPos.Z / float chunkWorldDepth))
 
-  for x in pcx - chunkLoadRadius..pcx + chunkLoadRadius do
-    for z in pcz - chunkLoadRadius..pcz + chunkLoadRadius do
+  for x in pcx - chunkLoadRadius .. pcx + chunkLoadRadius do
+    for z in pcz - chunkLoadRadius .. pcz + chunkLoadRadius do
       let key = struct (x, z)
 
-      if not (chunks.ContainsKey(key)) then
+      if not(chunks.ContainsKey(key)) then
         chunks[key] <- generateChunk x z seed
 
 let evictDistantChunks
@@ -197,7 +229,7 @@ let evictDistantChunks
   for KeyValue(key, _) in chunks do
     let struct (cx, cz) = key
 
-    if abs (cx - pcx) > chunkEvictRadius || abs (cz - pcz) > chunkEvictRadius then
+    if abs(cx - pcx) > chunkEvictRadius || abs(cz - pcz) > chunkEvictRadius then
       keysToRemove.Add key
 
   for i = 0 to keysToRemove.Count - 1 do

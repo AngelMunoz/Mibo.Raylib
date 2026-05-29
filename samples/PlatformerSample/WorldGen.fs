@@ -128,7 +128,12 @@ let generateChunk (cx: int) (cy: int) (worldSeed: int) : Chunk =
   let torches = extractTorches grid rng
   // Only floating platforms cast shadows — ground does not
   let occluders =
-    GridOccluders.fromCellGrid (fun t -> t = Platform) (GridOccluders.Edge.Bottom ||| GridOccluders.Edge.Left ||| GridOccluders.Edge.Right) grid
+    GridOccluders.fromCellGrid
+      (fun t -> t = Platform)
+      (GridOccluders.Edge.Bottom
+       ||| GridOccluders.Edge.Left
+       ||| GridOccluders.Edge.Right)
+      grid
 
   {
     Grid = grid

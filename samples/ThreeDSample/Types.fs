@@ -51,7 +51,8 @@ type BlockType =
   | MushroomLight
 
 module BlockType =
-  let modelPath = function
+  let modelPath =
+    function
     | Ground -> Constants.KenneyModels.blockGrass
     | GroundSlopeXPos -> Constants.KenneyModels.blockGrassSlope
     | GroundSlopeXNeg -> Constants.KenneyModels.blockGrassSlope
@@ -80,12 +81,19 @@ module BlockType =
     | MushroomLight -> Constants.KenneyModels.mushrooms
     | Empty -> ""
 
-  let modelVerticalOffset = function
-    | Platform | PlatformRamp -> Constants.cellSize * 0.5f
-    | Coin | Jewel | Heart | Star | Flag -> Constants.cellSize * 0.5f
+  let modelVerticalOffset =
+    function
+    | Platform
+    | PlatformRamp -> Constants.cellSize * 0.5f
+    | Coin
+    | Jewel
+    | Heart
+    | Star
+    | Flag -> Constants.cellSize * 0.5f
     | _ -> 0.0f
 
-  let modelRotation = function
+  let modelRotation =
+    function
     | GroundSlopeXNeg -> 180.0f
     | GroundSlopeZPos -> 90.0f
     | GroundSlopeZNeg -> -90.0f
@@ -94,19 +102,41 @@ module BlockType =
     | SnowSlopeZNeg -> -90.0f
     | _ -> 0.0f
 
-  let isSolid = function
-    | Empty | Coin | Jewel | Heart | Star | GrassTuft | Mushrooms | MushroomLight | Flag -> false
+  let isSolid =
+    function
+    | Empty
+    | Coin
+    | Jewel
+    | Heart
+    | Star
+    | GrassTuft
+    | Mushrooms
+    | MushroomLight
+    | Flag -> false
     | _ -> true
 
-  let isCollectible = function
-    | Coin | Jewel | Heart | Star -> true
+  let isCollectible =
+    function
+    | Coin
+    | Jewel
+    | Heart
+    | Star -> true
     | _ -> false
 
-  let isDecoration = function
-    | TreePine | TreeSnow | Rock | GrassTuft | Mushrooms | Flag | Barrel | Crate -> true
+  let isDecoration =
+    function
+    | TreePine
+    | TreeSnow
+    | Rock
+    | GrassTuft
+    | Mushrooms
+    | Flag
+    | Barrel
+    | Crate -> true
     | _ -> false
 
-  let isLightSource = function
+  let isLightSource =
+    function
     | MushroomLight -> true
     | _ -> false
 
@@ -124,7 +154,10 @@ type GameModel() =
   member val IsGrounded = false with get, set
   member val CameraYaw = Constants.cameraDefaultYaw with get, set
   member val CameraPitch = Constants.cameraDefaultPitch with get, set
-  member val CameraPosition = Constants.spawnPosition + Vector3(0.0f, 4.0f, 8.0f) with get, set
+
+  member val CameraPosition =
+    Constants.spawnPosition + Vector3(0.0f, 4.0f, 8.0f) with get, set
+
   member val CameraTarget = Constants.spawnPosition with get, set
   member val Actions: ActionState<GameAction> = ActionState.empty with get, set
   member val InputMap: InputMap<GameAction> = InputMap.empty with get, set
