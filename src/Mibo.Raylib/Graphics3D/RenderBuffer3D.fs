@@ -23,7 +23,7 @@ open System.Collections.Generic
 type RenderBuffer3D([<Struct>] ?capacity: int) =
 
   let mutable items =
-    ArrayPool<IRenderCommand3D>.Shared.Rent(defaultValueArg capacity 1024)
+    ArrayPool<Command3D>.Shared.Rent(defaultValueArg capacity 1024)
 
   let mutable count = 0
 
@@ -31,10 +31,10 @@ type RenderBuffer3D([<Struct>] ?capacity: int) =
     if count + needed > items.Length then
       let newSize = max (items.Length * 2) (count + needed)
 
-      let newArr = ArrayPool<IRenderCommand3D>.Shared.Rent(newSize)
+      let newArr = ArrayPool<Command3D>.Shared.Rent(newSize)
 
       Array.Copy(items, newArr, count)
-      ArrayPool<IRenderCommand3D>.Shared.Return(items)
+      ArrayPool<Command3D>.Shared.Return(items)
       items <- newArr
 
   /// <summary>The number of commands currently in the buffer.</summary>
@@ -44,7 +44,7 @@ type RenderBuffer3D([<Struct>] ?capacity: int) =
   member _.Item(i: int) = items[i]
 
   /// <summary>Adds a render command to the buffer.</summary>
-  member _.Add(cmd: IRenderCommand3D) =
+  member _.Add(cmd: Command3D) =
     ensureCapacity 1
     items[count] <- cmd
     count <- count + 1
@@ -59,10 +59,10 @@ type RenderBuffer3D([<Struct>] ?capacity: int) =
   /// Sorts commands using the provided comparer.
   /// Pipelines may call this internally to optimize draw order.
   /// </summary>
-  member _.Sort(comparer: IComparer<IRenderCommand3D>) =
+  member _.Sort(comparer: IComparer<Command3D>) =
     Array.Sort(items, 0, count, comparer)
 
   interface System.IDisposable with
     member _.Dispose() =
-      ArrayPool<IRenderCommand3D>.Shared.Return(items)
+      ArrayPool<Command3D>.Shared.Return(items)
       items <- Array.empty

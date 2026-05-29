@@ -6,6 +6,7 @@ open System
 open System.Collections.Generic
 open System.Numerics
 open FSharp.NativeInterop
+open FSharp.UMX
 open Raylib_cs
 
 // ------------------------------------------------------------------
@@ -13,7 +14,8 @@ open Raylib_cs
 // ------------------------------------------------------------------
 
 /// <summary>Unique identifier for a shadow caster in the atlas.</summary>
-type ShadowCasterId = int
+[<Measure>]
+type ShadowCasterId
 
 /// <summary>Type of shadow caster determines projection and face count.</summary>
 type ShadowCasterType =
@@ -25,7 +27,7 @@ type ShadowCasterType =
 [<Struct>]
 type ShadowCasterData = {
   /// <summary>Unique identifier for this caster.</summary>
-  Id: ShadowCasterId
+  Id: int<ShadowCasterId>
   /// <summary>Type of light (directional, point, spot).</summary>
   Type: ShadowCasterType
   /// <summary>World-space position of the light (for point/spot).</summary>
@@ -55,6 +57,7 @@ type ShadowCasterData = {
 /// The shadow origin determines where shadow maps are centered. This affects
 /// which parts of the scene receive shadows and how shadows move with the camera.
 /// </remarks>
+[<Struct>]
 type ShadowOriginStrategy =
   /// <summary>Use the camera's target point as shadow origin. Good for third-person games.</summary>
   | CameraTarget
@@ -178,7 +181,7 @@ type ShadowAtlas(config: ShadowAtlasConfig, biasConfig: ShadowBiasConfig) =
   let regionSize = config.Resolution / gridSize
 
   let mutable fbo: RenderTexture2D = Unchecked.defaultof<RenderTexture2D>
-  let casters = Dictionary<ShadowCasterId, ShadowCasterData>()
+  let casters = Dictionary<int<ShadowCasterId>, ShadowCasterData>()
   let viewProjs = Dictionary<int, Matrix4x4>()
   let mutable nextId = 0
   let mutable slotAllocator = 0
@@ -311,16 +314,16 @@ type ShadowAtlas(config: ShadowAtlasConfig, biasConfig: ShadowBiasConfig) =
       lightTarget: Vector3,
       enabled: bool,
       biasOverride: float32 voption
-    ) : ShadowCasterId voption =
+    ) : int<ShadowCasterId> voption =
     let regionCount =
       match casterType with
-      | ShadowCasterType.Point -> 6 // Cubemap faces
+      | ShadowCasterType.Point -> 6
       | _ -> 1
 
     match this.AllocateSlot(regionCount) with
     | ValueNone -> ValueNone
     | ValueSome region ->
-      let id = nextId
+      let id = UMX.tag<ShadowCasterId> nextId
       nextId <- nextId + 1
 
       let caster = {
@@ -340,7 +343,7 @@ type ShadowAtlas(config: ShadowAtlasConfig, biasConfig: ShadowBiasConfig) =
       ValueSome id
 
   /// <summary>Remove a shadow caster and free its atlas regions.</summary>
-  member this.RemoveCaster(id: ShadowCasterId) =
+  member this.RemoveCaster(id: int<ShadowCasterId>) =
     match casters.TryGetValue(id) with
     | true, caster ->
       this.FreeSlot(caster.AtlasRegion, caster.RegionCount)
@@ -350,7 +353,7 @@ type ShadowAtlas(config: ShadowAtlasConfig, biasConfig: ShadowBiasConfig) =
   /// <summary>Update a shadow caster's properties.</summary>
   member this.UpdateCaster
     (
-      id: ShadowCasterId,
+      id: int<ShadowCasterId>,
       ?lightPosition: Vector3,
       ?lightDirection: Vector3,
       ?lightTarget: Vector3,
@@ -385,7 +388,7 @@ type ShadowAtlas(config: ShadowAtlasConfig, biasConfig: ShadowBiasConfig) =
     viewProjs[regionIndex] <- vp
 
   /// <summary>Set the view-projection matrix for a single-region caster.</summary>
-  member this.SetCasterViewProj(id: ShadowCasterId, vp: Matrix4x4) =
+  member this.SetCasterViewProj(id: int<ShadowCasterId>, vp: Matrix4x4) =
     match casters.TryGetValue(id) with
     | true, caster -> this.SetRegionViewProj(caster.AtlasRegion, vp)
     | false, _ -> ()
@@ -424,6 +427,7 @@ type ShadowAtlas(config: ShadowAtlasConfig, biasConfig: ShadowBiasConfig) =
           if index < config.MaxCasters then
             // Get VP from dictionary by region index
             let regionIndex = caster.AtlasRegion + r
+
             match viewProjs.TryGetValue(regionIndex) with
             | true, vp -> viewProjsUniforms[index] <- vp
             | false, _ -> viewProjsUniforms[index] <- Matrix4x4.Identity

@@ -8,7 +8,7 @@ open Mibo.Elmish
 /// </summary>
 /// <remarks>
 /// The pipeline is the consumer of geometry, not the definer. It receives a buffer of
-/// <see cref="T:Mibo.Elmish.Graphics3D.IRenderCommand3D"/> and interprets them.
+/// <see cref="T:Mibo.Elmish.Graphics3D.Command3D"/> and interprets them.
 ///
 /// The built-in <see cref="T:Mibo.Elmish.Graphics3D.Pipelines.ForwardPbrPipeline"/>
 /// is the reference implementation, not the engine core. Users may swap it for a deferred,
@@ -18,8 +18,8 @@ type IRenderPipeline3D =
 
   /// <summary>
   /// Executes all commands in the buffer, turning them into pixels.
-  /// The pipeline internally implements <see cref="T:Mibo.Elmish.Graphics3D.IRenderContext3D"/>
-  /// and iterates the buffer, handling pass order, shader binding, and render target management.
+  /// The pipeline dispatches each <see cref="T:Mibo.Elmish.Graphics3D.Command3D"/> directly,
+  /// handling pass order, shader binding, and render target management.
   /// </summary>
   /// <param name="gameCtx">The current game context (window dimensions, services).</param>
   /// <param name="buffer">The accumulated render commands for this frame.</param>

@@ -165,11 +165,9 @@ module Draw3D =
   // Debug Drawing
   // ──────────────────────────────────────────────
 
-  /// <summary>
   /// Draws a ground grid centered at world origin.
   /// Uses <see cref="M:Raylib_cs.Raylib.DrawGrid"/> internally via
-  /// <see cref="M:Mibo.Elmish.Graphics3D.IRenderContext3D.DrawImmediate"/>.
-  /// </summary>
+  /// the pipeline's draw-immediate path.
   let inline drawGrid
     (slices: int)
     (spacing: float32)

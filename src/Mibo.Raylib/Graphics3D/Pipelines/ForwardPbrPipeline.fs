@@ -444,128 +444,148 @@ type private PipelineContext
       Raylib.DrawMesh(mesh, mat, transform)
 
   // ------------------------------------------------------------------
-  // IRenderContext3D Implementation
+  // Public rendering methods (called directly by pipeline dispatch)
   // ------------------------------------------------------------------
 
-  interface IRenderContext3D with
-    member _.GameContext = gameCtx
+  member _.GameContext = gameCtx
 
-    member _.BeginCamera cam =
-      if cameraActive then
-        ensureShaderInactive()
-        Raylib.EndMode3D()
+  member _.BeginCamera(cam: Camera3D) =
+    if cameraActive then
+      ensureShaderInactive()
+      Raylib.EndMode3D()
 
-      Raylib.BeginMode3D cam
-      cameraActive <- true
-      currentCamera <- cam
+    Raylib.BeginMode3D cam
+    cameraActive <- true
+    currentCamera <- cam
 
-    member _.EndCamera() =
-      if cameraActive then
-        ensureShaderInactive()
-        Raylib.EndMode3D()
-        cameraActive <- false
+  member _.EndCamera() =
+    if cameraActive then
+      ensureShaderInactive()
+      Raylib.EndMode3D()
+      cameraActive <- false
 
-    member _.DrawMesh(mesh, transform, material) =
-      drawMeshCore mesh transform material
+  member _.DrawMesh(mesh, transform, material) =
+    drawMeshCore mesh transform material
 
-    member _.DrawBillboard(texture, position, size, color) =
-      if cameraActive then
+  member _.DrawBillboard
+    (texture: Texture2D, position: Vector3, size: Vector2, color: Color)
+    =
+    if cameraActive then
+      let transform =
+        Matrix4x4.CreateBillboard(
+          position,
+          currentCamera.Position,
+          Vector3.UnitY,
+          Vector3.UnitY
+        )
+
+      let scaled = Matrix4x4.CreateScale(size.X, size.Y, 1.0f)
+      let final = scaled * transform
+
+      let mat = {
+        Material3D.defaults with
+            AlbedoColor = color
+            AlbedoMap = ValueSome texture
+      }
+
+      drawMeshCore Primitive3D.plane final mat
+
+  member _.DrawLine3D(start: Vector3, finish: Vector3, color: Color) =
+    if cameraActive then
+      Raylib.DrawLine3D(start, finish, color)
+
+  member _.DrawSkinnedMesh
+    (
+      mesh: Mesh,
+      transform: Matrix4x4,
+      material: Material3D,
+      _boneMatrices: Matrix4x4[]
+    ) =
+    drawMeshCore mesh transform material
+
+  member _.DrawMeshInstanced
+    (
+      mesh: Mesh,
+      transforms: Matrix4x4[],
+      material: Material3D,
+      instanceCount: int
+    ) =
+    if cameraActive then
+      if lightsDirty then
+        uploadLights()
+
+      setMaterialUniforms material
+      let mat = getOrCreateMaterial material
+      Raylib.DrawMeshInstanced(mesh, mat, transforms, instanceCount)
+
+  member _.DrawBillboardBatch
+    (
+      textures: Texture2D[],
+      positions: Vector3[],
+      sizes: Vector2[],
+      colors: Color[],
+      count: int
+    ) =
+    if cameraActive then
+      for i = 0 to count - 1 do
         let transform =
           Matrix4x4.CreateBillboard(
-            position,
+            positions[i],
             currentCamera.Position,
             Vector3.UnitY,
             Vector3.UnitY
           )
 
-        let scaled = Matrix4x4.CreateScale(size.X, size.Y, 1.0f)
+        let scaled = Matrix4x4.CreateScale(sizes[i].X, sizes[i].Y, 1.0f)
         let final = scaled * transform
 
         let mat = {
           Material3D.defaults with
-              AlbedoColor = color
-              AlbedoMap = ValueSome texture
+              AlbedoColor = colors[i]
+              AlbedoMap = ValueSome textures[i]
         }
 
         drawMeshCore Primitive3D.plane final mat
 
-    member _.DrawLine3D(start, finish, color) =
-      if cameraActive then
-        Raylib.DrawLine3D(start, finish, color)
+  member _.AddPointLight(light: PointLight3D) =
+    pointLights.Add light
+    lightsDirty <- true
 
-    member _.DrawSkinnedMesh(mesh, transform, material, _boneMatrices) =
-      drawMeshCore mesh transform material
+  member _.AddDirectionalLight(light: DirectionalLight3D) =
+    dirLights.Add light
+    lightsDirty <- true
 
-    member _.DrawMeshInstanced(mesh, transforms, material, instanceCount) =
-      if cameraActive then
-        if lightsDirty then
-          uploadLights()
+  member _.AddSpotLight(light: SpotLight3D) =
+    spotLights.Add light
+    lightsDirty <- true
 
-        setMaterialUniforms material
-        let mat = getOrCreateMaterial material
-        Raylib.DrawMeshInstanced(mesh, mat, transforms, instanceCount)
+  member _.SetAmbientLight(light: AmbientLight3D) =
+    ambient.Clear()
+    ambient.Add light
+    lightsDirty <- true
 
-    member _.DrawBillboardBatch(textures, positions, sizes, colors, count) =
-      if cameraActive then
-        for i = 0 to count - 1 do
-          let transform =
-            Matrix4x4.CreateBillboard(
-              positions[i],
-              currentCamera.Position,
-              Vector3.UnitY,
-              Vector3.UnitY
-            )
+  member _.DrawImmediate(action: unit -> unit) =
+    let savedCam = cameraActive
+    let savedShader = shaderActive
 
-          let scaled = Matrix4x4.CreateScale(sizes[i].X, sizes[i].Y, 1.0f)
-          let final = scaled * transform
+    if shaderActive then
+      Raylib.EndShaderMode()
+      shaderActive <- false
 
-          let mat = {
-            Material3D.defaults with
-                AlbedoColor = colors[i]
-                AlbedoMap = ValueSome textures[i]
-          }
+    if cameraActive then
+      Raylib.EndMode3D()
+      cameraActive <- false
 
-          drawMeshCore Primitive3D.plane final mat
+    try
+      action()
+    finally
+      if savedCam then
+        Raylib.BeginMode3D currentCamera
+        cameraActive <- true
 
-    member _.AddPointLight light =
-      pointLights.Add light
-      lightsDirty <- true
-
-    member _.AddDirectionalLight light =
-      dirLights.Add light
-      lightsDirty <- true
-
-    member _.AddSpotLight light =
-      spotLights.Add light
-      lightsDirty <- true
-
-    member _.SetAmbientLight light =
-      ambient.Clear()
-      ambient.Add light
-      lightsDirty <- true
-
-    member _.DrawImmediate action =
-      let savedCam = cameraActive
-      let savedShader = shaderActive
-
-      if shaderActive then
-        Raylib.EndShaderMode()
-        shaderActive <- false
-
-      if cameraActive then
-        Raylib.EndMode3D()
-        cameraActive <- false
-
-      try
-        action()
-      finally
-        if savedCam then
-          Raylib.BeginMode3D currentCamera
-          cameraActive <- true
-
-        if savedShader then
-          Raylib.BeginShaderMode forwardShader
-          shaderActive <- true
+      if savedShader then
+        Raylib.BeginShaderMode forwardShader
+        shaderActive <- true
 
   member internal _.WarmMaterial(mat3d: Material3D) =
     getOrCreateMaterial mat3d |> ignore
@@ -579,6 +599,15 @@ type private PipelineContext
   member internal _.LocShadowBiases = locShadowBiases
   member internal _.LocShadowTypes = locShadowTypes
   member internal _.LocCameraPos = locCameraPos
+
+  member internal _.ClearLights() =
+    dirLights.Clear()
+    pointLights.Clear()
+    spotLights.Clear()
+
+  member internal _.DirLights = dirLights
+  member internal _.PointLights = pointLights
+  member internal _.SpotLights = spotLights
 
   member internal _.Reset
     (
@@ -611,7 +640,7 @@ type private PipelineContext
 // ------------------------------------------------------------------
 
 module private ShadowPassHelpers =
-
+  [<Struct>]
   type MeshDraw = { Mesh: Mesh; Transform: Matrix4x4 }
 
   let collectMeshDraws(buffer: RenderBuffer3D) =
@@ -621,37 +650,22 @@ module private ShadowPassHelpers =
 
     for i = 0 to buffer.Count - 1 do
       match buffer[i] with
-      | :? Command3D.DrawMeshCommand as cmd ->
-        arr[count] <- {
-          Mesh = cmd.Mesh
-          Transform = cmd.Transform
-        }
-
+      | Command3D.DrawMesh(mesh, transform, _) ->
+        arr[count] <- { Mesh = mesh; Transform = transform }
         count <- count + 1
-      | :? Command3D.DrawSkinnedMeshCommand as cmd ->
-        arr[count] <- {
-          Mesh = cmd.Mesh
-          Transform = cmd.Transform
-        }
-
+      | Command3D.DrawSkinnedMesh(mesh, transform, _, _) ->
+        arr[count] <- { Mesh = mesh; Transform = transform }
         count <- count + 1
-      | :? Command3D.DrawModelCommand as cmd ->
-        let m = cmd.Model
-
-        for mi = 0 to m.MeshCount - 1 do
-          let mesh = NativePtr.get m.Meshes mi
-
+      | Command3D.DrawModel(model, transform) ->
+        for mi = 0 to model.MeshCount - 1 do
+          let mesh = NativePtr.get model.Meshes mi
+          arr[count] <- { Mesh = mesh; Transform = transform }
+          count <- count + 1
+      | Command3D.DrawMeshInstanced(mesh, transforms, _, instanceCount) ->
+        for ti = 0 to instanceCount - 1 do
           arr[count] <- {
             Mesh = mesh
-            Transform = cmd.Transform
-          }
-
-          count <- count + 1
-      | :? Command3D.DrawMeshInstancedCommand as cmd ->
-        for ti = 0 to cmd.InstanceCount - 1 do
-          arr[count] <- {
-            Mesh = cmd.Mesh
-            Transform = cmd.Transforms[ti]
+            Transform = transforms[ti]
           }
 
           count <- count + 1
@@ -811,27 +825,21 @@ type ForwardPbrPipeline
       let mutable activeCamera = Unchecked.defaultof<Camera3D>
       let mutable cameraFound = false
 
-      let dirLights = ResizeArray<DirectionalLight3D>()
-      let pointLights = ResizeArray<PointLight3D>()
-      let spotLights = ResizeArray<SpotLight3D>()
+      context.ClearLights()
 
       for i = 0 to buffer.Count - 1 do
         match buffer[i] with
-        | :? Command3D.BeginCameraCommand as cmd ->
-          activeCamera <- cmd.Camera
+        | Command3D.BeginCamera cam ->
+          activeCamera <- cam
           cameraFound <- true
-        | :? Command3D.AddDirectionalLightCommand as cmd ->
-          dirLights.Add cmd.Light
-        | :? Command3D.AddPointLightCommand as cmd -> pointLights.Add cmd.Light
-        | :? Command3D.AddSpotLightCommand as cmd -> spotLights.Add cmd.Light
-        | :? Command3D.DrawMeshCommand as cmd ->
-          context.WarmMaterial(cmd.Material)
-        | :? Command3D.DrawSkinnedMeshCommand as cmd ->
-          context.WarmMaterial(cmd.Material)
-        | :? Command3D.DrawMeshInstancedCommand as cmd ->
-          context.WarmMaterial(cmd.Material)
-        | :? Command3D.DrawModelCommand as cmd ->
-          let m = cmd.Model
+        | Command3D.AddDirectionalLight light -> context.DirLights.Add light
+        | Command3D.AddPointLight light -> context.PointLights.Add light
+        | Command3D.AddSpotLight light -> context.SpotLights.Add light
+        | Command3D.DrawMesh(_, _, mat) -> context.WarmMaterial(mat)
+        | Command3D.DrawSkinnedMesh(_, _, mat, _) -> context.WarmMaterial(mat)
+        | Command3D.DrawMeshInstanced(_, _, mat, _) -> context.WarmMaterial(mat)
+        | Command3D.DrawModel(model, transform) ->
+          let m = model
 
           for mi = 0 to m.MeshCount - 1 do
             let matIdx = NativePtr.get m.MeshMaterial mi
@@ -855,7 +863,7 @@ type ForwardPbrPipeline
 
         if cameraFound && meshDrawCount > 0 then
           // Register shadow casters
-          for dir in dirLights do
+          for dir in context.DirLights do
             if dir.CastsShadows then
               hasShadowCasters <- true
 
@@ -871,9 +879,10 @@ type ForwardPbrPipeline
               |> ignore
 
           // TODO: Register point light casters
-          for pt in pointLights do
+          for pt in context.PointLights do
             if pt.CastsShadows then
               hasShadowCasters <- true
+
               shadowAtlas.AddCaster(
                 ShadowCasterType.Point,
                 pt.Position,
@@ -881,12 +890,13 @@ type ForwardPbrPipeline
                 Vector3.Zero,
                 true,
                 pt.ShadowBias
-              ) |> ignore
+              )
+              |> ignore
 
-          // TODO: Register spot light casters
-          for sp in spotLights do
+          for sp in context.SpotLights do
             if sp.CastsShadows then
               hasShadowCasters <- true
+
               shadowAtlas.AddCaster(
                 ShadowCasterType.Spot,
                 sp.Position,
@@ -894,7 +904,8 @@ type ForwardPbrPipeline
                 sp.Position + sp.Direction,
                 true,
                 sp.ShadowBias
-              ) |> ignore
+              )
+              |> ignore
 
           // Render shadow passes
           if shadowAtlas.Count > 0 then
@@ -907,7 +918,10 @@ type ForwardPbrPipeline
             Raylib.ClearBackground(Color.White)
 
             // Render each caster to its atlas region
-            let renderShadowRegion (regionIndex: int) (camera: Camera3D) =
+            let inline renderShadowRegion
+              (regionIndex: int)
+              (camera: Camera3D)
+              =
               shadowAtlas.GetRegionViewport(regionIndex)
               Raylib.BeginMode3D(camera)
 
@@ -933,13 +947,27 @@ type ForwardPbrPipeline
                   for face = 0 to 5 do
                     let struct (faceTarget, faceUp) =
                       match face with
-                      | 0 -> struct (caster.LightPosition + Vector3.UnitX, -Vector3.UnitY) // +X
-                      | 1 -> struct (caster.LightPosition - Vector3.UnitX, -Vector3.UnitY) // -X
-                      | 2 -> struct (caster.LightPosition + Vector3.UnitY, Vector3.UnitZ) // +Y
-                      | 3 -> struct (caster.LightPosition - Vector3.UnitY, -Vector3.UnitZ) // -Y
-                      | 4 -> struct (caster.LightPosition + Vector3.UnitZ, -Vector3.UnitY) // +Z
-                      | 5 -> struct (caster.LightPosition - Vector3.UnitZ, -Vector3.UnitY) // -Z
-                      | _ -> struct (caster.LightPosition + Vector3.UnitX, -Vector3.UnitY)
+                      | 0 ->
+                        struct (caster.LightPosition + Vector3.UnitX,
+                                -Vector3.UnitY) // +X
+                      | 1 ->
+                        struct (caster.LightPosition - Vector3.UnitX,
+                                -Vector3.UnitY) // -X
+                      | 2 ->
+                        struct (caster.LightPosition + Vector3.UnitY,
+                                Vector3.UnitZ) // +Y
+                      | 3 ->
+                        struct (caster.LightPosition - Vector3.UnitY,
+                                -Vector3.UnitZ) // -Y
+                      | 4 ->
+                        struct (caster.LightPosition + Vector3.UnitZ,
+                                -Vector3.UnitY) // +Z
+                      | 5 ->
+                        struct (caster.LightPosition - Vector3.UnitZ,
+                                -Vector3.UnitY) // -Z
+                      | _ ->
+                        struct (caster.LightPosition + Vector3.UnitX,
+                                -Vector3.UnitY)
 
                     let faceCamera =
                       Camera3D(
@@ -1035,8 +1063,6 @@ type ForwardPbrPipeline
       // ------------------------------------------------------------------
       context.Reset(gameCtx, shadowAtlas.Fbo, Matrix4x4.Identity)
 
-      let ctx = context :> IRenderContext3D
-
       // Upload shadow atlas uniforms
       if hasShadowCasters && cameraFound then
         shadowAtlas.PrepareUniforms()
@@ -1088,11 +1114,49 @@ type ForwardPbrPipeline
         setShaderInt forwardShader context.LocShadowPass 0
 
       // Render
+      let dispatch(cmd: Command3D) =
+        match cmd with
+        | Command3D.DrawMesh(mesh, transform, material) ->
+          context.DrawMesh(mesh, transform, material)
+        | Command3D.DrawModel(model, transform) ->
+          for mi = 0 to model.MeshCount - 1 do
+            let mesh = NativePtr.get model.Meshes mi
+            let matIdx = NativePtr.get model.MeshMaterial mi
+            let mat = NativePtr.get model.Materials matIdx
+            let mat3d = Material3D.fromRaylibMaterial mat
+            context.DrawMesh(mesh, transform, mat3d)
+        | Command3D.DrawBillboard(texture, position, size, color) ->
+          context.DrawBillboard(texture, position, size, color)
+        | Command3D.DrawLine3D(start, finish, color) ->
+          context.DrawLine3D(start, finish, color)
+        | Command3D.DrawSkinnedMesh(mesh, transform, material, bones) ->
+          context.DrawSkinnedMesh(mesh, transform, material, bones)
+        | Command3D.DrawMeshInstanced(mesh, transforms, material, instanceCount) ->
+          context.DrawMeshInstanced(mesh, transforms, material, instanceCount)
+        | Command3D.DrawBillboardBatch(textures, positions, sizes, colors, count) ->
+          context.DrawBillboardBatch(textures, positions, sizes, colors, count)
+        | Command3D.BeginCamera cam -> context.BeginCamera(cam)
+        | Command3D.EndCamera -> context.EndCamera()
+        | Command3D.SetAmbientLight light -> context.SetAmbientLight(light)
+        | Command3D.AddDirectionalLight light ->
+          context.AddDirectionalLight(light)
+        | Command3D.AddPointLight light -> context.AddPointLight(light)
+        | Command3D.AddSpotLight light -> context.AddSpotLight(light)
+        | Command3D.DrawGrid(slices, spacing, _color) ->
+          context.DrawImmediate(fun () -> Raylib.DrawGrid(slices, spacing))
+        | Command3D.DrawBoundingBox(box, color) ->
+          context.DrawImmediate(fun () -> Raylib.DrawBoundingBox(box, color))
+        | Command3D.DrawPoint3D(position, color) ->
+          context.DrawImmediate(fun () -> Raylib.DrawPoint3D(position, color))
+        | Command3D.DrawRay(ray, color) ->
+          context.DrawImmediate(fun () -> Raylib.DrawRay(ray, color))
+        | Command3D.DrawImmediate action -> context.DrawImmediate(action)
+
       match ppConfig.Passes with
       | ValueNone
       | ValueSome [||] ->
         for i = 0 to buffer.Count - 1 do
-          buffer[i].Render(ctx)
+          dispatch buffer[i]
 
         context.EndAll()
       | _ ->
@@ -1101,7 +1165,7 @@ type ForwardPbrPipeline
         Raylib.ClearBackground(Color.Black)
 
         for i = 0 to buffer.Count - 1 do
-          buffer[i].Render(ctx)
+          dispatch buffer[i]
 
         context.EndAll()
         Raylib.EndTextureMode()
