@@ -129,6 +129,20 @@ module private MaterialKey =
   }
 
 // ------------------------------------------------------------------
+// Normal Matrix Helper
+// ------------------------------------------------------------------
+
+[<AutoOpen>]
+module private NormalMatrixHelpers =
+
+  /// Pre-computes the normal matrix (inverse-transpose of model matrix) on the CPU
+  /// instead of computing transpose(inverse(matModel)) per-vertex in the shader.
+  let computeNormalMatrix(model: Matrix4x4) =
+    let mutable inv = Matrix4x4.Identity
+    Matrix4x4.Invert(model, &inv) |> ignore
+    Matrix4x4.Transpose(inv)
+
+// ------------------------------------------------------------------
 // Shadow Configuration (uses ShadowAtlas types from ShadowAtlas.fs)
 // ------------------------------------------------------------------
 
@@ -193,6 +207,8 @@ type private PipelineContext
   let mutable locShadowMap = -1
   let mutable locCameraPos = -1
 
+  let mutable locNormalMatrix = -1
+  let mutable locShadowNormalMatrix = -1
   let mutable locShadowPass = -1
   let mutable locShadowAtlas = -1
   let mutable locShadowCasterCount = -1
@@ -214,6 +230,7 @@ type private PipelineContext
       locOpacity <- Raylib.GetShaderLocation(forwardShader, "opacity")
       locTiling <- Raylib.GetShaderLocation(forwardShader, "tiling")
       locUseNormalMap <- Raylib.GetShaderLocation(forwardShader, "useNormalMap")
+      locNormalMatrix <- Raylib.GetShaderLocation(forwardShader, "normalMatrix")
 
       locAmbientColor <- Raylib.GetShaderLocation(forwardShader, "ambientColor")
 
@@ -411,7 +428,7 @@ type private PipelineContext
       materialCache[key] <- mat
       mat
 
-  let setMaterialUniforms(mat3d: Material3D) =
+  let setMaterialUniforms(normalMatrix: Matrix4x4) (mat3d: Material3D) =
     cacheLocations()
     ensureShaderActive()
 
@@ -433,13 +450,14 @@ type private PipelineContext
       | ValueNone -> 0
 
     setShaderInt forwardShader locUseNormalMap useNormal
+    Raylib.SetShaderValueMatrix(forwardShader, locNormalMatrix, normalMatrix)
 
-  let drawMeshCore (mesh: Mesh) (transform: Matrix4x4) (material: Material3D) =
+  let drawMeshCore (mesh: Mesh) (transform: Matrix4x4) (normalMatrix: Matrix4x4) (material: Material3D) =
     if cameraActive then
       if lightsDirty then
         uploadLights()
 
-      setMaterialUniforms material
+      setMaterialUniforms normalMatrix material
       let mat = getOrCreateMaterial material
       Raylib.DrawMesh(mesh, mat, transform)
 
@@ -465,7 +483,8 @@ type private PipelineContext
       cameraActive <- false
 
   member _.DrawMesh(mesh, transform, material) =
-    drawMeshCore mesh transform material
+    let normalMatrix = computeNormalMatrix transform
+    drawMeshCore mesh transform normalMatrix material
 
   member _.DrawBillboard
     (texture: Texture2D, position: Vector3, size: Vector2, color: Color)
@@ -488,7 +507,8 @@ type private PipelineContext
             AlbedoMap = ValueSome texture
       }
 
-      drawMeshCore Primitive3D.plane final mat
+      let normalMatrix = computeNormalMatrix final
+      drawMeshCore Primitive3D.plane final normalMatrix mat
 
   member _.DrawLine3D(start: Vector3, finish: Vector3, color: Color) =
     if cameraActive then
@@ -501,7 +521,8 @@ type private PipelineContext
       material: Material3D,
       _boneMatrices: Matrix4x4[]
     ) =
-    drawMeshCore mesh transform material
+    let normalMatrix = computeNormalMatrix transform
+    drawMeshCore mesh transform normalMatrix material
 
   member _.DrawMeshInstanced
     (
@@ -514,7 +535,11 @@ type private PipelineContext
       if lightsDirty then
         uploadLights()
 
-      setMaterialUniforms material
+      // For instanced draws, use identity normal matrix (instances share transforms)
+      // Each instance should ideally have its own normal matrix, but for uniform
+      // scale transforms this is equivalent
+      let normalMatrix = computeNormalMatrix transforms[0]
+      setMaterialUniforms normalMatrix material
       let mat = getOrCreateMaterial material
       Raylib.DrawMeshInstanced(mesh, mat, transforms, instanceCount)
 
@@ -545,7 +570,8 @@ type private PipelineContext
               AlbedoMap = ValueSome textures[i]
         }
 
-        drawMeshCore Primitive3D.plane final mat
+        let normalMatrix = computeNormalMatrix final
+        drawMeshCore Primitive3D.plane final normalMatrix mat
 
   member _.AddPointLight(light: PointLight3D) =
     pointLights.Add light
@@ -590,6 +616,11 @@ type private PipelineContext
   member internal _.WarmMaterial(mat3d: Material3D) =
     getOrCreateMaterial mat3d |> ignore
 
+  member internal _.CacheShadowLocations(shadowShader: Shader) =
+    locShadowNormalMatrix <- Raylib.GetShaderLocation(shadowShader, "normalMatrix")
+
+  member internal _.LocNormalMatrix = locNormalMatrix
+  member internal _.LocShadowNormalMatrix = locShadowNormalMatrix
   member internal _.LocShadowPass = locShadowPass
   member internal _.LocShadowAtlas = locShadowAtlas
   member internal _.LocShadowCasterCount = locShadowCasterCount
@@ -803,6 +834,8 @@ type ForwardPbrPipeline
           atlasCfg.MaxCasters
         )
 
+      context.CacheShadowLocations(depthShadowShader)
+
     member _.Shutdown() =
       Raylib.UnloadShader forwardShader
       Raylib.UnloadShader depthShadowShader
@@ -935,6 +968,8 @@ type ForwardPbrPipeline
 
               for i = 0 to meshDrawCount - 1 do
                 let draw = meshDraws[i]
+                let nm = computeNormalMatrix draw.Transform
+                Raylib.SetShaderValueMatrix(depthShadowShader, context.LocShadowNormalMatrix, nm)
                 Raylib.DrawMesh(draw.Mesh, depthShadowMaterial, draw.Transform)
 
               Raylib.EndMode3D()
