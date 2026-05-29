@@ -243,55 +243,33 @@ float computeShadowFromAtlas(vec3 worldPos, int casterIndex)
     return shadow / 9.0;
 }}
 
-// Determine which cubemap face a direction points to (dominant axis method)
-int determineFace(vec3 dir)
-{{
-    vec3 absDir = abs(dir);
-    if (absDir.x > absDir.y && absDir.x > absDir.z) {{
-        return dir.x > 0.0 ? 0 : 1; // +X or -X
-    }} else if (absDir.y > absDir.z) {{
-        return dir.y > 0.0 ? 2 : 3; // +Y or -Y
-    }} else {{
-        return dir.z > 0.0 ? 4 : 5; // +Z or -Z
-    }}
-}}
-
-// Project 3D direction to 2D UV on a cubemap face
-vec2 projectToFace(vec3 dir, int face)
-{{
-    vec2 uv;
-    if (face == 0) {{ uv = dir.yz / dir.x; }}        // +X
-    else if (face == 1) {{ uv = dir.yz / -dir.x; }}  // -X
-    else if (face == 2) {{ uv = dir.xz / dir.y; }}   // +Y
-    else if (face == 3) {{ uv = dir.xz / -dir.y; }}  // -Y
-    else if (face == 4) {{ uv = dir.xy / dir.z; }}   // +Z
-    else {{ uv = dir.xy / -dir.z; }}                  // -Z
-
-    // Remap from [-1,1] to [0,1]
-    return uv * 0.5 + 0.5;
-}}
-
 float computePointShadow(vec3 worldPos, int casterIndex)
 {{
     if (casterIndex < 0 || casterIndex >= shadowCasterCount)
         return 1.0;
 
-    vec3 lightPos = shadowLightPositions[casterIndex];
-    vec3 toFrag = worldPos - lightPos;
+    // Single forward-facing shadow map per point light
+    // Uses standard projective shadow mapping (same as spot lights)
+    vec4 shadowCoord = shadowViewProjs[casterIndex] * vec4(worldPos, 1.0);
+    vec3 projCoord = shadowCoord.xyz / shadowCoord.w;
+    projCoord = projCoord * 0.5 + 0.5;
 
-    // Determine face and project to UV
-    int face = determineFace(toFrag);
-    vec2 faceUV = projectToFace(toFrag, face);
+    if (projCoord.z > 1.0) return 0.0;
+    if (projCoord.x < 0.0 || projCoord.x > 1.0 || projCoord.y < 0.0 || projCoord.y > 1.0)
+        return 0.0;
 
-    // Calculate which region in the atlas this face uses
-    // Each point light uses 6 consecutive regions starting at its casterIndex
-    int regionOffset = casterIndex + face;
-    vec2 atlasUV = faceUV * shadowUVOffsets[regionOffset].zw + shadowUVOffsets[regionOffset].xy;
+    vec2 atlasUV = projCoord.xy * shadowUVOffsets[casterIndex].zw + shadowUVOffsets[casterIndex].xy;
 
     float bias = shadowBiases[casterIndex];
-    float dist = length(toFrag);
-    float d = texture(shadowAtlas, atlasUV).r;
-    return (dist - bias > d) ? 0.0 : 1.0;
+    float shadow = 0.0;
+    vec2 texel = 1.0 / vec2(textureSize(shadowAtlas, 0));
+    for (int x = -1; x <= 1; x++) {{
+        for (int y = -1; y <= 1; y++) {{
+            float d = texture(shadowAtlas, atlasUV + vec2(float(x), float(y)) * texel).r;
+            shadow += (projCoord.z - bias > d) ? 0.0 : 1.0;
+        }}
+    }}
+    return shadow / 9.0;
 }}
 
 float computeSpotShadow(vec3 worldPos, int casterIndex)
