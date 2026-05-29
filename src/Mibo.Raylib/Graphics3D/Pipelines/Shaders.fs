@@ -39,6 +39,41 @@ void main()
 }
 """
 
+  /// <summary>
+  /// Instanced variant of the forward vertex shader.
+  /// Uses <c>in mat4 instanceTransform</c> (vertex attribute) instead of
+  /// <c>uniform mat4 matModel</c>. The <c>mvp</c> uniform must be
+  /// view-projection only (without model) — the per-instance model
+  /// transform comes from the <c>instanceTransform</c> attribute.
+  /// </summary>
+  let forwardVertexInstanced =
+    """#version 330
+
+in vec3 vertexPosition;
+in vec2 vertexTexCoord;
+in vec3 vertexNormal;
+in vec4 vertexColor;
+
+in mat4 instanceTransform;
+
+out vec2 fragTexCoord;
+out vec4 fragColor;
+out vec3 fragNormal;
+out vec3 fragWorldPos;
+
+uniform mat4 mvp;
+uniform mat4 normalMatrix;
+
+void main()
+{
+    fragTexCoord = vertexTexCoord;
+    fragColor = vertexColor;
+    fragNormal = mat3(normalMatrix) * vertexNormal;
+    fragWorldPos = (instanceTransform * vec4(vertexPosition, 1.0)).xyz;
+    gl_Position = mvp * instanceTransform * vec4(vertexPosition, 1.0);
+}
+"""
+
   let depthShadowVertex =
     """#version 330
 
@@ -433,6 +468,21 @@ void main()
     : Shader =
     Raylib.LoadShaderFromMemory(
       forwardVertex,
+      forwardFragmentFmt maxPointLights maxSpotLights maxShadowCasters
+    )
+
+  /// <summary>
+  /// Loads the instanced forward PBR vertex + fragment shader.
+  /// Uses <c>in mat4 instanceTransform</c> for per-instance model transforms.
+  /// The <c>mvp</c> uniform must be view-projection only (without model).
+  /// </summary>
+  let loadForwardInstancedShader
+    (maxPointLights: int)
+    (maxSpotLights: int)
+    (maxShadowCasters: int)
+    : Shader =
+    Raylib.LoadShaderFromMemory(
+      forwardVertexInstanced,
       forwardFragmentFmt maxPointLights maxSpotLights maxShadowCasters
     )
 
