@@ -662,7 +662,6 @@ type private PipelineContext
     dirLights.Clear()
     pointLights.Clear()
     spotLights.Clear()
-    lightsDirty <- true
     hasLastMaterial <- false
     cameraActive <- false
     shaderActive <- false
