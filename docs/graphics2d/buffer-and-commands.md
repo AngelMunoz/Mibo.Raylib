@@ -20,11 +20,13 @@ The buffer is **pre-cleared** by the renderer each frame. Do not call `Clear()` 
 
 ```fsharp
 let myView (ctx: GameContext) (model: Model) (buffer: RenderBuffer2D) =
-    buffer
-    |> Draw.fillRect (0<RenderLayer>, Color.SkyBlue) (Rectangle(0f, 0f, 800f, 600f))
-    |> Draw.sprite { Texture = tex; Dest = r 100 100 32 32; Source = r 0 0 32 32
-                     Origin = Vector2.Zero; Rotation = 0f; Color = Color.White; Layer = 10<RenderLayer> }
-    |> Draw.drop
+  let bg = Rectangle(0f, 0f, 800f, 600f)
+  let player = SpriteState.create(tex, Rectangle(100f, 100f, 32f, 32f), Rectangle(0f, 0f, 32f, 32f))
+
+  buffer
+  |> Draw.fillRect (0<RenderLayer>, Color.SkyBlue) bg
+  |> Draw.sprite player
+  |> Draw.drop
 ```
 
 The `|> Draw.drop` at the end silences the unused-value warning. It does nothing.
@@ -43,8 +45,7 @@ let blueOutline = Draw.rectOutline (10<RenderLayer>, Color.Blue, 2f)
 buffer
 |> redFill groundRect
 |> blueOutline groundRect
-|> Draw.text { Font = font; Text = "Score: 100"; Position = Vector2(10f, 10f)
-               FontSize = 20f; Spacing = 1f; Color = Color.White; Layer = 100<RenderLayer> }
+|> Draw.text (TextState.create(font, "Score: 100", Vector2(10f, 10f)))
 ```
 
 ### Command2D factories (command-first)
@@ -52,9 +53,9 @@ buffer
 Use `Command2D.*` when you need to store a command or build one without a buffer:
 
 ```fsharp
-let mySprite = Command2D.sprite { Texture = tex; Dest = r 0 0 64 64; Source = r 0 0 64 64
-                                   Origin = Vector2.Zero; Rotation = 0f; Color = Color.White
-                                   Layer = 10<RenderLayer> }
+let dest = Rectangle(0f, 0f, 64f, 64f)
+let source = Rectangle(0f, 0f, 64f, 64f)
+let mySprite = Command2D.sprite (SpriteState.create(tex, dest, source))
 
 // Later, add to buffer:
 buffer.Add(mySprite)
@@ -111,14 +112,12 @@ All commands live in two modules in `Mibo.Elmish.Graphics2D`:
 All `Draw` functions group styling parameters first. This lets you bind them once:
 
 ```fsharp
-let hudLayer = 100<RenderLayer>
-let hudText = Draw.text { Font = font; Text = ""; Position = Vector2.Zero
-                           FontSize = 16f; Spacing = 1f; Color = Color.White; Layer = hudLayer }
+let hudText text = Draw.text (TextState.create(font, text, Vector2(10f, 10f)))
 
 // Reuse with different data:
 buffer
-|> hudText { ... with Text = "HP: 100" }
-|> hudText { ... with Text = "Score: 5000" }
+|> hudText "HP: 100"
+|> hudText "Score: 5000"
 ```
 
 ## State commands (blend, scissor, viewport)
@@ -136,26 +135,20 @@ Blend mode, scissor rect, line width, and viewport are reset at the start of eac
 
 ## Text and sprite state types
 
-Sprite and text use explicit state records rather than positional parameters:
+Sprite and text use state records. Use the `create` builders for quick setup:
 
 ```fsharp
-// SpriteState
-{ Texture = Texture2D
-  Dest = Rectangle         // screen/world destination rect
-  Source = Rectangle       // source rect on the texture
-  Origin = Vector2         // rotation/scaling origin
-  Rotation = float32       // radians
-  Color = Color
-  Layer = int<RenderLayer> }
+// Sprite: texture + destination + source rect
+let sprite = SpriteState.create(tex, Rectangle(100f, 100f, 32f, 32f), Rectangle(0f, 0f, 32f, 32f))
 
-// TextState
-{ Font = Font
-  Text = string
-  Position = Vector2
-  FontSize = float32
-  Spacing = float32
-  Color = Color
-  Layer = int<RenderLayer> }
+// Sprite with custom color
+let redSprite = { sprite with Color = Color.Red; Layer = 10<RenderLayer> }
+
+// Text: font + string + position
+let scoreText = TextState.create(font, "Score: 100", Vector2(10f, 10f))
+
+// Text with custom size
+let bigText = { scoreText with FontSize = 24f; Color = Color.Yellow; Layer = 100<RenderLayer> }
 ```
 
 ## Cameras
@@ -164,13 +157,14 @@ Wrap world-space content between `Draw.beginCamera` and `Draw.endCamera`:
 
 ```fsharp
 let camera = Camera2D.create (Vector2(400f, 300f)) 1.0f viewportSize
+let hudLabel = TextState.create(font, "HUD", Vector2(10f, 10f))
 
 buffer
 |> Draw.beginCamera 0<RenderLayer> camera
 |> Draw.fillCircle (10<RenderLayer>, Color.Red) (worldPos, 20f)
 |> Draw.endCamera 1000<RenderLayer>
 // After endCamera, draws are in screen space:
-|> Draw.text { ... with Text = "HUD" }
+|> Draw.text hudLabel
 ```
 
 See [Camera](../camera.html) for details.
