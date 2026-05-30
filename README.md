@@ -18,7 +18,6 @@ Mibo aims to solve 90% of use cases for enabling developers to focus on game log
   - 3D batch renderer with opaque/transparent passes and custom shader switching
   - Escape hatches (`DrawCustom`) for custom GPU work
 - **Camera** helpers (`Camera2D`, `Camera3D`) with screen-to-world, orbit, and ray casting
-- **Culling** utilities for both 2D (quadtree) and 3D (frustum)
 - **Layout** — 2D procedural grid layout (`CellGrid2D`) with platformer, top-down, and geometric primitives
 - **Layout3D** — 3D voxel-style grid layout (`CellGrid3D`) with terrain, interior rooms, corridors, stairs, and procedural generation
 - **Animation** — sprite sheet slicing, `AnimatedSprite` state machines, and grid-based animation definitions
