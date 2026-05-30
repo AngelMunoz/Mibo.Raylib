@@ -186,7 +186,9 @@ uniform int dirLightCastsShadows;
 uniform int pointLightCount;
 uniform vec3 pointLightPos[{maxPointLights}];
 uniform vec3 pointLightColor[{maxPointLights}];
+uniform float pointLightIntensity[{maxPointLights}];
 uniform float pointLightRadius[{maxPointLights}];
+uniform float pointLightFalloff[{maxPointLights}];
 
 uniform int spotLightCount;
 uniform vec3 spotLightPos[{maxSpotLights}];
@@ -419,8 +421,8 @@ void main()
         if (dist < pointLightRadius[i])
         {{
             vec3 pL = normalize(toLight);
-            float atten = 1.0 - (dist / pointLightRadius[i]);
-            vec3 pRadiance = pointLightColor[i] * atten;
+            float atten = pow(clamp(1.0 - dist / pointLightRadius[i], 0.0, 1.0), pointLightFalloff[i]);
+            vec3 pRadiance = pointLightColor[i] * pointLightIntensity[i] * atten;
             
             // Find matching shadow caster for this point light
             float ptShadow = 1.0;

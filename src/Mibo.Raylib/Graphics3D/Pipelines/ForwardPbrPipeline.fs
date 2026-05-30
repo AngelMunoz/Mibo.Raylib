@@ -199,7 +199,9 @@ type private PipelineContext
   let mutable locPointLightCount = -1
   let locPointLightPos = Array.zeroCreate<int> maxPointLights
   let locPointLightColor = Array.zeroCreate<int> maxPointLights
+  let locPointLightIntensity = Array.zeroCreate<int> maxPointLights
   let locPointLightRadius = Array.zeroCreate<int> maxPointLights
+  let locPointLightFalloff = Array.zeroCreate<int> maxPointLights
 
   let mutable locSpotLightCount = -1
   let locSpotLightPos = Array.zeroCreate<int> maxSpotLights
@@ -264,8 +266,14 @@ type private PipelineContext
         locPointLightColor[i] <-
           Raylib.GetShaderLocation(forwardShader, $"pointLightColor[{i}]")
 
+        locPointLightIntensity[i] <-
+          Raylib.GetShaderLocation(forwardShader, $"pointLightIntensity[{i}]")
+
         locPointLightRadius[i] <-
           Raylib.GetShaderLocation(forwardShader, $"pointLightRadius[{i}]")
+
+        locPointLightFalloff[i] <-
+          Raylib.GetShaderLocation(forwardShader, $"pointLightFalloff[{i}]")
 
       locSpotLightCount <-
         Raylib.GetShaderLocation(forwardShader, "spotLightCount")
@@ -345,7 +353,9 @@ type private PipelineContext
   let mutable iLocPointLightCount = -1
   let iLocPointLightPos = Array.zeroCreate<int> maxPointLights
   let iLocPointLightColor = Array.zeroCreate<int> maxPointLights
+  let iLocPointLightIntensity = Array.zeroCreate<int> maxPointLights
   let iLocPointLightRadius = Array.zeroCreate<int> maxPointLights
+  let iLocPointLightFalloff = Array.zeroCreate<int> maxPointLights
 
   let mutable iLocSpotLightCount = -1
   let iLocSpotLightPos = Array.zeroCreate<int> maxSpotLights
@@ -415,8 +425,14 @@ type private PipelineContext
         iLocPointLightColor[i] <-
           Raylib.GetShaderLocation(instancedShader, $"pointLightColor[{i}]")
 
+        iLocPointLightIntensity[i] <-
+          Raylib.GetShaderLocation(instancedShader, $"pointLightIntensity[{i}]")
+
         iLocPointLightRadius[i] <-
           Raylib.GetShaderLocation(instancedShader, $"pointLightRadius[{i}]")
+
+        iLocPointLightFalloff[i] <-
+          Raylib.GetShaderLocation(instancedShader, $"pointLightFalloff[{i}]")
 
       iLocSpotLightCount <-
         Raylib.GetShaderLocation(instancedShader, "spotLightCount")
@@ -528,7 +544,9 @@ type private PipelineContext
       let l = pointLights[i]
       setShaderVec3 instancedShader iLocPointLightPos[i] l.Position
       setShaderVec3 instancedShader iLocPointLightColor[i] (colorToVec3 l.Color)
+      setShaderFloat instancedShader iLocPointLightIntensity[i] l.Intensity
       setShaderFloat instancedShader iLocPointLightRadius[i] l.Radius
+      setShaderFloat instancedShader iLocPointLightFalloff[i] l.Falloff
 
     let spCount = min spotLights.Count maxSpotLights
     setShaderInt instancedShader iLocSpotLightCount spCount
@@ -676,7 +694,9 @@ type private PipelineContext
       let l = pointLights[i]
       setShaderVec3 forwardShader locPointLightPos[i] l.Position
       setShaderVec3 forwardShader locPointLightColor[i] (colorToVec3 l.Color)
+      setShaderFloat forwardShader locPointLightIntensity[i] l.Intensity
       setShaderFloat forwardShader locPointLightRadius[i] l.Radius
+      setShaderFloat forwardShader locPointLightFalloff[i] l.Falloff
 
     let spCount = min spotLights.Count maxSpotLights
     setShaderInt forwardShader locSpotLightCount spCount

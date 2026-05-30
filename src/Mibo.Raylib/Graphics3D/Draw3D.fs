@@ -19,7 +19,7 @@ open Mibo.Elmish
 /// buffer
 /// |> Draw3D.beginCamera worldCamera
 /// |> Draw3D.drawModel model transform
-/// |> Draw3D.addPointLight { Position = pos; Color = Color.White; Radius = 10f }
+/// |> Draw3D.addPointLight { Position = pos; Color = Color.White; Intensity = 1f; Radius = 10f; CastsShadows = false; ShadowBias = ValueNone }
 /// |> Draw3D.endCamera
 /// |> Draw3D.drop
 /// </code>

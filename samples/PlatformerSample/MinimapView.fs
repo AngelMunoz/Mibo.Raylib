@@ -2,6 +2,7 @@ module PlatformerSample.Minimap
 
 #nowarn "9"
 
+open System.Collections.Concurrent
 open System.Collections.Generic
 open System.Numerics
 open FSharp.NativeInterop
@@ -32,7 +33,11 @@ let private texSize = 200
 
 // ── Helpers ──
 
-let private tileColor (skyColor: Color) (biome: Biome) (tile: TileType) : Color =
+let private tileColor
+  (skyColor: Color)
+  (biome: Biome)
+  (tile: TileType)
+  : Color =
   match tile with
   | Ground ->
     match biome with
@@ -48,88 +53,81 @@ let private tileColor (skyColor: Color) (biome: Biome) (tile: TileType) : Color 
 
 // ── System ──
 
-let system
-  (chunks: Dictionary<struct (int * int), Chunk>)
+let generateMinimapImage
+  (chunks: ConcurrentDictionary<struct (int * int), Chunk>)
   (timeOfDay: float32)
   (playerPos: Vector2)
-  (model: inref<MinimapModel>)
-  : unit =
+  : Image =
   let scale = minimapSize / (minimapWorldRadius * 2.0f)
 
-  let posDelta = playerPos - model.LastPlayerPos
+  let blocks =
+    Dictionary<struct (int * int), struct (float32 * TileType * Biome)>()
 
-  let needsUpdate =
-    model.FrameCounter % updateInterval = 0 || posDelta.LengthSquared() > 4.0f
+  let halfWorld = minimapWorldRadius
 
-  if needsUpdate then
-    model.LastPlayerPos <- playerPos
-    model.Blocks.Clear()
+  for KeyValue(struct (_cx, _cy), chunk) in chunks do
+    if
+      chunk.Bounds.X + chunk.Bounds.Width >= playerPos.X - halfWorld
+      && chunk.Bounds.X <= playerPos.X + halfWorld
+      && chunk.Bounds.Y + chunk.Bounds.Height >= playerPos.Y - halfWorld
+      && chunk.Bounds.Y <= playerPos.Y + halfWorld
+    then
+      let cellW = chunk.Grid.CellSize.X
+      let cellH = chunk.Grid.CellSize.Y
+      let chunkBiome = chunk.Biome
 
-    let halfWorld = minimapWorldRadius
+      for y in 0 .. chunk.Grid.Height - 1 do
+        for x in 0 .. chunk.Grid.Width - 1 do
+          match CellGrid2D.get x y chunk.Grid with
+          | ValueSome tile when tile <> Empty ->
+            let wx = chunk.Grid.Origin.X + float32 x * cellW
+            let wy = chunk.Grid.Origin.Y + float32 y * cellH
+            let qx = int wx
+            let qz = int wy
+            let key = struct (qx, qz)
 
-    for KeyValue(struct (_cx, _cy), chunk) in chunks do
-      if
-        chunk.Bounds.X + chunk.Bounds.Width >= playerPos.X - halfWorld
-        && chunk.Bounds.X <= playerPos.X + halfWorld
-        && chunk.Bounds.Y + chunk.Bounds.Height >= playerPos.Y - halfWorld
-        && chunk.Bounds.Y <= playerPos.Y + halfWorld
-      then
-        let cellW = chunk.Grid.CellSize.X
-        let cellH = chunk.Grid.CellSize.Y
-        let chunkBiome = chunk.Biome
+            if not(blocks.ContainsKey key) then
+              blocks[key] <- struct (wy, tile, chunkBiome)
+          | _ -> ()
 
-        for y in 0 .. chunk.Grid.Height - 1 do
-          for x in 0 .. chunk.Grid.Width - 1 do
-            match CellGrid2D.get x y chunk.Grid with
-            | ValueSome tile when tile <> Empty ->
-              let wx = chunk.Grid.Origin.X + float32 x * cellW
-              let wy = chunk.Grid.Origin.Y + float32 y * cellH
-              let qx = int wx
-              let qz = int wy
-              let key = struct (qx, qz)
+  let skyTop, _skyBot = DayNight.getSkyColors timeOfDay
+  let halfMinimap = minimapSize * 0.5f
+  let pixelSize = tileSize * scale + 1.0f
+  let pixelSizeI = max 1 (int pixelSize)
 
-              if not(model.Blocks.ContainsKey key) then
-                model.Blocks[key] <- struct (wy, tile, chunkBiome)
-            | _ -> ()
+  let mutable img = Raylib.GenImageColor(texSize, texSize, skyTop)
+  use imgPin = fixed &img
 
-    // Bake texture
-    let skyTop, _skyBot = DayNight.getSkyColors timeOfDay
-    let halfMinimap = minimapSize * 0.5f
-    let pixelSize = tileSize * scale + 1.0f
-    let pixelSizeI = max 1 (int pixelSize)
+  for KeyValue(struct (wx, wz), struct (_, tile, biome)) in blocks do
+    let relX = (float32 wx - playerPos.X) * scale
+    let relZ = (float32 wz - playerPos.Y) * scale
+    let pixelX = int(halfMinimap + relX)
+    let pixelZ = int(halfMinimap + relZ)
+    let color = tileColor skyTop biome tile
 
-    let mutable img = Raylib.GenImageColor(texSize, texSize, skyTop)
-    use imgPin = fixed &img
-
-    for KeyValue(struct (wx, wz), struct (_, tile, biome)) in model.Blocks do
-      let relX = (float32 wx - playerPos.X) * scale
-      let relZ = (float32 wz - playerPos.Y) * scale
-      let pixelX = int(halfMinimap + relX)
-      let pixelZ = int(halfMinimap + relZ)
-      let color = tileColor skyTop biome tile
-
-      if color.A > 0uy then
-        Raylib.ImageDrawRectangle(
-          imgPin,
-          pixelX,
-          pixelZ,
-          pixelSizeI,
-          pixelSizeI,
-          color
-        )
-
-    if model.TexReady then
-      Raylib.UpdateTexture(
-        model.Texture,
-        NativePtr.toVoidPtr(NativePtr.ofVoidPtr<byte> img.Data)
+    if color.A > 0uy then
+      Raylib.ImageDrawRectangle(
+        imgPin,
+        pixelX,
+        pixelZ,
+        pixelSizeI,
+        pixelSizeI,
+        color
       )
-    else
-      model.Texture <- Raylib.LoadTextureFromImage(img)
-      model.TexReady <- true
 
-    Raylib.UnloadImage(img)
+  img
 
-  model.FrameCounter <- model.FrameCounter + 1
+let uploadTexture (image: Image) (model: inref<MinimapModel>) : unit =
+  if model.TexReady then
+    Raylib.UpdateTexture(
+      model.Texture,
+      NativePtr.toVoidPtr(NativePtr.ofVoidPtr<byte> image.Data)
+    )
+  else
+    model.Texture <- Raylib.LoadTextureFromImage(image)
+    model.TexReady <- true
+
+  Raylib.UnloadImage(image)
 
 // ── View ──
 

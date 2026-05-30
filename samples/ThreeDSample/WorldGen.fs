@@ -1,6 +1,7 @@
 module ThreeDSample.WorldGen
 
 open System
+open System.Collections.Concurrent
 open System.Collections.Generic
 open System.Numerics
 open Raylib_cs
@@ -204,7 +205,7 @@ let generateChunk cx cz worldSeed : Chunk =
 
 let loadChunks
   (playerPos: Vector3)
-  (chunks: Dictionary<struct (int * int), Chunk>)
+  (chunks: ConcurrentDictionary<struct (int * int), Chunk>)
   (seed: int)
   =
   let pcx = int(Math.Floor(float playerPos.X / float chunkWorldWidth))
@@ -219,7 +220,7 @@ let loadChunks
 
 let evictDistantChunks
   (playerPos: Vector3)
-  (chunks: Dictionary<struct (int * int), Chunk>)
+  (chunks: ConcurrentDictionary<struct (int * int), Chunk>)
   (keysToRemove: ResizeArray<struct (int * int)>)
   =
   let pcx = int(Math.Floor(float playerPos.X / float chunkWorldWidth))
@@ -233,4 +234,4 @@ let evictDistantChunks
       keysToRemove.Add key
 
   for i = 0 to keysToRemove.Count - 1 do
-    chunks.Remove keysToRemove[i] |> ignore
+    chunks.TryRemove(keysToRemove[i]) |> ignore

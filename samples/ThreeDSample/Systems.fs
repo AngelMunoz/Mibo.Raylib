@@ -1,6 +1,7 @@
 module ThreeDSample.Systems
 
 open System
+open System.Collections.Concurrent
 open System.Numerics
 open Raylib_cs
 open Mibo.Elmish
@@ -94,13 +95,47 @@ let physicsSystem
 
   struct (model, Cmd.none)
 
+let private generateChunkAsync (cx: int) (cz: int) (seed: int) : Cmd<Msg> =
+  Cmd.ofAsync
+    (async { return generateChunk cx cz seed })
+    (fun chunk -> ChunkCreated(struct (cx, cz), chunk))
+    (fun _ex -> ChunkCreated(struct (cx, cz), generateChunk cx cz seed))
+
 let chunkSystem
   (dt: float32)
   (model: GameModel)
   : struct (GameModel * Cmd<Msg>) =
-  loadChunks model.PlayerPosition model.Chunks model.Seed
+  let pcx =
+    int(Math.Floor(float model.PlayerPosition.X / float chunkWorldWidth))
+
+  let pcz =
+    int(Math.Floor(float model.PlayerPosition.Z / float chunkWorldDepth))
+
+  let keysToGenerate = ResizeArray<struct (int * int)>()
+
+  for x in pcx - chunkLoadRadius .. pcx + chunkLoadRadius do
+    for z in pcz - chunkLoadRadius .. pcz + chunkLoadRadius do
+      let key = struct (x, z)
+
+      if
+        not(model.Chunks.ContainsKey(key))
+        && not(model.PendingChunks.Contains(key))
+      then
+        model.PendingChunks.Add(key) |> ignore
+        keysToGenerate.Add(key)
+
   evictDistantChunks model.PlayerPosition model.Chunks model.KeysToRemove
-  struct (model, Cmd.none)
+
+  if keysToGenerate.Count = 0 then
+    struct (model, Cmd.none)
+  else
+    let cmd =
+      Cmd.batch [|
+        for struct (x, z) in keysToGenerate do
+          generateChunkAsync x z model.Seed
+      |]
+
+    struct (model, cmd)
 
 let dayNightSystem
   (dt: float32)
@@ -118,15 +153,32 @@ let inline minimapSystem
   (model: GameModel)
   : struct (GameModel * Cmd<Msg>) =
   let minimap = model.Minimap
+  let posDelta = model.PlayerPosition - minimap.LastPlayerPos
 
-  Minimap.system
-    dt
-    model.Chunks
-    model.DayNightTimeOfDay
-    model.PlayerPosition
-    &minimap
+  let needsUpdate =
+    minimap.FrameCounter % Minimap.updateInterval = 0
+    || posDelta.LengthSquared() > 4.0f
 
-  struct (model, Cmd.none)
+  minimap.FrameCounter <- minimap.FrameCounter + 1
+
+  if needsUpdate then
+    minimap.LastPlayerPos <- model.PlayerPosition
+
+    let cmd =
+      Cmd.ofAsync
+        (async {
+          return
+            Minimap.generateMinimapImage
+              model.PlayerPosition
+              model.DayNightTimeOfDay
+              model.Chunks
+        })
+        (fun img -> MinimapReady img)
+        (fun _ex -> MinimapReady(Raylib.GenImageColor(1, 1, Color.Black)))
+
+    struct (model, cmd)
+  else
+    struct (model, Cmd.none)
 
 let inline diagnosticsSystem
   (dt: float32)
@@ -157,16 +209,14 @@ let inline lightingSystem
   l.LightIntensity <- getPrimaryLightIntensity time
   struct (model, Cmd.none)
 
-let mushroomLightSystem
-  (dt: float32)
-  (model: GameModel)
-  : struct (GameModel * Cmd<Msg>) =
-  model.VisibleLights.Clear()
-  let camPos = model.CameraPosition
-  let mutable count = 0
+let private collectMushroomLights
+  (chunks: ConcurrentDictionary<struct (int * int), Chunk>)
+  (camPos: Vector3)
+  : PointLight3D[] =
+  let lights = ResizeArray<PointLight3D>(8)
 
-  for KeyValue(struct (_cx, _cz), chunk) in model.Chunks do
-    if count < 8 then
+  for KeyValue(struct (_cx, _cz), chunk) in chunks do
+    if lights.Count < 8 then
       let bounds = {
         Mibo.Layout3D.BoundingBox.Min = chunk.Bounds.Min
         Mibo.Layout3D.BoundingBox.Max = chunk.Bounds.Max
@@ -178,27 +228,61 @@ let mushroomLightSystem
         (fun worldPos blockType ->
           if
             blockType = BlockType.MushroomLight
-            && count < 8
+            && lights.Count < 8
             && (worldPos - camPos).LengthSquared() <= 1600.0f
           then
-            count <- count + 1
-
-            model.VisibleLights.Add(
+            lights.Add(
               {
                 Position = worldPos + Vector3(0.0f, 0.5f, 0.0f)
                 Color = Color(255uy, 200uy, 120uy)
-                Radius = 6.0f
+                Intensity = 1.2f
+                Radius = 8.0f
+                Falloff = 1.2f
                 CastsShadows = false
                 ShadowBias = ValueNone
               }
             ))
 
-  struct (model, Cmd.none)
+  lights.ToArray()
+
+let mutable private mushroomLightFrameCounter = 0
+
+let mushroomLightSystem
+  (dt: float32)
+  (model: GameModel)
+  : struct (GameModel * Cmd<Msg>) =
+  mushroomLightFrameCounter <- mushroomLightFrameCounter + 1
+
+  if mushroomLightFrameCounter % 6 = 0 then
+    let camPos = model.CameraPosition
+
+    let cmd =
+      Cmd.ofAsync
+        (async { return collectMushroomLights model.Chunks camPos })
+        (fun lights -> MushroomLightsReady lights)
+        (fun _ex -> MushroomLightsReady Array.empty)
+
+    struct (model, cmd)
+  else
+    struct (model, Cmd.none)
 
 let update (msg: Msg) (model: GameModel) : struct (GameModel * Cmd<Msg>) =
   match msg with
   | InputMapped actions ->
     model.Actions <- actions
+    struct (model, Cmd.none)
+  | ChunkCreated(key, chunk) ->
+    model.Chunks[key] <- chunk
+    model.PendingChunks.Remove(key) |> ignore
+    struct (model, Cmd.none)
+  | MinimapReady image ->
+    let mutable minimap = model.Minimap
+    Minimap.uploadTexture image &minimap
+    model.Minimap <- minimap
+    struct (model, Cmd.none)
+  | MushroomLightsReady lights ->
+    model.VisibleLights.Clear()
+    model.VisibleLights.AddRange(lights)
     struct (model, Cmd.none)
   | Tick gt ->
     let dt = float32 gt.ElapsedGameTime.TotalSeconds

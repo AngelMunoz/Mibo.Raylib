@@ -1,7 +1,7 @@
 module ThreeDSample.Physics
 
 open System
-open System.Collections.Generic
+open System.Collections.Concurrent
 open System.Numerics
 open Raylib_cs
 open Mibo.Input
@@ -108,7 +108,7 @@ let resolveCollision
   (prevPos: Vector3)
   (newPos: Vector3)
   (velocity: Vector3)
-  (chunks: Dictionary<struct (int * int), Chunk>)
+  (chunks: ConcurrentDictionary<struct (int * int), Chunk>)
   : struct (Vector3 * Vector3 * bool * int) =
   let mutable pos = newPos
   let mutable vel = velocity

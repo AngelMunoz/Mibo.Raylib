@@ -1,6 +1,7 @@
 module PlatformerSample.WorldGen
 
 open System
+open System.Collections.Concurrent
 open System.Collections.Generic
 open System.Numerics
 open Raylib_cs
@@ -123,6 +124,7 @@ let generateChunk (cx: int) (cy: int) (worldSeed: int) : Chunk =
   // Biome based on chunk position (like ThreeDSample's isSnow)
   let biome =
     let v = (abs cx + abs cy) % 4
+
     match v with
     | 0 -> Grass
     | 1 -> Stone
@@ -164,6 +166,11 @@ let generateChunk (cx: int) (cy: int) (worldSeed: int) : Chunk =
             section
             |> Layout.section px py (Platformer.platform pw Platform)
             |> ignore
+
+            // Coins above floating platforms
+            for cx in 0 .. pw - 1 do
+              if rng.Next(4) = 0 then
+                Layout.set (px + cx) (py - 1) Coin section |> ignore
 
           section)
         grid
@@ -291,12 +298,17 @@ let generateChunk (cx: int) (cy: int) (worldSeed: int) : Chunk =
             |> Layout.section px py (Platformer.platform pw Platform)
             |> ignore
 
+            // Coins above platforms in spike chunks too
+            for cx in 0 .. pw - 1 do
+              if rng.Next(4) = 0 then
+                Layout.set (px + cx) (py - 1) Coin section |> ignore
+
           section)
         grid
       |> ignore
 
     else
-      // Archetype: Ground + treasures
+      // Archetype: Ground + treasures (more coins)
       Layout.run
         (fun section ->
           section
@@ -316,8 +328,8 @@ let generateChunk (cx: int) (cy: int) (worldSeed: int) : Chunk =
             groundSection)
           |> ignore
 
-          // Platforms with coins above
-          let platCount = rng.Next(2, 5)
+          // Platforms with coins above — more platforms, more coins
+          let platCount = rng.Next(3, 7)
 
           for _ in 1..platCount do
             let px = rng.Next(0, chunkCells - 6)
@@ -330,7 +342,7 @@ let generateChunk (cx: int) (cy: int) (worldSeed: int) : Chunk =
 
             // Coins above platform
             for cx in 0 .. pw - 1 do
-              if rng.Next(3) = 0 then
+              if rng.Next(2) = 0 then
                 Layout.set (px + cx) (py - 1) Coin section |> ignore
 
           section)
@@ -379,12 +391,10 @@ let generateChunk (cx: int) (cy: int) (worldSeed: int) : Chunk =
           grid
         |> ignore
 
-        // Occasional coin above platform
-        if rng.Next(3) = 0 then
-          let coinX = px + rng.Next(0, pw)
+        // Coin above platform
+        let coinX = px + rng.Next(0, pw)
 
-          Layout.run (fun s -> s |> Layout.set coinX (py - 1) Coin) grid
-          |> ignore
+        Layout.run (fun s -> s |> Layout.set coinX (py - 1) Coin) grid |> ignore
 
     else
       // Pillar chains — limited height
@@ -505,7 +515,7 @@ let generateChunk (cx: int) (cy: int) (worldSeed: int) : Chunk =
 
 let loadChunks
   (playerPos: Vector2)
-  (chunks: Dictionary<struct (int * int), Chunk>)
+  (chunks: ConcurrentDictionary<struct (int * int), Chunk>)
   (seed: int)
   =
   let pcx = int(Math.Floor(float playerPos.X / float chunkWorldSize))
@@ -515,12 +525,12 @@ let loadChunks
     for y in pcy - chunkLoadRadius .. pcy + chunkLoadRadius do
       let key = struct (x, y)
 
-      if not (chunks.ContainsKey(key)) then
+      if not(chunks.ContainsKey(key)) then
         chunks[key] <- generateChunk x y seed
 
 let evictDistantChunks
   (playerPos: Vector2)
-  (chunks: Dictionary<struct (int * int), Chunk>)
+  (chunks: ConcurrentDictionary<struct (int * int), Chunk>)
   (keysToRemove: ResizeArray<struct (int * int)>)
   =
   let pcx = int(Math.Floor(float playerPos.X / float chunkWorldSize))
@@ -534,4 +544,4 @@ let evictDistantChunks
       keysToRemove.Add key
 
   for i = 0 to keysToRemove.Count - 1 do
-    chunks.Remove keysToRemove[i] |> ignore
+    chunks.TryRemove(keysToRemove[i]) |> ignore

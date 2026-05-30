@@ -1,6 +1,7 @@
 module ThreeDSample.Types
 
 open System
+open System.Collections.Concurrent
 open System.Collections.Generic
 open System.Numerics
 open Raylib_cs
@@ -192,7 +193,10 @@ type GameModel() =
   member val InputMap: InputMap<GameAction> = InputMap.empty with get, set
   member val PlayerModel = Unchecked.defaultof<Model> with get, set
   member val ModelCache = Dictionary<string, Model>() with get, set
-  member val Chunks = Dictionary<struct (int * int), Chunk>() with get, set
+
+  member val Chunks =
+    ConcurrentDictionary<struct (int * int), Chunk>() with get, set
+
   member val TotalTime = 0.0f with get, set
   member val DayNightTimeOfDay = 12.0f with get, set
   member val DayNightDuration = 60.0f with get, set
@@ -204,8 +208,12 @@ type GameModel() =
   member val Diagnostics = DiagnosticsModel() with get, set
   member val Lighting = LightingModel() with get, set
   member val VisibleLights = ResizeArray<PointLight3D>() with get, set
+  member val PendingChunks = HashSet<struct (int * int)>() with get, set
 
 [<Struct>]
 type Msg =
   | Tick of tick: GameTime
   | InputMapped of inputs: ActionState<GameAction>
+  | ChunkCreated of key: struct (int * int) * chunk: Chunk
+  | MinimapReady of image: Raylib_cs.Image
+  | MushroomLightsReady of lights: PointLight3D[]

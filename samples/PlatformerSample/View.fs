@@ -18,6 +18,10 @@ open PlatformerSample.Minimap
 let inline r (x: int) (y: int) (w: int) (h: int) =
   Rectangle(float32 x, float32 y, float32 w, float32 h)
 
+// Pre-allocated buffers to avoid per-frame allocation
+let private nearbyOccluders = ResizeArray<Occluder2D>(256)
+let private nearbyTorches = ResizeArray<TorchLight>(64)
+
 // -------------------------------------------------------------
 // Lighting & Rendering
 // -------------------------------------------------------------
@@ -89,14 +93,16 @@ let view (ctx: GameContext) (model: Model) (buffer: RenderBuffer2D) =
   let pcx = int(Math.Floor(float model.PlayerPosition.X / float chunkWorldSize))
   let pcy = int(Math.Floor(float model.PlayerPosition.Y / float chunkWorldSize))
 
-  let nearbyOccluders = ResizeArray()
-  let nearbyTorches = ResizeArray()
+  nearbyOccluders.Clear()
+  nearbyTorches.Clear()
 
   // Max distance for occluders to cast shadows (1.5x viewport diagonal)
   let maxOccluderDistSq =
     let vw = float32 ctx.WindowWidth
     let vh = float32 ctx.WindowHeight
     (vw * 1.5f) * (vw * 1.5f) + (vh * 1.5f) * (vh * 1.5f)
+
+  let playerPos = model.PlayerPosition
 
   for KeyValue(key, chunk) in model.Chunks do
     let struct (cx, cy) = key
@@ -106,39 +112,42 @@ let view (ctx: GameContext) (model: Model) (buffer: RenderBuffer2D) =
       for o in chunk.Occluders do
         let mx = (o.P1.X + o.P2.X) * 0.5f
         let my = (o.P1.Y + o.P2.Y) * 0.5f
-        let dx = mx - model.PlayerPosition.X
-        let dy = my - model.PlayerPosition.Y
+        let dx = mx - playerPos.X
+        let dy = my - playerPos.Y
 
         if dx * dx + dy * dy <= maxOccluderDistSq then
           nearbyOccluders.Add o
 
-      nearbyTorches.AddRange chunk.Torches
+      for t in chunk.Torches do
+        nearbyTorches.Add t
 
-  // Sort by distance to player and take nearest N
-  let playerPos = model.PlayerPosition
+  // Sort by distance and take nearest N (avoid Seq allocation)
+  let ocCount = min nearbyOccluders.Count maxOccluders
 
-  let occludersSorted =
-    nearbyOccluders
-    |> Seq.sortBy(fun o ->
-      let mx = (o.P1.X + o.P2.X) * 0.5f
-      let my = (o.P1.Y + o.P2.Y) * 0.5f
+  if nearbyOccluders.Count > 1 then
+    nearbyOccluders.Sort(fun a b ->
+      let ax = (a.P1.X + a.P2.X) * 0.5f - playerPos.X
+      let ay = (a.P1.Y + a.P2.Y) * 0.5f - playerPos.Y
+      let bx = (b.P1.X + b.P2.X) * 0.5f - playerPos.X
+      let by = (b.P1.Y + b.P2.Y) * 0.5f - playerPos.Y
+      compare (ax * ax + ay * ay) (bx * bx + by * by))
 
-      (mx - playerPos.X) * (mx - playerPos.X)
-      + (my - playerPos.Y) * (my - playerPos.Y))
-    |> Seq.truncate maxOccluders
+  let torchCount = min nearbyTorches.Count maxTorchLights
 
-  let torchesSorted =
-    nearbyTorches
-    |> Seq.sortBy(fun t ->
-      let dx = t.Position.X - playerPos.X
-      let dy = t.Position.Y - playerPos.Y
-      dx * dx + dy * dy)
-    |> Seq.truncate maxTorchLights
+  if nearbyTorches.Count > 1 then
+    nearbyTorches.Sort(fun a b ->
+      let ax = a.Position.X - playerPos.X
+      let ay = a.Position.Y - playerPos.Y
+      let bx = b.Position.X - playerPos.X
+      let by = b.Position.Y - playerPos.Y
+      compare (ax * ax + ay * ay) (bx * bx + by * by))
 
   // Add torches as point lights and draw sprites
   let torchSrc = AnimatedSprite.currentSource model.TorchSprite
 
-  for torch in torchesSorted do
+  for i = 0 to torchCount - 1 do
+    let torch = nearbyTorches[i]
+
     buffer
     |> LightDraw.addPointLight model.Lighting 7<RenderLayer> {
       Position = torch.Position
@@ -166,9 +175,9 @@ let view (ctx: GameContext) (model: Model) (buffer: RenderBuffer2D) =
     |> Draw.drop
 
   // Add occluders
-  for occluder in occludersSorted do
+  for i = 0 to ocCount - 1 do
     buffer
-    |> LightDraw.addOccluder model.Lighting 8<RenderLayer> occluder
+    |> LightDraw.addOccluder model.Lighting 8<RenderLayer> nearbyOccluders[i]
     |> Draw.drop
 
   // Render visible tiles from nearby chunks only
@@ -176,19 +185,19 @@ let view (ctx: GameContext) (model: Model) (buffer: RenderBuffer2D) =
     match tile with
     | Ground ->
       match biome with
-      | Grass -> r 260 585 64 64     // terrain_grass_block
-      | Stone -> r 520 975 64 64     // terrain_stone_block
-      | Snow -> r 1040 845 64 64     // terrain_snow_block
-      | Sand -> r 390 780 64 64      // terrain_sand_block
+      | Grass -> r 260 585 64 64 // terrain_grass_block
+      | Stone -> r 520 975 64 64 // terrain_stone_block
+      | Snow -> r 1040 845 64 64 // terrain_snow_block
+      | Sand -> r 390 780 64 64 // terrain_sand_block
     | Platform ->
       match biome with
-      | Grass -> r 520 975 64 64     // terrain_stone_block
-      | Stone -> r 780 455 64 64     // terrain_dirt_block
-      | Snow -> r 520 975 64 64     // terrain_stone_block
-      | Sand -> r 780 455 64 64     // terrain_dirt_block
-    | Spikes -> r 715 0 64 64        // block_spikes
-    | Coin -> r 0 130 64 64          // coin_gold
-    | Flag -> r 780 195 64 64        // flag_red_a
+      | Grass -> r 520 975 64 64 // terrain_stone_block
+      | Stone -> r 780 455 64 64 // terrain_dirt_block
+      | Snow -> r 520 975 64 64 // terrain_stone_block
+      | Sand -> r 780 455 64 64 // terrain_dirt_block
+    | Spikes -> r 715 0 64 64 // block_spikes
+    | Coin -> r 0 130 64 64 // coin_gold
+    | Flag -> r 780 195 64 64 // flag_red_a
     | Empty -> r 0 0 0 0
 
   for KeyValue(key, chunk) in model.Chunks do

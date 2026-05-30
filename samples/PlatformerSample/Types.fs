@@ -1,6 +1,7 @@
 module PlatformerSample.Types
 
 open System
+open System.Collections.Concurrent
 open System.Collections.Generic
 open System.Numerics
 open Raylib_cs
@@ -79,7 +80,9 @@ type SpriteAssets = {
 // -------------------------------------------------------------
 
 type MinimapModel() =
-  member val Blocks = Dictionary<struct (int * int), struct (float32 * TileType * Biome)>() with get, set
+  member val Blocks =
+    Dictionary<struct (int * int), struct (float32 * TileType * Biome)>() with get, set
+
   member val Texture = Unchecked.defaultof<Texture2D> with get, set
   member val TexReady = false with get, set
   member val FrameCounter = 0 with get, set
@@ -108,7 +111,10 @@ type Model() as self =
   member val PlayerSprite: AnimatedSprite = Unchecked.defaultof<_> with get, set
   member val TorchSprite: AnimatedSprite = Unchecked.defaultof<_> with get, set
   member val PlayerChunk = struct (0, 0) with get, set
-  member val Chunks = Dictionary<struct (int * int), Chunk>() with get, set
+
+  member val Chunks =
+    ConcurrentDictionary<struct (int * int), Chunk>() with get, set
+
   member val Seed = 0 with get, set
   member val DayNightTimeOfDay = 12.0f with get, set
   member val DayNightDuration = 60.0f with get, set
@@ -117,6 +123,7 @@ type Model() as self =
   member val ParticleVelocities: Vector2[] = Array.zeroCreate 512 with get, set
   member val ParticleCount = 0 with get, set
   member val Score = 0 with get, set
+  member val PendingChunks = HashSet<struct (int * int)>() with get, set
 
   member val Diagnostics = Diagnostics() with get, set
   member val Minimap = MinimapModel() with get, set
@@ -134,3 +141,5 @@ type Model() as self =
 type Msg =
   | Tick of tick: GameTime
   | InputMapped of inputs: ActionState<GameAction>
+  | ChunkCreated of key: struct (int * int) * chunk: Chunk
+  | MinimapReady of image: Raylib_cs.Image

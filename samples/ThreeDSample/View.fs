@@ -117,6 +117,9 @@ let view (ctx: GameContext) (model: GameModel) (buffer: RenderBuffer3D) =
   currentGameContext <- ctx
   instancedCtx.ResetFrameBuffers()
 
+  for light in model.VisibleLights do
+    Draw3D.addPointLight light buffer |> Draw3D.drop
+
   let camPos = model.CameraPosition
   let maxChunkDistSq = 2500.0f
 

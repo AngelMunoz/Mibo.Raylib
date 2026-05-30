@@ -2,6 +2,7 @@ module ThreeDSample.Minimap
 
 #nowarn "9"
 
+open System.Collections.Concurrent
 open System.Collections.Generic
 open System.Numerics
 open FSharp.NativeInterop
@@ -69,7 +70,7 @@ let private blockColor (fallbackColor: Color) (blockType: BlockType) : Color =
 let private collectBlocks
   (playerPos: Vector3)
   (bounds: BoundingBox)
-  (chunks: Dictionary<struct (int * int), Chunk>)
+  (chunks: ConcurrentDictionary<struct (int * int), Chunk>)
   (blocks: Dictionary<struct (int * int), struct (float32 * BlockType)>)
   : unit =
   blocks.Clear()
@@ -103,12 +104,12 @@ let private collectBlocks
             | _ -> blocks[key] <- struct (worldY, blockType))
         chunk.Grid
 
-let private bakeTexture
+let private generateImage
   (playerPos: Vector3)
   (timeOfDay: float32)
   (scale: float32)
-  (model: inref<MinimapModel>)
-  : unit =
+  (blocks: Dictionary<struct (int * int), struct (float32 * BlockType)>)
+  : Image =
   let halfMinimap = minimapSize * 0.5f
   let bgColor = Color(20uy, 20uy, 40uy, 200uy)
   let skyColor = DayNight.getSkyColor timeOfDay
@@ -118,7 +119,7 @@ let private bakeTexture
   let mutable img = Raylib.GenImageColor(texSize, texSize, bgColor)
   use imgPin = fixed &img
 
-  for KeyValue(struct (wx, wz), struct (_, blockType)) in model.Blocks do
+  for KeyValue(struct (wx, wz), struct (_, blockType)) in blocks do
     let relX = (float32 wx - playerPos.X) * scale
     let relZ = (float32 wz - playerPos.Z) * scale
     let pixelX = int(halfMinimap + relX)
@@ -135,53 +136,45 @@ let private bakeTexture
         color
       )
 
+  img
+
+let uploadTexture (image: Image) (model: inref<MinimapModel>) : unit =
   if model.TexReady then
     Raylib.UpdateTexture(
       model.Texture,
-      NativePtr.toVoidPtr(NativePtr.ofVoidPtr<byte> img.Data)
+      NativePtr.toVoidPtr(NativePtr.ofVoidPtr<byte> image.Data)
     )
   else
-    model.Texture <- Raylib.LoadTextureFromImage(img)
+    model.Texture <- Raylib.LoadTextureFromImage(image)
     model.TexReady <- true
 
-  Raylib.UnloadImage(img)
+  Raylib.UnloadImage(image)
 
-let system
-  (dt: float32)
-  (chunks: Dictionary<struct (int * int), Chunk>)
-  (timeOfDay: float32)
+let generateMinimapImage
   (playerPos: Vector3)
-  (model: inref<MinimapModel>)
-  : unit =
+  (timeOfDay: float32)
+  (chunks: ConcurrentDictionary<struct (int * int), Chunk>)
+  : Image =
   let scale = minimapSize / (minimapWorldRadius * 2.0f)
 
-  let posDelta = playerPos - model.LastPlayerPos
+  let bounds = {
+    Min =
+      Vector3(
+        playerPos.X - minimapWorldRadius,
+        -100.0f,
+        playerPos.Z - minimapWorldRadius
+      )
+    Max =
+      Vector3(
+        playerPos.X + minimapWorldRadius,
+        100.0f,
+        playerPos.Z + minimapWorldRadius
+      )
+  }
 
-  let needsUpdate =
-    model.FrameCounter % updateInterval = 0 || posDelta.LengthSquared() > 4.0f
-
-  if needsUpdate then
-    model.LastPlayerPos <- playerPos
-
-    let bounds = {
-      Min =
-        Vector3(
-          playerPos.X - minimapWorldRadius,
-          -100.0f,
-          playerPos.Z - minimapWorldRadius
-        )
-      Max =
-        Vector3(
-          playerPos.X + minimapWorldRadius,
-          100.0f,
-          playerPos.Z + minimapWorldRadius
-        )
-    }
-
-    collectBlocks playerPos bounds chunks model.Blocks
-    bakeTexture playerPos timeOfDay scale &model
-
-  model.FrameCounter <- model.FrameCounter + 1
+  let blocks = Dictionary<struct (int * int), struct (float32 * BlockType)>()
+  collectBlocks playerPos bounds chunks blocks
+  generateImage playerPos timeOfDay scale blocks
 
 
 // ── View ──

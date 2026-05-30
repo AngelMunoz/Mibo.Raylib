@@ -21,6 +21,7 @@ open Mibo.Layout
 let nearbyPlatforms = ResizeArray<Rectangle>(256)
 let nearbySpikes = ResizeArray<Rectangle>(64)
 let nearbyCoins = ResizeArray<Rectangle>(64)
+let collectedCoins = ResizeArray<Rectangle>(16)
 let keysToRemove = ResizeArray<struct (int * int)>(32)
 
 let confettiColors = [|
@@ -98,11 +99,7 @@ let physicsSystem (dt: float32) (model: Model) : struct (Model * Cmd<Msg>) =
   if jumpStarted && canJump then
     spawnConfetti model
     velocityY <- jumpSpeed
-  elif
-    not canJump
-    && not jumpHeld
-    && velocityY < 0.0f
-  then
+  elif not canJump && not jumpHeld && velocityY < 0.0f then
     velocityY <- velocityY * jumpCutMultiplier
 
   let velocity = Vector2(model.PlayerVelocity.X, velocityY)
@@ -141,7 +138,7 @@ let physicsSystem (dt: float32) (model: Model) : struct (Model * Cmd<Msg>) =
       isGrounded <- true
 
   // Coin collection → increment score
-  let mutable collectedCoins = ResizeArray<Rectangle>()
+  collectedCoins.Clear()
 
   for i = 0 to nearbyCoins.Count - 1 do
     if checkCollision playerRect nearbyCoins[i] then
@@ -149,8 +146,14 @@ let physicsSystem (dt: float32) (model: Model) : struct (Model * Cmd<Msg>) =
       collectedCoins.Add nearbyCoins[i]
 
   // Remove collected coins from chunks (mark as Empty in grid)
-  for coinRect in collectedCoins do
-    for KeyValue(_key, chunk) in model.Chunks do
+  for i = 0 to collectedCoins.Count - 1 do
+    let coinRect = collectedCoins[i]
+    let coinCx = int(Math.Floor(float coinRect.X / float chunkWorldSize))
+    let coinCy = int(Math.Floor(float coinRect.Y / float chunkWorldSize))
+    let key = struct (coinCx, coinCy)
+
+    match model.Chunks.TryGetValue key with
+    | true, chunk ->
       let cellX =
         int((coinRect.X - chunk.Grid.Origin.X) / chunk.Grid.CellSize.X)
 
@@ -163,9 +166,8 @@ let physicsSystem (dt: float32) (model: Model) : struct (Model * Cmd<Msg>) =
         && cellY >= 0
         && cellY < chunk.Grid.Height
       then
-        match CellGrid2D.get cellX cellY chunk.Grid with
-        | ValueSome Coin -> CellGrid2D.set cellX cellY Empty chunk.Grid
-        | _ -> ()
+        CellGrid2D.set cellX cellY Empty chunk.Grid
+    | _ -> ()
 
   // Respawn if fallen too far
   if finalPos.Y > groundLevel + 500.0f then
@@ -214,17 +216,41 @@ let physicsSystem (dt: float32) (model: Model) : struct (Model * Cmd<Msg>) =
 // System: Chunk Management (only runs when player changes chunk)
 // -------------------------------------------------------------
 
+let private generateChunkAsync (cx: int) (cy: int) (seed: int) : Cmd<Msg> =
+  Cmd.ofAsync
+    (async { return generateChunk cx cy seed })
+    (fun chunk -> ChunkCreated(struct (cx, cy), chunk))
+    (fun _ex -> ChunkCreated(struct (cx, cy), generateChunk cx cy seed))
+
 let chunkSystem (dt: float32) (model: Model) : struct (Model * Cmd<Msg>) =
   let pos = model.PlayerPosition
   let pcx = int(Math.Floor(float pos.X / float chunkWorldSize))
   let pcy = int(Math.Floor(float pos.Y / float chunkWorldSize))
-  let currentChunk = struct (pcx, pcy)
+  let keysToGenerate = ResizeArray<struct (int * int)>()
 
-  if currentChunk <> model.PlayerChunk then
-    loadChunks pos model.Chunks model.Seed
-    evictDistantChunks pos model.Chunks keysToRemove
+  for x in pcx - chunkLoadRadius .. pcx + chunkLoadRadius do
+    for y in pcy - chunkLoadRadius .. pcy + chunkLoadRadius do
+      let key = struct (x, y)
 
-  model, Cmd.none
+      if
+        not(model.Chunks.ContainsKey(key))
+        && not(model.PendingChunks.Contains(key))
+      then
+        model.PendingChunks.Add(key) |> ignore
+        keysToGenerate.Add(key)
+
+  evictDistantChunks pos model.Chunks keysToRemove
+
+  if keysToGenerate.Count = 0 then
+    struct (model, Cmd.none)
+  else
+    let cmd =
+      Cmd.batch [|
+        for struct (x, y) in keysToGenerate do
+          generateChunkAsync x y model.Seed
+      |]
+
+    struct (model, cmd)
 
 // -------------------------------------------------------------
 // System: Animation
@@ -295,14 +321,32 @@ let dayNightSystem (dt: float32) (model: Model) : struct (Model * Cmd<Msg>) =
 
 let minimapSystem (dt: float32) (model: Model) : struct (Model * Cmd<Msg>) =
   let minimap = model.Minimap
+  let posDelta = model.PlayerPosition - minimap.LastPlayerPos
 
-  Minimap.system
-    model.Chunks
-    model.DayNightTimeOfDay
-    model.PlayerPosition
-    &minimap
+  let needsUpdate =
+    minimap.FrameCounter % Minimap.updateInterval = 0
+    || posDelta.LengthSquared() > 4.0f
 
-  model, Cmd.none
+  minimap.FrameCounter <- minimap.FrameCounter + 1
+
+  if needsUpdate then
+    minimap.LastPlayerPos <- model.PlayerPosition
+
+    let cmd =
+      Cmd.ofAsync
+        (async {
+          return
+            Minimap.generateMinimapImage
+              model.Chunks
+              model.DayNightTimeOfDay
+              model.PlayerPosition
+        })
+        (fun img -> MinimapReady img)
+        (fun _ex -> MinimapReady(Raylib.GenImageColor(1, 1, Color.Black)))
+
+    model, cmd
+  else
+    model, Cmd.none
 
 let diagnosticSystem (dt: float32) (model: Model) : struct (Model * Cmd<Msg>) =
   model.Diagnostics.Fps <- Raylib.GetFPS()
@@ -317,6 +361,17 @@ let update (msg: Msg) (model: Model) : struct (Model * Cmd<Msg>) =
   match msg with
   | InputMapped actions ->
     model.Actions <- actions
+    model, Cmd.none
+
+  | ChunkCreated(key, chunk) ->
+    model.Chunks[key] <- chunk
+    model.PendingChunks.Remove(key) |> ignore
+    model, Cmd.none
+
+  | MinimapReady image ->
+    let mutable minimap = model.Minimap
+    Minimap.uploadTexture image &minimap
+    model.Minimap <- minimap
     model, Cmd.none
 
   | Tick gt ->

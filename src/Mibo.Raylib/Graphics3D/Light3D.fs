@@ -76,8 +76,12 @@ type PointLight3D = {
   Position: Vector3
   /// <summary>Color of the point light.</summary>
   Color: Color
+  /// <summary>Brightness multiplier. 1.0 = full, 0.0 = off.</summary>
+  Intensity: float32
   /// <summary>Maximum radius of influence.</summary>
   Radius: float32
+  /// <summary>Falloff curve exponent. 1.0 = linear, 2.0 = quadratic.</summary>
+  Falloff: float32
   /// <summary>
   /// Whether this point light casts shadows.
   /// </summary>
@@ -101,16 +105,25 @@ type PointLight3D = {
 /// <summary>Convenience builders for <see cref="T:Mibo.Elmish.Graphics3D.PointLight3D"/>.</summary>
 module PointLight3D =
 
-  /// <summary>Creates a point light. Defaults: Color=White, CastsShadows=false, ShadowBias=None.</summary>
+  /// <summary>Creates a point light. Defaults: Color=White, Intensity=1, Falloff=2, CastsShadows=false, ShadowBias=None.</summary>
   let create(position: Vector3, radius: float32) : PointLight3D = {
     Position = position
     Color = Color.White
+    Intensity = 1.0f
     Radius = radius
+    Falloff = 2.0f
     CastsShadows = false
     ShadowBias = ValueNone
   }
 
   let inline withColor (v: Color) (l: PointLight3D) = { l with Color = v }
+
+  let inline withIntensity (v: float32) (l: PointLight3D) = {
+    l with
+        Intensity = v
+  }
+
+  let inline withFalloff (v: float32) (l: PointLight3D) = { l with Falloff = v }
 
   let inline withCastsShadows (v: bool) (l: PointLight3D) = {
     l with
