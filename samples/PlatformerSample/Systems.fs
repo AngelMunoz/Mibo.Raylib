@@ -20,15 +20,16 @@ open PlatformerSample.WorldGen
 let nearbyPlatforms = ResizeArray<Rectangle>(256)
 let keysToRemove = ResizeArray<struct (int * int)>(32)
 
-let confettiColors =
-  [| Color(255uy, 50uy, 50uy, 255uy)
-     Color(50uy, 255uy, 50uy, 255uy)
-     Color(50uy, 50uy, 255uy, 255uy)
-     Color(255uy, 255uy, 50uy, 255uy)
-     Color(255uy, 50uy, 255uy, 255uy)
-     Color(50uy, 255uy, 255uy, 255uy)
-     Color(255uy, 150uy, 50uy, 255uy)
-     Color(255uy, 50uy, 150uy, 255uy) |]
+let confettiColors = [|
+  Color(255uy, 50uy, 50uy, 255uy)
+  Color(50uy, 255uy, 50uy, 255uy)
+  Color(50uy, 50uy, 255uy, 255uy)
+  Color(255uy, 255uy, 50uy, 255uy)
+  Color(255uy, 50uy, 255uy, 255uy)
+  Color(50uy, 255uy, 255uy, 255uy)
+  Color(255uy, 150uy, 50uy, 255uy)
+  Color(255uy, 50uy, 150uy, 255uy)
+|]
 
 // -------------------------------------------------------------
 // System: Input -> Movement Intent
@@ -61,14 +62,16 @@ let physicsSystem (dt: float32) (model: Model) : struct (Model * Cmd<Msg>) =
       let mutable pc = model.ParticleCount
       let particles = model.Particles
       let particleVelocities = model.ParticleVelocities
+
       for i = 0 to 19 do
         if pc < particles.Length then
           let spawnPos =
             model.PlayerPosition
             + Vector2(
-                playerWidth / 2.0f + float32(rng.NextDouble() * 20.0 - 10.0),
-                playerHeight * 0.3f
-              )
+              playerWidth / 2.0f + float32(rng.NextDouble() * 20.0 - 10.0),
+              playerHeight * 0.3f
+            )
+
           particles[pc] <- {
             Position = spawnPos
             Size = Vector2(4.0f, 4.0f)
@@ -76,12 +79,15 @@ let physicsSystem (dt: float32) (model: Model) : struct (Model * Cmd<Msg>) =
             SourceRect = Rectangle(0.0f, 0.0f, 1.0f, 1.0f)
             Color = confettiColors[rng.Next(confettiColors.Length)]
           }
+
           particleVelocities[pc] <-
             Vector2(
               float32(rng.NextDouble() * 300.0 - 150.0),
               float32(rng.NextDouble() * -250.0 - 50.0)
             )
+
           pc <- pc + 1
+
       model.ParticleCount <- pc
       Raylib.PlaySound(model.Assets.JumpSound)
 
@@ -215,6 +221,7 @@ let particleSystem (dt: float32) (model: Model) : struct (Model * Cmd<Msg>) =
     let vel = particleVelocities[i]
     let newVel = Vector2(vel.X, vel.Y + gravity * dt * 0.05f)
     particleVelocities[i] <- newVel
+
     particles[i] <- {
       particles[i] with
           Position = particles[i].Position + newVel * dt

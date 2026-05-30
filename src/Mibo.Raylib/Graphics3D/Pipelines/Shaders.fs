@@ -3,7 +3,7 @@ namespace Mibo.Elmish.Graphics3D.Pipelines
 open Raylib_cs
 
 /// <summary>
-/// Built-in GLSL shader generators for the reference Clustered Forward+ pipeline.
+/// Built-in GLSL shader generators for the Forward PBR pipeline.
 /// </summary>
 /// <remarks>
 /// Fragment shaders use uniform arrays for point lights. The array size is
@@ -27,31 +27,81 @@ out vec3 fragWorldPos;
 
 uniform mat4 mvp;
 uniform mat4 matModel;
+uniform mat4 normalMatrix;
 
 void main()
 {
     fragTexCoord = vertexTexCoord;
     fragColor = vertexColor;
-    fragNormal = mat3(transpose(inverse(matModel))) * vertexNormal;
+    fragNormal = mat3(normalMatrix) * vertexNormal;
     fragWorldPos = (matModel * vec4(vertexPosition, 1.0)).xyz;
     gl_Position = mvp * vec4(vertexPosition, 1.0);
 }
 """
 
-  let shadowPassVertex =
+  /// <summary>
+  /// Instanced variant of the forward vertex shader.
+  /// Uses <c>in mat4 instanceTransform</c> (vertex attribute) instead of
+  /// <c>uniform mat4 matModel</c>. The <c>mvp</c> uniform must be
+  /// view-projection only (without model) — the per-instance model
+  /// transform comes from the <c>instanceTransform</c> attribute.
+  /// </summary>
+  let forwardVertexInstanced =
     """#version 330
 
 in vec3 vertexPosition;
+in vec2 vertexTexCoord;
+in vec3 vertexNormal;
+in vec4 vertexColor;
 
-uniform mat4 lightMvp;
+in mat4 instanceTransform;
+
+out vec2 fragTexCoord;
+out vec4 fragColor;
+out vec3 fragNormal;
+out vec3 fragWorldPos;
+
+uniform mat4 mvp;
+uniform mat4 normalMatrix;
 
 void main()
 {
-    gl_Position = lightMvp * vec4(vertexPosition, 1.0);
+    fragTexCoord = vertexTexCoord;
+    fragColor = vertexColor;
+    fragNormal = mat3(normalMatrix) * vertexNormal;
+    fragWorldPos = (instanceTransform * vec4(vertexPosition, 1.0)).xyz;
+    gl_Position = mvp * instanceTransform * vec4(vertexPosition, 1.0);
 }
 """
 
-  let shadowPassFragment =
+  let depthShadowVertex =
+    """#version 330
+
+in vec3 vertexPosition;
+in vec3 vertexNormal;
+in vec2 vertexTexCoord;
+in vec4 vertexColor;
+
+uniform mat4 mvp;
+uniform mat4 matModel;
+uniform mat4 normalMatrix;
+
+out vec3 fragPosition;
+out vec2 fragTexCoord;
+out vec4 fragColor;
+out vec3 fragNormal;
+
+void main()
+{
+    fragPosition = vec3(matModel * vec4(vertexPosition, 1.0));
+    fragTexCoord = vertexTexCoord;
+    fragColor    = vertexColor;
+    fragNormal   = normalize(mat3(normalMatrix) * vertexNormal);
+    gl_Position  = mvp * vec4(vertexPosition, 1.0);
+}
+"""
+
+  let depthShadowFragment =
     """#version 330
 
 out vec4 finalColor;
@@ -97,35 +147,12 @@ void main()
   let forwardFragmentFmt
     (maxPointLights: int)
     (maxSpotLights: int)
-    (cascadeCount: int)
+    (maxShadowCasters: int)
     =
-    let cascadeArray = String.init cascadeCount (fun _ -> "")
-
-    let shadowMapSamplers =
-      if cascadeCount > 0 then
-        String.concat "" [
-          for i in 0 .. cascadeCount - 1 -> $"uniform sampler2D shadowMap{i};"
-        ]
-      else
-        ""
-
-    let shadowMatrices =
-      if cascadeCount > 0 then
-        String.concat "" [
-          for i in 0 .. cascadeCount - 1 -> $"uniform mat4 shadowMatrix{i};"
-        ]
-      else
-        ""
-
-    let cascadeSplitDecl =
-      if cascadeCount > 1 then
-        $"uniform float cascadeSplits[{cascadeCount - 1}];"
-      else
-        ""
-
     $"""#version 330
 
 const float PI = 3.14159265359;
+const int MAX_SHADOW_CASTERS = {maxShadowCasters};
 
 in vec2 fragTexCoord;
 in vec4 fragColor;
@@ -171,12 +198,14 @@ uniform float spotLightInnerCutoff[{maxSpotLights}];
 uniform float spotLightOuterCutoff[{maxSpotLights}];
 
 uniform vec3 cameraPos;
-uniform float shadowBias;
-uniform float normalShadowBias;
-
-{shadowMapSamplers}
-{shadowMatrices}
-{cascadeSplitDecl}
+uniform sampler2D shadowAtlas;
+uniform int shadowCasterCount;
+uniform mat4 shadowViewProjs[MAX_SHADOW_CASTERS];
+uniform vec4 shadowUVOffsets[MAX_SHADOW_CASTERS]; // xy=offset, zw=scale
+uniform vec3 shadowLightPositions[MAX_SHADOW_CASTERS];
+uniform float shadowBiases[MAX_SHADOW_CASTERS];
+uniform int shadowTypes[MAX_SHADOW_CASTERS]; // 0=directional, 1=point, 2=spot
+uniform int shadowPass;
 
 vec3 getNormal()
 {{
@@ -221,76 +250,119 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0)
     return F0 + (1.0 - F0) * pow(max(1.0 - cosTheta, 0.0), 5.0);
 }}
 
-float sampleShadowMap(sampler2D shadowMap, vec4 shadowCoord, float bias)
+float computeShadowFromAtlas(vec3 worldPos, int casterIndex)
 {{
+    if (casterIndex < 0 || casterIndex >= shadowCasterCount)
+        return 1.0;
+
+    vec4 shadowCoord = shadowViewProjs[casterIndex] * vec4(worldPos, 1.0);
     vec3 projCoord = shadowCoord.xyz / shadowCoord.w;
     projCoord = projCoord * 0.5 + 0.5;
 
-    if (projCoord.z > 1.0 || projCoord.x < 0.0 || projCoord.x > 1.0 || projCoord.y < 0.0 || projCoord.y > 1.0)
+    // Outside shadow frustum → fully lit (no shadow)
+    if (projCoord.z > 1.0) return 1.0;
+    if (projCoord.x < 0.0 || projCoord.x > 1.0 || projCoord.y < 0.0 || projCoord.y > 1.0)
         return 1.0;
 
-    float closestDepth = texture(shadowMap, projCoord.xy).r;
-    float currentDepth = projCoord.z;
-    return currentDepth - bias > closestDepth ? 0.0 : 1.0;
-}}
+    // Apply UV offset/scale for atlas region
+    vec2 atlasUV = projCoord.xy * shadowUVOffsets[casterIndex].zw + shadowUVOffsets[casterIndex].xy;
 
-float sampleShadowMapPCF(sampler2D shadowMap, vec4 shadowCoord, float bias)
-{{
-    vec3 projCoord = shadowCoord.xyz / shadowCoord.w;
-    projCoord = projCoord * 0.5 + 0.5;
+    // Slope-scale bias: increases bias at steep angles to prevent shadow acne
+    float baseBias = shadowBiases[casterIndex];
+    float dzdx = dFdx(projCoord.z);
+    float dzdy = dFdy(projCoord.z);
+    float bias = baseBias + length(vec2(dzdx, dzdy)) * 3.0;
 
-    if (projCoord.z > 1.0 || projCoord.x < 0.0 || projCoord.x > 1.0 || projCoord.y < 0.0 || projCoord.y > 1.0)
-        return 1.0;
-
-    float currentDepth = projCoord.z;
-    vec2 texelSize = 1.0 / vec2(textureSize(shadowMap, 0));
     float shadow = 0.0;
-
-    for (int x = -1; x <= 1; ++x)
-    {{
-        for (int y = -1; y <= 1; ++y)
-        {{
-            vec2 sampleCoord = projCoord.xy + vec2(float(x), float(y)) * texelSize;
-            float pcfDepth = texture(shadowMap, sampleCoord).r;
-            shadow += currentDepth - bias > pcfDepth ? 0.0 : 1.0;
+    vec2 texel = 1.0 / vec2(textureSize(shadowAtlas, 0));
+    for (int x = -1; x <= 1; x++) {{
+        for (int y = -1; y <= 1; y++) {{
+            float d = texture(shadowAtlas, atlasUV + vec2(float(x), float(y)) * texel).r;
+            shadow += (projCoord.z - bias > d) ? 0.0 : 1.0;
         }}
     }}
-    shadow /= 9.0;
-    return shadow;
+    return shadow / 9.0;
 }}
 
-int getCascadeIndex(vec3 worldPos)
+float computePointShadow(vec3 worldPos, int casterIndex)
 {{
-    if ({cascadeCount} <= 1) return 0;
-
-    float viewDepth = length(cameraPos - worldPos);
-
-    {String.concat "\n    " [
-       for i in 0 .. (cascadeCount - 2) ->
-         $"if (viewDepth < cascadeSplits[{i}]) return {i};"
-     ]}
-    return {cascadeCount - 1};
-}}
-
-float computeDirShadow(vec3 worldPos, vec3 normal)
-{{
-    if (dirLightCastsShadows == 0 || {cascadeCount} == 0)
+    if (casterIndex < 0 || casterIndex >= shadowCasterCount)
         return 1.0;
 
-    int cascadeIdx = getCascadeIndex(worldPos);
-    vec4 shadowCoord = vec4(0.0);
-    float bias = shadowBias + normalShadowBias * (1.0 - max(dot(normalize(normal), -normalize(dirLightDir)), 0.0));
+    // Single forward-facing shadow map per point light
+    // Uses standard projective shadow mapping (same as spot lights)
+    vec4 shadowCoord = shadowViewProjs[casterIndex] * vec4(worldPos, 1.0);
+    vec3 projCoord = shadowCoord.xyz / shadowCoord.w;
+    projCoord = projCoord * 0.5 + 0.5;
 
-    {String.concat "\n    " [
-       for i in 0 .. (cascadeCount - 1) ->
-         $"if (cascadeIdx == {i}) shadowCoord = shadowMatrix{i} * vec4(worldPos, 1.0);"
-     ]}
+    // Outside shadow frustum → fully lit (no shadow)
+    if (projCoord.z > 1.0) return 1.0;
+    if (projCoord.x < 0.0 || projCoord.x > 1.0 || projCoord.y < 0.0 || projCoord.y > 1.0)
+        return 1.0;
 
-    {String.concat "\n    " [
-       for i in 0 .. (cascadeCount - 1) ->
-         $"if (cascadeIdx == {i}) return sampleShadowMapPCF(shadowMap{i}, shadowCoord, bias);"
-     ]}
+    vec2 atlasUV = projCoord.xy * shadowUVOffsets[casterIndex].zw + shadowUVOffsets[casterIndex].xy;
 
+    // Slope-scale bias
+    float baseBias = shadowBiases[casterIndex];
+    float dzdx = dFdx(projCoord.z);
+    float dzdy = dFdy(projCoord.z);
+    float bias = baseBias + length(vec2(dzdx, dzdy)) * 3.0;
+
+    float shadow = 0.0;
+    vec2 texel = 1.0 / vec2(textureSize(shadowAtlas, 0));
+    for (int x = -1; x <= 1; x++) {{
+        for (int y = -1; y <= 1; y++) {{
+            float d = texture(shadowAtlas, atlasUV + vec2(float(x), float(y)) * texel).r;
+            shadow += (projCoord.z - bias > d) ? 0.0 : 1.0;
+        }}
+    }}
+    return shadow / 9.0;
+}}
+
+float computeSpotShadow(vec3 worldPos, int casterIndex)
+{{
+    if (casterIndex < 0 || casterIndex >= shadowCasterCount)
+        return 1.0;
+
+    vec4 shadowCoord = shadowViewProjs[casterIndex] * vec4(worldPos, 1.0);
+    vec3 projCoord = shadowCoord.xyz / shadowCoord.w;
+    projCoord = projCoord * 0.5 + 0.5;
+
+    // Outside shadow frustum → fully lit (no shadow)
+    if (projCoord.z > 1.0) return 1.0;
+    if (projCoord.x < 0.0 || projCoord.x > 1.0 || projCoord.y < 0.0 || projCoord.y > 1.0)
+        return 1.0;
+
+    vec2 atlasUV = projCoord.xy * shadowUVOffsets[casterIndex].zw + shadowUVOffsets[casterIndex].xy;
+
+    // Slope-scale bias
+    float baseBias = shadowBiases[casterIndex];
+    float dzdx = dFdx(projCoord.z);
+    float dzdy = dFdy(projCoord.z);
+    float bias = baseBias + length(vec2(dzdx, dzdy)) * 3.0;
+
+    float shadow = 0.0;
+    vec2 texel = 1.0 / vec2(textureSize(shadowAtlas, 0));
+    for (int x = -1; x <= 1; x++) {{
+        for (int y = -1; y <= 1; y++) {{
+            float d = texture(shadowAtlas, atlasUV + vec2(float(x), float(y)) * texel).r;
+            shadow += (projCoord.z - bias > d) ? 0.0 : 1.0;
+        }}
+    }}
+    return shadow / 9.0;
+}}
+
+float computeDirShadow(vec3 worldPos)
+{{
+    if (dirLightCastsShadows == 0)
+        return 1.0;
+
+    // Find the first directional light caster
+    for (int i = 0; i < shadowCasterCount; i++) {{
+        if (shadowTypes[i] == 0) {{ // Directional
+            return computeShadowFromAtlas(worldPos, i);
+        }}
+    }}
     return 1.0;
 }}
 
@@ -316,15 +388,15 @@ vec3 calcPBR(vec3 V, vec3 N, vec3 L, vec3 radiance, vec3 albedo, float r, float 
 
 void main()
 {{
+    if (shadowPass == 1) {{ finalColor = vec4(1.0); return; }}
+
     vec2 uv = fragTexCoord * tiling;
     vec4 texColor = texture(texture0, uv) * albedoColor * fragColor;
     vec3 albedo = texColor.rgb;
     vec3 normal = getNormal();
 
-    float r = texture(texture3, uv).r * roughness + (1.0 - texture(texture3, uv).r) * roughness;
-    r = clamp(r, 0.04, 1.0);
-    float m = texture(texture1, uv).r * metallic + (1.0 - texture(texture1, uv).r) * metallic;
-    m = clamp(m, 0.0, 1.0);
+    float r = clamp(roughness, 0.04, 1.0);
+    float m = clamp(metallic, 0.0, 1.0);
 
     vec3 V = normalize(cameraPos - fragWorldPos);
 
@@ -332,7 +404,7 @@ void main()
     vec3 ambient = ambientColor * albedo * ambientIntensity;
 
     // Directional light (PBR)
-    float dirShadow = computeDirShadow(fragWorldPos, normal);
+    float dirShadow = computeDirShadow(fragWorldPos);
     vec3 L = normalize(-dirLightDir);
     vec3 radiance = dirLightColor * dirLightIntensity;
     vec3 dirResult = calcPBR(V, normal, L, radiance, albedo, r, m) * dirShadow;
@@ -349,7 +421,17 @@ void main()
             vec3 pL = normalize(toLight);
             float atten = 1.0 - (dist / pointLightRadius[i]);
             vec3 pRadiance = pointLightColor[i] * atten;
-            pointResult += calcPBR(V, normal, pL, pRadiance, albedo, r, m);
+            
+            // Find matching shadow caster for this point light
+            float ptShadow = 1.0;
+            for (int si = 0; si < shadowCasterCount; si++) {{
+                if (shadowTypes[si] == 1 && shadowLightPositions[si] == pointLightPos[i]) {{
+                    ptShadow = computePointShadow(fragWorldPos, si);
+                    break;
+                }}
+            }}
+            
+            pointResult += calcPBR(V, normal, pL, pRadiance, albedo, r, m) * ptShadow;
         }}
     }}
 
@@ -368,7 +450,17 @@ void main()
             float intensity = clamp((theta - spotLightOuterCutoff[i]) / max(epsilon, 0.0001), 0.0, 1.0);
             float distAtten = 1.0 - (dist / spotLightRadius[i]);
             vec3 sRadiance = spotLightColor[i] * spotLightIntensity[i] * intensity * distAtten;
-            spotResult += calcPBR(V, normal, sL, sRadiance, albedo, r, m);
+            
+            // Find matching shadow caster for this spot light
+            float spShadow = 1.0;
+            for (int si = 0; si < shadowCasterCount; si++) {{
+                if (shadowTypes[si] == 2 && shadowLightPositions[si] == spotLightPos[i]) {{
+                    spShadow = computeSpotShadow(fragWorldPos, si);
+                    break;
+                }}
+            }}
+            
+            spotResult += calcPBR(V, normal, sL, sRadiance, albedo, r, m) * spShadow;
         }}
     }}
 
@@ -385,21 +477,36 @@ void main()
 
   /// <summary>
   /// Loads the built-in forward PBR vertex + fragment shader.
-  /// The fragment shader is generated with the specified light array sizes and cascade count.
+  /// The fragment shader is generated with the specified light and shadow array sizes.
   /// </summary>
   let loadForwardShader
     (maxPointLights: int)
     (maxSpotLights: int)
-    (cascadeCount: int)
+    (maxShadowCasters: int)
     : Shader =
     Raylib.LoadShaderFromMemory(
       forwardVertex,
-      forwardFragmentFmt maxPointLights maxSpotLights cascadeCount
+      forwardFragmentFmt maxPointLights maxSpotLights maxShadowCasters
     )
 
-  /// <summary>Loads the shadow pass vertex + fragment shader.</summary>
-  let loadShadowShader() : Shader =
-    Raylib.LoadShaderFromMemory(shadowPassVertex, shadowPassFragment)
+  /// <summary>
+  /// Loads the instanced forward PBR vertex + fragment shader.
+  /// Uses <c>in mat4 instanceTransform</c> for per-instance model transforms.
+  /// The <c>mvp</c> uniform must be view-projection only (without model).
+  /// </summary>
+  let loadForwardInstancedShader
+    (maxPointLights: int)
+    (maxSpotLights: int)
+    (maxShadowCasters: int)
+    : Shader =
+    Raylib.LoadShaderFromMemory(
+      forwardVertexInstanced,
+      forwardFragmentFmt maxPointLights maxSpotLights maxShadowCasters
+    )
+
+  /// <summary>Loads the depth-only shadow pass vertex + fragment shader (C example compatible).</summary>
+  let loadDepthShadowShader() : Shader =
+    Raylib.LoadShaderFromMemory(depthShadowVertex, depthShadowFragment)
 
   /// <summary>Loads the built-in fullscreen post-process vertex + fragment shader.</summary>
   let loadPostProcessShader() : Shader =

@@ -2,6 +2,7 @@ namespace Mibo.Elmish.Graphics3D
 
 open System.Numerics
 open Raylib_cs
+open Mibo.Elmish
 
 /// <summary>
 /// Pipe-friendly drawing DSL for 3D rendering. Each function takes a
@@ -129,9 +130,29 @@ module Draw3D =
     buffer.Add(Command3D.beginCamera camera)
     buffer
 
+  /// <summary>Begins a 3D camera with explicit rendering config (viewport, clear, post-process).</summary>
+  let inline beginCameraWith (config: Camera3DConfig) (buffer: RenderBuffer3D) =
+    buffer.Add(Command3D.beginCameraConfig config)
+    buffer
+
   /// <summary>Ends the current 3D camera transform.</summary>
   let inline endCamera(buffer: RenderBuffer3D) =
     buffer.Add(Command3D.endCamera())
+    buffer
+
+  /// <summary>Sets the shadow origin for this frame's shadow pass.</summary>
+  let inline setShadowOrigin (origin: Vector3) (buffer: RenderBuffer3D) =
+    buffer.Add(Command3D.setShadowOrigin origin)
+    buffer
+
+  /// <summary>Enables shadow casting for subsequent geometry until disabled.</summary>
+  let inline enableShadows (buffer: RenderBuffer3D) =
+    buffer.Add(Command3D.enableShadows())
+    buffer
+
+  /// <summary>Disables shadow casting for subsequent geometry until re-enabled.</summary>
+  let inline disableShadows (buffer: RenderBuffer3D) =
+    buffer.Add(Command3D.disableShadows())
     buffer
 
   // ──────────────────────────────────────────────
@@ -159,61 +180,6 @@ module Draw3D =
   /// <summary>Adds a spot light to the scene.</summary>
   let inline addSpotLight (light: SpotLight3D) (buffer: RenderBuffer3D) =
     buffer.Add(Command3D.addSpotLight light)
-    buffer
-
-  // ──────────────────────────────────────────────
-  // Debug Drawing
-  // ──────────────────────────────────────────────
-
-  /// <summary>
-  /// Draws a ground grid centered at world origin.
-  /// Uses <see cref="M:Raylib_cs.Raylib.DrawGrid"/> internally via
-  /// <see cref="M:Mibo.Elmish.Graphics3D.IRenderContext3D.DrawImmediate"/>.
-  /// </summary>
-  let inline drawGrid
-    (slices: int)
-    (spacing: float32)
-    (buffer: RenderBuffer3D)
-    =
-    buffer.Add(Command3D.drawGrid slices spacing)
-    buffer
-
-  /// <summary>
-  /// Draws a ground grid with a custom color.
-  /// Uses <see cref="M:Raylib_cs.Raylib.DrawGrid"/> internally.
-  /// Note: raylib's DrawGrid ignores the color parameter;
-  /// it is included for API consistency.
-  /// </summary>
-  let inline drawGridWithColor
-    (slices: int)
-    (spacing: float32)
-    (color: Color)
-    (buffer: RenderBuffer3D)
-    =
-    buffer.Add(Command3D.drawGridWithColor slices spacing color)
-    buffer
-
-  /// <summary>Draws a bounding box wireframe for debugging.</summary>
-  let inline drawBoundingBox
-    (box: BoundingBox)
-    (color: Color)
-    (buffer: RenderBuffer3D)
-    =
-    buffer.Add(Command3D.drawBoundingBox box color)
-    buffer
-
-  /// <summary>Draws a single point in 3D space for debugging.</summary>
-  let inline drawPoint3D
-    (position: Vector3)
-    (color: Color)
-    (buffer: RenderBuffer3D)
-    =
-    buffer.Add(Command3D.drawPoint3D position color)
-    buffer
-
-  /// <summary>Draws a ray visualization for debugging.</summary>
-  let inline drawRay (ray: Ray) (color: Color) (buffer: RenderBuffer3D) =
-    buffer.Add(Command3D.drawRay ray color)
     buffer
 
   // ──────────────────────────────────────────────

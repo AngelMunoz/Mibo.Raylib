@@ -116,6 +116,32 @@ module Camera2D =
 
 
 /// <summary>
+/// Camera rendering configuration for 3D pipelines.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Controls how a camera renders: viewport bounds, clear behavior, and post-processing.
+/// Construct via <see cref="M:Mibo.Elmish.Camera3D.render"/> and the <c>with*</c> modifiers.
+/// </para>
+/// <para>
+/// <c>ClearColor</c> doubles as the clear signal:
+/// <c>ValueNone</c> = don't clear (overlay on existing content),
+/// <c>ValueSome color</c> = clear with this color before rendering.
+/// </para>
+/// </remarks>
+[<Struct>]
+type Camera3DConfig = {
+  /// <summary>The raylib camera for rendering.</summary>
+  Camera: Raylib_cs.Camera3D
+  /// <summary>Viewport in normalized screen coordinates (0-1). ValueNone = fullscreen.</summary>
+  Viewport: Raylib_cs.Rectangle voption
+  /// <summary>Clear color before rendering. ValueNone = don't clear. ValueSome = clear with this color.</summary>
+  ClearColor: Color voption
+  /// <summary>Post-process pass indices. ValueNone = all passes. ValueSome [||] = no passes.</summary>
+  PostProcessPasses: int[] voption
+}
+
+/// <summary>
 /// Helper functions for 3D Cameras (Perspective projection).
 /// </summary>
 /// <remarks>
@@ -239,3 +265,88 @@ module Camera3D =
       Position = nearPos
       Direction = direction
     }
+
+  /// <summary>
+  /// Convert a raylib <see cref="T:Raylib_cs.Camera3D"/> to a Mibo <see cref="T:Mibo.Elmish.Camera"/>
+  /// by computing view and projection matrices.
+  /// </summary>
+  let fromRaylib (cam: Raylib_cs.Camera3D) : Camera = {
+    View =
+      Matrix4x4.CreateLookAt(cam.Position, cam.Target, cam.Up)
+    Projection =
+      match cam.Projection with
+      | CameraProjection.Perspective ->
+        Matrix4x4.CreatePerspectiveFieldOfView(
+          cam.FovY * (MathF.PI / 180.0f),
+          1.0f, // aspect ratio must be provided by caller
+          0.01f,
+          1000.0f
+        )
+      | _ ->
+        // Orthographic: FovY is used as ortho half-height
+        let halfH = cam.FovY
+        let halfW = halfH // assume square; caller can override
+        Matrix4x4.CreateOrthographic(halfW * 2.0f, halfH * 2.0f, 0.01f, 1000.0f)
+  }
+
+  // ── Rendering Config Builders ──
+
+  /// <summary>
+  /// Create a rendering config from a raylib camera.
+  /// Defaults: fullscreen, no clear, all post-process passes.
+  /// </summary>
+  let render (camera: Raylib_cs.Camera3D) : Camera3DConfig = {
+    Camera = camera
+    Viewport = ValueNone
+    ClearColor = ValueNone
+    PostProcessPasses = ValueNone
+  }
+
+  /// <summary>Set viewport in normalized screen coordinates (0-1).</summary>
+  let withViewport (viewport: Raylib_cs.Rectangle) (config: Camera3DConfig) =
+    { config with Viewport = ValueSome viewport }
+
+  /// <summary>Clear with this color before rendering.</summary>
+  let withClear (color: Color) (config: Camera3DConfig) =
+    { config with ClearColor = ValueSome color }
+
+  /// <summary>Use only specific post-process pass indices.</summary>
+  let withPostProcess (passes: int[]) (config: Camera3DConfig) =
+    { config with PostProcessPasses = ValueSome passes }
+
+  /// <summary>Disable post-processing for this camera.</summary>
+  let withoutPostProcess (config: Camera3DConfig) =
+    { config with PostProcessPasses = ValueSome [||] }
+
+  // ── Convenience Constructors ──
+
+  /// <summary>Split-screen left half. Clears with given color.</summary>
+  let splitScreenLeft (camera: Raylib_cs.Camera3D) (clearColor: Color) =
+    render camera
+    |> withViewport (Raylib_cs.Rectangle(0.0f, 0.0f, 0.5f, 1.0f))
+    |> withClear clearColor
+
+  /// <summary>Split-screen right half. Clears with given color.</summary>
+  let splitScreenRight (camera: Raylib_cs.Camera3D) (clearColor: Color) =
+    render camera
+    |> withViewport (Raylib_cs.Rectangle(0.5f, 0.0f, 0.5f, 1.0f))
+    |> withClear clearColor
+
+  /// <summary>Split-screen top half. Clears with given color.</summary>
+  let splitScreenTop (camera: Raylib_cs.Camera3D) (clearColor: Color) =
+    render camera
+    |> withViewport (Raylib_cs.Rectangle(0.0f, 0.0f, 1.0f, 0.5f))
+    |> withClear clearColor
+
+  /// <summary>Split-screen bottom half. Clears with given color.</summary>
+  let splitScreenBottom (camera: Raylib_cs.Camera3D) (clearColor: Color) =
+    render camera
+    |> withViewport (Raylib_cs.Rectangle(0.0f, 0.5f, 1.0f, 0.5f))
+    |> withClear clearColor
+
+  /// <summary>Picture-in-picture overlay. No post-process by default.</summary>
+  let overlay (camera: Raylib_cs.Camera3D) (bounds: Raylib_cs.Rectangle) =
+    render camera
+    |> withViewport bounds
+    |> withClear Color.Black
+    |> withoutPostProcess

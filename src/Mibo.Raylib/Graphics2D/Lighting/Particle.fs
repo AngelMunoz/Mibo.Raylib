@@ -5,73 +5,12 @@ open System.Numerics
 open Raylib_cs
 open Mibo.Elmish.Graphics2D
 
-/// <summary>A single 2D particle rendered as a textured quad with optional sprite-sheet source rect.</summary>
-/// <remarks>
-/// This is a render snapshot. Simulation state (velocity, lifetime, spin, color rules) lives in the
-/// user's model and is written into this struct at the start of the view function.
-/// </remarks>
-[<Struct>]
-type Particle2D = {
-  /// <summary>Center position in world/screen space.</summary>
-  Position: Vector2
-
-  /// <summary>Width and height of the quad.</summary>
-  Size: Vector2
-
-  /// <summary>Rotation in degrees around the center.</summary>
-  Rotation: float32
-
-  /// <summary>Source rectangle within the texture in pixels. Use (0, 0, tw, th) for the full texture.</summary>
-  SourceRect: Rectangle
-
-  /// <summary>Tint color. Alpha controls transparency.</summary>
-  Color: Color
-}
-
-[<Struct>]
-type ParticleCommand
-  (
-    texture: Texture2D,
-    particles: Particle2D[],
-    count: int,
-    cmdLayer: int<RenderLayer>
-  ) =
-  interface IRenderCommand2D with
-    member _.Layer = cmdLayer
-
-    member _.Render _ =
-      let tex = texture
-      let ps = particles
-      let c = count
-
-      for i = 0 to c - 1 do
-        let p = ps[i]
-        let halfW = p.Size.X * 0.5f
-        let halfH = p.Size.Y * 0.5f
-
-        let dest =
-          Rectangle(
-            p.Position.X - halfW,
-            p.Position.Y - halfH,
-            p.Size.X,
-            p.Size.Y
-          )
-
-        Raylib.DrawTexturePro(
-          tex,
-          p.SourceRect,
-          dest,
-          Vector2.Zero,
-          p.Rotation,
-          p.Color
-        )
-
 /// <summary>Factory functions for particle render commands.</summary>
 module ParticleCommands =
 
   /// <summary>
   /// Creates a batched particle render command. All particles are drawn as textured quads
-  /// in a single draw call via Rlgl immediate mode.
+  /// in a single draw call.
   /// </summary>
   /// <param name="texture">The texture applied to every particle.</param>
   /// <param name="particles">Array of particle render snapshots. Managed by the user.</param>
@@ -82,8 +21,8 @@ module ParticleCommands =
     (particles: Particle2D[])
     (count: int)
     (layer: int<RenderLayer>)
-    : IRenderCommand2D =
-    ParticleCommand(texture, particles, count, layer)
+    =
+    Command2D.Particle(texture, particles, count, layer)
 
 /// <summary>Pipe-friendly wrappers for particle drawing.</summary>
 module ParticleDraw =

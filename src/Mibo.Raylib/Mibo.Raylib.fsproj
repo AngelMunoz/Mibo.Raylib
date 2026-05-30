@@ -26,17 +26,16 @@
     <Compile Include="Elmish.Program.fs" />
     <Compile Include="Elmish.Runtime.fs" />
     <Compile Include="DefaultShaders.fs" />
-    <Compile Include="Graphics2D/RenderContext.fs" />
-    <Compile Include="Graphics2D/RenderCommand.fs" />
-    <Compile Include="Graphics2D/RenderBuffer.fs" />
+    <Compile Include="Graphics2D/Lighting/LightTypes.fs" />
+    <Compile Include="Graphics2D/Lighting/LitShader.fs" />
+    <Compile Include="Graphics2D/Lighting/LightContext.fs" />
+    <Compile Include="Graphics2D/Lighting/ParticleTypes.fs" />
     <Compile Include="Graphics2D/Command2D.fs" />
+    <Compile Include="Graphics2D/RenderBuffer.fs" />
     <Compile Include="Graphics2D/RenderTargetPool.fs" />
     <Compile Include="Graphics2D/Renderer2D.fs" />
     <Compile Include="Graphics2D/Draw.fs" />
-    <Compile Include="Graphics2D/Lighting/LightTypes.fs" />
     <Compile Include="Graphics2D/Lighting/GridOccluders.fs" />
-    <Compile Include="Graphics2D/Lighting/LitShader.fs" />
-    <Compile Include="Graphics2D/Lighting/LightContext.fs" />
     <Compile Include="Graphics2D/Lighting/LightCommands.fs" />
     <Compile Include="Graphics2D/Lighting/Particle.fs" />
     <Compile Include="Animation.fs" />
@@ -44,17 +43,15 @@
     <Compile Include="Graphics3D/Material3D.fs" />
     <Compile Include="Graphics3D/Primitive3D.fs" />
     <Compile Include="Graphics3D/RenderTargetPool3D.fs" />
-    <Compile Include="Graphics3D/RenderContext3D.fs" />
-    <Compile Include="Graphics3D/RenderCommand3D.fs" />
+    <Compile Include="Graphics3D/Command3D.fs" />
     <Compile Include="Graphics3D/RenderBuffer3D.fs" />
     <Compile Include="Graphics3D/RenderPipeline3D.fs" />
     <Compile Include="Graphics3D/Renderer3D.fs" />
-    <Compile Include="Graphics3D/Command3D.fs" />
     <Compile Include="Graphics3D/Draw3D.fs" />
     <Compile Include="Graphics3D/Pipelines/PostProcess3D.fs" />
-    <Compile Include="Graphics3D/Pipelines/CsmMath.fs" />
+    <Compile Include="Graphics3D/Pipelines/ShadowAtlas.fs" />
     <Compile Include="Graphics3D/Pipelines/Shaders.fs" />
-    <Compile Include="Graphics3D/Pipelines/ClusteredForwardPipeline.fs" />
+    <Compile Include="Graphics3D/Pipelines/ForwardPbrPipeline.fs" />
     <Compile Include="Layout3D/Grid3D.fs" />
     <Compile Include="Layout3D/Layout3D.fs" />
     <Compile Include="Layout3D/Interior.fs" />
@@ -62,7 +59,7 @@
     <Compile Include="Layout3D/Renderer3D.fs" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Raylib-cs" Version="7.0.2" />
+    <PackageReference Include="Raylib-cs" Version="8.0.0" />
     <PackageReference Include="FSharp.UMX" Version="1.1.0" />
   </ItemGroup>
 </Project>

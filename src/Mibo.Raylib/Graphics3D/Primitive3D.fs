@@ -8,7 +8,7 @@ open Raylib_cs
 /// Generated once at module initialization to avoid runtime mesh generation overhead.
 /// </summary>
 /// <remarks>
-/// Use these with <see cref="M:Mibo.Elmish.Graphics3D.IRenderContext3D.DrawMesh"/>
+/// Use these with <see cref="T:Mibo.Elmish.Graphics3D.Pipelines.ForwardPbrPipeline"/>
 /// instead of calling <c>Raylib.DrawSphere</c>, <c>Raylib.DrawCube</c>, etc.
 /// This ensures the active pipeline's shader is bound, not raylib's default shader.
 /// </remarks>
