@@ -566,3 +566,77 @@ module Command2D =
 
   let inline clear (layer: int<RenderLayer>) (color: Color) =
     Command2D.Clear(color, layer)
+
+/// <summary>Convenience builders for <see cref="T:Mibo.Elmish.Graphics2D.Command2D.SpriteState"/>.</summary>
+module SpriteState =
+
+  /// <summary>Creates a sprite state with required fields. Defaults: Origin=Zero, Rotation=0, Color=White, Layer=0.</summary>
+  let create
+    (texture: Texture2D, dest: Rectangle, source: Rectangle)
+    : Command2D.SpriteState =
+    {
+      Texture = texture
+      Dest = dest
+      Source = source
+      Origin = Vector2.Zero
+      Rotation = 0.0f
+      Color = Color.White
+      Layer = 0<RenderLayer>
+    }
+
+  let inline withOrigin (v: Vector2) (s: Command2D.SpriteState) = {
+    s with
+        Origin = v
+  }
+
+  let inline withRotation (v: float32) (s: Command2D.SpriteState) = {
+    s with
+        Rotation = v
+  }
+
+  let inline withColor (v: Color) (s: Command2D.SpriteState) = {
+    s with
+        Color = v
+  }
+
+  let inline withLayer (v: int<RenderLayer>) (s: Command2D.SpriteState) = {
+    s with
+        Layer = v
+  }
+
+/// <summary>Convenience builders for <see cref="T:Mibo.Elmish.Graphics2D.Command2D.TextState"/>.</summary>
+module TextState =
+
+  /// <summary>Creates a text state with required fields. Defaults: FontSize=20, Spacing=1, Color=White, Layer=0.</summary>
+  let create
+    (font: Font, text: string, position: Vector2)
+    : Command2D.TextState =
+    {
+      Font = font
+      Text = text
+      Position = position
+      FontSize = 20.0f
+      Spacing = 1.0f
+      Color = Color.White
+      Layer = 0<RenderLayer>
+    }
+
+  let inline withFontSize (v: float32) (s: Command2D.TextState) = {
+    s with
+        FontSize = v
+  }
+
+  let inline withSpacing (v: float32) (s: Command2D.TextState) = {
+    s with
+        Spacing = v
+  }
+
+  let inline withColor (v: Color) (s: Command2D.TextState) = {
+    s with
+        Color = v
+  }
+
+  let inline withLayer (v: int<RenderLayer>) (s: Command2D.TextState) = {
+    s with
+        Layer = v
+  }

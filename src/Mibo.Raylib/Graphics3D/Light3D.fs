@@ -12,6 +12,20 @@ type AmbientLight3D = {
   Intensity: float32
 }
 
+/// <summary>Convenience builders for <see cref="T:Mibo.Elmish.Graphics3D.AmbientLight3D"/>.</summary>
+module AmbientLight3D =
+
+  /// <summary>Creates an ambient light. Defaults: Intensity=1.</summary>
+  let create(color: Color) : AmbientLight3D = {
+    Color = color
+    Intensity = 1.0f
+  }
+
+  let inline withIntensity (v: float32) (l: AmbientLight3D) = {
+    l with
+        Intensity = v
+  }
+
 /// <summary>Directional light configuration for 3D scenes.</summary>
 [<Struct>]
 type DirectionalLight3D = {
@@ -31,6 +45,29 @@ type DirectionalLight3D = {
   /// </remarks>
   CastsShadows: bool
 }
+
+/// <summary>Convenience builders for <see cref="T:Mibo.Elmish.Graphics3D.DirectionalLight3D"/>.</summary>
+module DirectionalLight3D =
+
+  /// <summary>Creates a directional light. Defaults: Color=White, Intensity=1, CastsShadows=true.</summary>
+  let create(direction: Vector3) : DirectionalLight3D = {
+    Direction = direction
+    Color = Color.White
+    Intensity = 1.0f
+    CastsShadows = true
+  }
+
+  let inline withColor (v: Color) (l: DirectionalLight3D) = { l with Color = v }
+
+  let inline withIntensity (v: float32) (l: DirectionalLight3D) = {
+    l with
+        Intensity = v
+  }
+
+  let inline withCastsShadows (v: bool) (l: DirectionalLight3D) = {
+    l with
+        CastsShadows = v
+  }
 
 /// <summary>Point light configuration for 3D scenes.</summary>
 [<Struct>]
@@ -60,6 +97,30 @@ type PointLight3D = {
   /// </remarks>
   ShadowBias: float32 voption
 }
+
+/// <summary>Convenience builders for <see cref="T:Mibo.Elmish.Graphics3D.PointLight3D"/>.</summary>
+module PointLight3D =
+
+  /// <summary>Creates a point light. Defaults: Color=White, CastsShadows=false, ShadowBias=None.</summary>
+  let create(position: Vector3, radius: float32) : PointLight3D = {
+    Position = position
+    Color = Color.White
+    Radius = radius
+    CastsShadows = false
+    ShadowBias = ValueNone
+  }
+
+  let inline withColor (v: Color) (l: PointLight3D) = { l with Color = v }
+
+  let inline withCastsShadows (v: bool) (l: PointLight3D) = {
+    l with
+        CastsShadows = v
+  }
+
+  let inline withShadowBias (v: float32) (l: PointLight3D) = {
+    l with
+        ShadowBias = ValueSome v
+  }
 
 /// <summary>Spot light configuration for cone-shaped lights with distance attenuation.</summary>
 [<Struct>]
@@ -97,3 +158,45 @@ type SpotLight3D = {
   /// </remarks>
   ShadowBias: float32 voption
 }
+
+/// <summary>Convenience builders for <see cref="T:Mibo.Elmish.Graphics3D.SpotLight3D"/>.</summary>
+module SpotLight3D =
+
+  /// <summary>Creates a spot light. Defaults: Color=White, Intensity=1, InnerCutoff=0.5, OuterCutoff=0.7, CastsShadows=false, ShadowBias=None.</summary>
+  let create
+    (position: Vector3, direction: Vector3, radius: float32)
+    : SpotLight3D =
+    {
+      Position = position
+      Direction = direction
+      Color = Color.White
+      Intensity = 1.0f
+      Radius = radius
+      InnerCutoff = 0.5f
+      OuterCutoff = 0.7f
+      CastsShadows = false
+      ShadowBias = ValueNone
+    }
+
+  let inline withColor (v: Color) (l: SpotLight3D) = { l with Color = v }
+
+  let inline withIntensity (v: float32) (l: SpotLight3D) = {
+    l with
+        Intensity = v
+  }
+
+  let inline withCutoff (inner: float32) (outer: float32) (l: SpotLight3D) = {
+    l with
+        InnerCutoff = inner
+        OuterCutoff = outer
+  }
+
+  let inline withCastsShadows (v: bool) (l: SpotLight3D) = {
+    l with
+        CastsShadows = v
+  }
+
+  let inline withShadowBias (v: float32) (l: SpotLight3D) = {
+    l with
+        ShadowBias = ValueSome v
+  }

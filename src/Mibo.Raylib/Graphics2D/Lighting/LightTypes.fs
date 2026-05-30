@@ -57,3 +57,65 @@ type Occluder2D = {
   /// <summary>End point of the occluder segment in world space.</summary>
   P2: Vector2
 }
+
+/// <summary>Convenience builders for <see cref="T:Mibo.Elmish.Graphics2D.Lighting.AmbientLight2D"/>.</summary>
+module AmbientLight2D =
+
+  /// <summary>Creates an ambient light with the given color.</summary>
+  let create(color: Color) : AmbientLight2D = { Color = color }
+
+/// <summary>Convenience builders for <see cref="T:Mibo.Elmish.Graphics2D.Lighting.DirectionalLight2D"/>.</summary>
+module DirectionalLight2D =
+
+  /// <summary>Creates a directional light. Defaults: Color=White, Intensity=1, CastsShadows=true.</summary>
+  let create(direction: Vector2) : DirectionalLight2D = {
+    Direction = direction
+    Color = Color.White
+    Intensity = 1.0f
+    CastsShadows = true
+  }
+
+  let inline withColor (v: Color) (l: DirectionalLight2D) = { l with Color = v }
+
+  let inline withIntensity (v: float32) (l: DirectionalLight2D) = {
+    l with
+        Intensity = v
+  }
+
+  let inline withCastsShadows (v: bool) (l: DirectionalLight2D) = {
+    l with
+        CastsShadows = v
+  }
+
+/// <summary>Convenience builders for <see cref="T:Mibo.Elmish.Graphics2D.Lighting.PointLight2D"/>.</summary>
+module PointLight2D =
+
+  /// <summary>Creates a point light. Defaults: Color=White, Intensity=1, Falloff=2, CastsShadows=false.</summary>
+  let create(position: Vector2, radius: float32) : PointLight2D = {
+    Position = position
+    Color = Color.White
+    Intensity = 1.0f
+    Radius = radius
+    Falloff = 2.0f
+    CastsShadows = false
+  }
+
+  let inline withColor (v: Color) (l: PointLight2D) = { l with Color = v }
+
+  let inline withIntensity (v: float32) (l: PointLight2D) = {
+    l with
+        Intensity = v
+  }
+
+  let inline withFalloff (v: float32) (l: PointLight2D) = { l with Falloff = v }
+
+  let inline withCastsShadows (v: bool) (l: PointLight2D) = {
+    l with
+        CastsShadows = v
+  }
+
+/// <summary>Convenience builders for <see cref="T:Mibo.Elmish.Graphics2D.Lighting.Occluder2D"/>.</summary>
+module Occluder2D =
+
+  /// <summary>Creates an occluder from two endpoints.</summary>
+  let create(p1: Vector2, p2: Vector2) : Occluder2D = { P1 = p1; P2 = p2 }

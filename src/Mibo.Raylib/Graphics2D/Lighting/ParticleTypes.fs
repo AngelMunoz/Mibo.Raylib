@@ -25,3 +25,24 @@ type Particle2D = {
   /// <summary>Tint color. Alpha controls transparency.</summary>
   Color: Color
 }
+
+/// <summary>Convenience builders for <see cref="T:Mibo.Elmish.Graphics2D.Lighting.Particle2D"/>.</summary>
+module Particle2D =
+
+  /// <summary>Creates a particle with required fields. Defaults: Rotation=0, SourceRect=empty, Color=White.</summary>
+  let create(position: Vector2, size: Vector2) : Particle2D = {
+    Position = position
+    Size = size
+    Rotation = 0.0f
+    SourceRect = Rectangle(0.0f, 0.0f, 0.0f, 0.0f)
+    Color = Color.White
+  }
+
+  let inline withRotation (v: float32) (p: Particle2D) = { p with Rotation = v }
+
+  let inline withSourceRect (v: Rectangle) (p: Particle2D) = {
+    p with
+        SourceRect = v
+  }
+
+  let inline withColor (v: Color) (p: Particle2D) = { p with Color = v }
