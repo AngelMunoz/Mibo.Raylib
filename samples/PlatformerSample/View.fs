@@ -13,6 +13,7 @@ open PlatformerSample.Constants
 open PlatformerSample.Types
 open PlatformerSample.DayNight
 open PlatformerSample.WorldGen
+open PlatformerSample.Minimap
 
 let inline r (x: int) (y: int) (w: int) (h: int) =
   Rectangle(float32 x, float32 y, float32 w, float32 h)
@@ -25,7 +26,6 @@ let view (ctx: GameContext) (model: Model) (buffer: RenderBuffer2D) =
   model.Lighting.Reset()
 
   let playerCenterX = model.PlayerPosition.X + playerWidth / 2.0f
-  let playerCenterY = model.PlayerPosition.Y + playerHeight / 2.0f
 
   let camera = model.Camera
 
@@ -92,11 +92,26 @@ let view (ctx: GameContext) (model: Model) (buffer: RenderBuffer2D) =
   let nearbyOccluders = ResizeArray()
   let nearbyTorches = ResizeArray()
 
+  // Max distance for occluders to cast shadows (1.5x viewport diagonal)
+  let maxOccluderDistSq =
+    let vw = float32 ctx.WindowWidth
+    let vh = float32 ctx.WindowHeight
+    (vw * 1.5f) * (vw * 1.5f) + (vh * 1.5f) * (vh * 1.5f)
+
   for KeyValue(key, chunk) in model.Chunks do
     let struct (cx, cy) = key
 
     if abs(cx - pcx) <= chunkLoadRadius && abs(cy - pcy) <= chunkLoadRadius then
-      nearbyOccluders.AddRange chunk.Occluders
+      // Filter occluders by distance — only near ones cast shadows
+      for o in chunk.Occluders do
+        let mx = (o.P1.X + o.P2.X) * 0.5f
+        let my = (o.P1.Y + o.P2.Y) * 0.5f
+        let dx = mx - model.PlayerPosition.X
+        let dy = my - model.PlayerPosition.Y
+
+        if dx * dx + dy * dy <= maxOccluderDistSq then
+          nearbyOccluders.Add o
+
       nearbyTorches.AddRange chunk.Torches
 
   // Sort by distance to player and take nearest N
@@ -157,13 +172,32 @@ let view (ctx: GameContext) (model: Model) (buffer: RenderBuffer2D) =
     |> Draw.drop
 
   // Render visible tiles from nearby chunks only
-  let tileSrc = r 260 585 64 64
+  let tileSpriteSrc (biome: Biome) (tile: TileType) =
+    match tile with
+    | Ground ->
+      match biome with
+      | Grass -> r 260 585 64 64     // terrain_grass_block
+      | Stone -> r 520 975 64 64     // terrain_stone_block
+      | Snow -> r 1040 845 64 64     // terrain_snow_block
+      | Sand -> r 390 780 64 64      // terrain_sand_block
+    | Platform ->
+      match biome with
+      | Grass -> r 520 975 64 64     // terrain_stone_block
+      | Stone -> r 780 455 64 64     // terrain_dirt_block
+      | Snow -> r 520 975 64 64     // terrain_stone_block
+      | Sand -> r 780 455 64 64     // terrain_dirt_block
+    | Spikes -> r 715 0 64 64        // block_spikes
+    | Coin -> r 0 130 64 64          // coin_gold
+    | Flag -> r 780 195 64 64        // flag_red_a
+    | Empty -> r 0 0 0 0
 
   for KeyValue(key, chunk) in model.Chunks do
     let struct (cx, cy) = key
 
     if abs(cx - pcx) <= chunkLoadRadius && abs(cy - pcy) <= chunkLoadRadius then
       if Culling.isVisible2D viewBounds chunk.Bounds then
+        let chunkBiome = chunk.Biome
+
         CellGrid2D.iterVisible
           (int viewBounds.X)
           (int viewBounds.Y)
@@ -179,7 +213,7 @@ let view (ctx: GameContext) (model: Model) (buffer: RenderBuffer2D) =
               |> LightDraw.litSprite model.Lighting {
                 Texture = model.Assets.TileTexture
                 Dest = dest
-                Source = tileSrc
+                Source = tileSpriteSrc chunkBiome tile
                 Origin = Vector2.Zero
                 Rotation = 0.0f
                 Color = Color.White
@@ -232,11 +266,23 @@ let view (ctx: GameContext) (model: Model) (buffer: RenderBuffer2D) =
   |> Draw.text {
     Font = model.Assets.Font
     Text =
-      $"Day/Night Cycle | Time: {model.DayNightTimeOfDay:F1}h | Chunks: {model.Chunks.Count} | Pos: %.1f{model.PlayerPosition.X},%.1f{model.PlayerPosition.Y} | WASD/Arrows: Move | Space: Jump | R: Respawn"
+      $"Day/Night Cycle | Time: {model.DayNightTimeOfDay:F1}h | Chunks: {model.Chunks.Count} | Score: {model.Score} | Pos: %.1f{model.PlayerPosition.X},%.1f{model.PlayerPosition.Y} | WASD/Arrows: Move | Space: Jump | R: Respawn"
     Position = Vector2(10.0f, 10.0f)
     FontSize = 20.0f
     Spacing = 1.0f
     Color = Color.White
     Layer = 1001<RenderLayer>
   }
+  |> Draw.text {
+    Font = model.Assets.Font
+    Text =
+      $"FPS: {model.Diagnostics.Fps} | Frame Time: {model.Diagnostics.FrameTime * 1000.0f:F1}ms"
+    Position = Vector2(10.0f, 32.0f)
+    FontSize = 20.0f
+    Spacing = 1.0f
+    Color = Color.White
+    Layer = 1001<RenderLayer>
+  }
+  // Minimap
+  |> Minimap.view ctx model
   |> Draw.drop

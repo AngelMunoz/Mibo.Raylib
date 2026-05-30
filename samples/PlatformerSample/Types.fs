@@ -33,6 +33,16 @@ type TileType =
   | Empty
   | Ground
   | Platform
+  | Spikes
+  | Coin
+  | Flag
+
+[<Struct>]
+type Biome =
+  | Grass
+  | Stone
+  | Snow
+  | Sand
 
 [<Struct>]
 type TorchLight = {
@@ -45,9 +55,13 @@ type TorchLight = {
 type Chunk = {
   Grid: Mibo.Layout.CellGrid2D<TileType>
   Platforms: Rectangle[]
+  Spikes: Rectangle[]
+  Coins: Rectangle[]
+  Flags: Rectangle[]
   Occluders: Occluder2D[]
   Torches: TorchLight[]
   Bounds: Rectangle
+  Biome: Biome
 }
 
 [<Struct>]
@@ -59,6 +73,22 @@ type SpriteAssets = {
   Font: Font
   JumpSound: Sound
 }
+
+// -------------------------------------------------------------
+// Minimap Model
+// -------------------------------------------------------------
+
+type MinimapModel() =
+  member val Blocks = Dictionary<struct (int * int), struct (float32 * TileType * Biome)>() with get, set
+  member val Texture = Unchecked.defaultof<Texture2D> with get, set
+  member val TexReady = false with get, set
+  member val FrameCounter = 0 with get, set
+  member val LastPlayerPos = Vector2.Zero with get, set
+
+
+type Diagnostics() =
+  member val Fps = 0 with get, set
+  member val FrameTime = 0.0f with get, set
 
 // -------------------------------------------------------------
 // Mutable Model (Level 2.5 — reduces GC pressure)
@@ -86,6 +116,10 @@ type Model() as self =
   member val Particles: Particle2D[] = Array.zeroCreate 512 with get, set
   member val ParticleVelocities: Vector2[] = Array.zeroCreate 512 with get, set
   member val ParticleCount = 0 with get, set
+  member val Score = 0 with get, set
+
+  member val Diagnostics = Diagnostics() with get, set
+  member val Minimap = MinimapModel() with get, set
 
   interface IDisposable with
     member _.Dispose() =

@@ -17,13 +17,16 @@ let playerWidth = 40.0f
 let playerHeight = 54.0f
 
 [<Literal>]
-let gravity = 1200.0f
+let gravity = 2000.0f
 
 [<Literal>]
-let moveSpeed = 300.0f
+let moveSpeed = 350.0f
 
 [<Literal>]
-let jumpSpeed = -700.0f
+let jumpSpeed = -900.0f
+
+[<Literal>]
+let jumpCutMultiplier = 0.3f
 
 [<Literal>]
 let worldHeight = 12.0f
@@ -32,10 +35,10 @@ let groundLevel = worldHeight * tileSize
 let groundSurface = groundLevel - tileSize
 
 [<Literal>]
-let chunkLoadRadius = 2
+let chunkLoadRadius = 3
 
 [<Literal>]
-let chunkEvictRadius = 4
+let chunkEvictRadius = 5
 
 [<Literal>]
 let maxOccluders = 128

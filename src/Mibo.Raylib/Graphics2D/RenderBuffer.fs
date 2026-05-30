@@ -56,6 +56,7 @@ type RenderBuffer2D
     | Command2D.FillPoly(_, _, _, _, _, layer) -> layer
     | Command2D.PolyOutline(_, _, _, _, _, _, layer) -> layer
     | Command2D.BeginCamera(_, layer) -> layer
+    | Command2D.BeginCameraConfig(_, layer) -> layer
     | Command2D.EndCamera layer -> layer
     | Command2D.BeginShader(_, layer) -> layer
     | Command2D.EndShader layer -> layer
@@ -71,6 +72,8 @@ type RenderBuffer2D
     | Command2D.NoopLight layer -> layer
     | Command2D.LitSprite(_, _, _, _, _, _, _, layer) -> layer
     | Command2D.EndLighting(_, layer) -> layer
+    | Command2D.EnableShadows(_, layer) -> layer
+    | Command2D.DisableShadows(_, layer) -> layer
     | Command2D.Particle(_, _, _, layer) -> layer
 
   let layerComparer =

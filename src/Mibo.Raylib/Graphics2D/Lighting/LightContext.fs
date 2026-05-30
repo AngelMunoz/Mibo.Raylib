@@ -136,6 +136,9 @@ type LightContext2D
   /// <summary>Whether light uniforms need to be re-uploaded to the GPU.</summary>
   member val UniformsDirty = true with get, set
 
+  /// <summary>Whether shadow raymarching is enabled for this context. Default true.</summary>
+  member val ShadowsEnabled = true with get, set
+
   /// <summary>Clears accumulated lights, occluders, and resets ambient to black. Call at the start of each frame's view.</summary>
   member this.Reset() =
     dirLights.Clear()
@@ -144,6 +147,7 @@ type LightContext2D
     ambientColor <- Color(0uy, 0uy, 0uy, 255uy)
     this.ShaderActive <- false
     this.UniformsDirty <- true
+    this.ShadowsEnabled <- true
 
   /// <summary>Current ambient light color.</summary>
   member _.Ambient
@@ -272,7 +276,11 @@ type LightContext2D
       )
 
     // Occluder segments for SDF shadow raymarching
-    let ocCount = min occluders.Count maxOccluders
+    let ocCount =
+      if this.ShadowsEnabled then
+        min occluders.Count maxOccluders
+      else
+        0
 
     Raylib.SetShaderValue(
       litShader,

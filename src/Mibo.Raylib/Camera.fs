@@ -36,6 +36,31 @@ type Ray = {
   Direction: Vector3
 }
 
+
+/// <summary>
+/// Camera rendering configuration for 2D multi-camera support.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Controls how a camera renders: viewport bounds and clear behavior.
+/// Construct via <see cref="M:Mibo.Elmish.Camera2D.render"/> and the <c>with*</c> modifiers.
+/// </para>
+/// <para>
+/// <c>ClearColor</c> doubles as the clear signal:
+/// <c>ValueNone</c> = don't clear (overlay on existing content),
+/// <c>ValueSome color</c> = clear with this color before rendering.
+/// </para>
+/// </remarks>
+[<Struct>]
+type Camera2DConfig = {
+  /// <summary>The raylib 2D camera for rendering.</summary>
+  Camera: Raylib_cs.Camera2D
+  /// <summary>Viewport in normalized screen coordinates (0-1). ValueNone = fullscreen.</summary>
+  Viewport: Raylib_cs.Rectangle voption
+  /// <summary>Clear color before rendering. ValueNone = don't clear. ValueSome = clear with this color.</summary>
+  ClearColor: Color voption
+}
+
 /// <summary>
 /// Helper functions for 2D Cameras (Orthographic projection).
 /// </summary>
@@ -113,6 +138,58 @@ module Camera2D =
     =
     camera.Target.X <- MathF.Max(minX, MathF.Min(camera.Target.X, maxX))
     camera.Target.Y <- MathF.Max(minY, MathF.Min(camera.Target.Y, maxY))
+
+  // ── Rendering Config Builders ──
+
+  /// <summary>
+  /// Create a rendering config from a 2D camera.
+  /// Defaults: fullscreen, no clear.
+  /// </summary>
+  let render(camera: Raylib_cs.Camera2D) : Camera2DConfig = {
+    Camera = camera
+    Viewport = ValueNone
+    ClearColor = ValueNone
+  }
+
+  /// <summary>Set viewport in normalized screen coordinates (0-1).</summary>
+  let withViewport (viewport: Raylib_cs.Rectangle) (config: Camera2DConfig) = {
+    config with
+        Viewport = ValueSome viewport
+  }
+
+  /// <summary>Clear with this color before rendering.</summary>
+  let withClear (color: Color) (config: Camera2DConfig) = {
+    config with
+        ClearColor = ValueSome color
+  }
+
+  /// <summary>Split-screen left half. Clears with given color.</summary>
+  let splitScreenLeft (camera: Raylib_cs.Camera2D) (clearColor: Color) =
+    render camera
+    |> withViewport(Raylib_cs.Rectangle(0.0f, 0.0f, 0.5f, 1.0f))
+    |> withClear clearColor
+
+  /// <summary>Split-screen right half. Clears with given color.</summary>
+  let splitScreenRight (camera: Raylib_cs.Camera2D) (clearColor: Color) =
+    render camera
+    |> withViewport(Raylib_cs.Rectangle(0.5f, 0.0f, 0.5f, 1.0f))
+    |> withClear clearColor
+
+  /// <summary>Split-screen top half. Clears with given color.</summary>
+  let splitScreenTop (camera: Raylib_cs.Camera2D) (clearColor: Color) =
+    render camera
+    |> withViewport(Raylib_cs.Rectangle(0.0f, 0.0f, 1.0f, 0.5f))
+    |> withClear clearColor
+
+  /// <summary>Split-screen bottom half. Clears with given color.</summary>
+  let splitScreenBottom (camera: Raylib_cs.Camera2D) (clearColor: Color) =
+    render camera
+    |> withViewport(Raylib_cs.Rectangle(0.0f, 0.5f, 1.0f, 0.5f))
+    |> withClear clearColor
+
+  /// <summary>Picture-in-picture overlay. Clears with black by default.</summary>
+  let overlay (camera: Raylib_cs.Camera2D) (bounds: Raylib_cs.Rectangle) =
+    render camera |> withViewport bounds |> withClear Color.Black
 
 
 /// <summary>

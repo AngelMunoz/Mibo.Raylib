@@ -2,6 +2,8 @@ namespace Mibo.Elmish.Graphics2D
 
 open System.Numerics
 open Raylib_cs
+open Mibo.Elmish
+open Mibo.Elmish.Graphics2D.Lighting
 
 /// <summary>
 /// Pipe-friendly drawing DSL. Each function takes a <see cref="T:Mibo.Elmish.Graphics2D.RenderBuffer2D"/>
@@ -378,6 +380,15 @@ module Draw =
     buffer.Add(Command2D.beginCamera layer camera)
     buffer
 
+  /// <summary>Begins a 2D camera with explicit rendering config (viewport, clear). (layer) can be partially applied.</summary>
+  let inline beginCameraWith
+    (layer: int<RenderLayer>)
+    (config: Camera2DConfig)
+    (buffer: RenderBuffer2D)
+    =
+    buffer.Add(Command2D.beginCameraConfig layer config)
+    buffer
+
   /// <summary>Ends the current 2D camera transform.</summary>
   let inline endCamera (layer: int<RenderLayer>) (buffer: RenderBuffer2D) =
     buffer.Add(Command2D.endCamera layer)
@@ -476,6 +487,28 @@ module Draw =
     (buffer: RenderBuffer2D)
     =
     buffer.Add(Command2D.clear layer color)
+    buffer
+
+  // ──────────────────────────────────────────────
+  // Shadow Control
+  // ──────────────────────────────────────────────
+
+  /// <summary>Enables shadow casting for the given light context. (layer) can be partially applied.</summary>
+  let inline enableShadows
+    (layer: int<RenderLayer>)
+    (lightCtx: LightContext2D)
+    (buffer: RenderBuffer2D)
+    =
+    buffer.Add(Command2D.enableShadows layer lightCtx)
+    buffer
+
+  /// <summary>Disables shadow casting for the given light context. (layer) can be partially applied.</summary>
+  let inline disableShadows
+    (layer: int<RenderLayer>)
+    (lightCtx: LightContext2D)
+    (buffer: RenderBuffer2D)
+    =
+    buffer.Add(Command2D.disableShadows layer lightCtx)
     buffer
 
   /// <summary>Terminal function that discards the buffer, silencing the unused-value warning. Does nothing.</summary>

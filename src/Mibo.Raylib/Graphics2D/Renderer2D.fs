@@ -98,6 +98,9 @@ type Renderer2D<'Model>
 
   let mutable _camera: Camera2D voption = ValueNone
   let mutable _shader: Shader voption = ValueNone
+  let mutable _hasViewport = false
+  let mutable _windowWidth = 0
+  let mutable _windowHeight = 0
 
   let beginCamera(c: Camera2D) =
     Rlgl.DrawRenderBatchActive()
@@ -113,6 +116,10 @@ type Renderer2D<'Model>
       Rlgl.DrawRenderBatchActive()
       Raylib.EndMode2D()
       _camera <- ValueNone
+
+    if _hasViewport then
+      Rlgl.Viewport(0, 0, _windowWidth, _windowHeight)
+      _hasViewport <- false
 
   let beginShader(s: Shader) =
     match _shader with
@@ -303,6 +310,25 @@ type Renderer2D<'Model>
           color
         )
       | Command2D.BeginCamera(camera, _) -> beginCamera camera
+      | Command2D.BeginCameraConfig(config: Camera2DConfig, _) ->
+        // Apply viewport if specified
+        match config.Viewport with
+        | ValueSome vp ->
+          let vpX = int(vp.X * float32 _windowWidth)
+          let vpY = int(vp.Y * float32 _windowHeight)
+          let vpW = int(vp.Width * float32 _windowWidth)
+          let vpH = int(vp.Height * float32 _windowHeight)
+          Rlgl.DrawRenderBatchActive()
+          Rlgl.Viewport(vpX, vpY, vpW, vpH)
+          _hasViewport <- true
+        | ValueNone -> ()
+
+        // Clear if specified
+        match config.ClearColor with
+        | ValueSome c -> Raylib.ClearBackground(c)
+        | ValueNone -> ()
+
+        beginCamera config.Camera
       | Command2D.EndCamera _ -> endCamera()
       | Command2D.BeginShader(shader, _) -> beginShader shader
       | Command2D.EndShader _ -> endShader()
@@ -340,6 +366,8 @@ type Renderer2D<'Model>
           endShader()
           lightCtx.ShaderActive <- false
           lightCtx.UniformsDirty <- true
+      | Command2D.EnableShadows(lightCtx, _) -> lightCtx.UniformsDirty <- true
+      | Command2D.DisableShadows(lightCtx, _) -> lightCtx.UniformsDirty <- true
       | Command2D.Particle(texture, particles, count, _) ->
         for j = 0 to count - 1 do
           let p = particles[j]
@@ -414,6 +442,8 @@ type Renderer2D<'Model>
 
   interface IRenderer<'Model> with
     member _.Draw(ctx, model, _gameTime) =
+      _windowWidth <- ctx.WindowWidth
+      _windowHeight <- ctx.WindowHeight
       buffer.Clear()
 
       view ctx model buffer

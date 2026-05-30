@@ -12,12 +12,15 @@ open PlatformerSample.Constants
 open PlatformerSample.Types
 open PlatformerSample.Physics
 open PlatformerSample.WorldGen
+open Mibo.Layout
 
 // -------------------------------------------------------------
 // Pre-allocated buffers (Level 4 — avoid per-frame allocation)
 // -------------------------------------------------------------
 
 let nearbyPlatforms = ResizeArray<Rectangle>(256)
+let nearbySpikes = ResizeArray<Rectangle>(64)
+let nearbyCoins = ResizeArray<Rectangle>(64)
 let keysToRemove = ResizeArray<struct (int * int)>(32)
 
 let confettiColors = [|
@@ -51,56 +54,65 @@ let inputSystem (dt: float32) (model: Model) : struct (Model * Cmd<Msg>) =
 // System: Physics (gravity + collision + camera follow)
 // -------------------------------------------------------------
 
+let private spawnConfetti(model: Model) =
+  let rng = System.Random.Shared
+  let mutable pc = model.ParticleCount
+  let particles = model.Particles
+  let particleVelocities = model.ParticleVelocities
+
+  for _ in 0..19 do
+    if pc < particles.Length then
+      let spawnPos =
+        model.PlayerPosition
+        + Vector2(
+          playerWidth / 2.0f + float32(rng.NextDouble() * 20.0 - 10.0),
+          playerHeight * 0.3f
+        )
+
+      particles[pc] <- {
+        Position = spawnPos
+        Size = Vector2(4.0f, 4.0f)
+        Rotation = float32(rng.NextDouble() * Math.PI * 2.0)
+        SourceRect = Rectangle(0.0f, 0.0f, 1.0f, 1.0f)
+        Color = confettiColors[rng.Next(confettiColors.Length)]
+      }
+
+      particleVelocities[pc] <-
+        Vector2(
+          float32(rng.NextDouble() * 300.0 - 150.0),
+          float32(rng.NextDouble() * -250.0 - 50.0)
+        )
+
+      pc <- pc + 1
+
+  model.ParticleCount <- pc
+  Raylib.PlaySound(model.Assets.JumpSound)
+
 let physicsSystem (dt: float32) (model: Model) : struct (Model * Cmd<Msg>) =
   let canJump = model.IsGrounded
-  let jumpPressed = model.Actions.Started.Contains(GameAction.Jump)
+  let jumpHeld = model.Actions.Held.Contains(GameAction.Jump)
+  let jumpStarted = model.Actions.Started.Contains(GameAction.Jump)
 
-  let velocityY =
-    if jumpPressed && canJump then
-      // Spawn confetti burst
-      let rng = System.Random.Shared
-      let mutable pc = model.ParticleCount
-      let particles = model.Particles
-      let particleVelocities = model.ParticleVelocities
+  let mutable velocityY = model.PlayerVelocity.Y + gravity * dt
 
-      for i = 0 to 19 do
-        if pc < particles.Length then
-          let spawnPos =
-            model.PlayerPosition
-            + Vector2(
-              playerWidth / 2.0f + float32(rng.NextDouble() * 20.0 - 10.0),
-              playerHeight * 0.3f
-            )
-
-          particles[pc] <- {
-            Position = spawnPos
-            Size = Vector2(4.0f, 4.0f)
-            Rotation = float32(rng.NextDouble() * Math.PI * 2.0)
-            SourceRect = Rectangle(0.0f, 0.0f, 1.0f, 1.0f)
-            Color = confettiColors[rng.Next(confettiColors.Length)]
-          }
-
-          particleVelocities[pc] <-
-            Vector2(
-              float32(rng.NextDouble() * 300.0 - 150.0),
-              float32(rng.NextDouble() * -250.0 - 50.0)
-            )
-
-          pc <- pc + 1
-
-      model.ParticleCount <- pc
-      Raylib.PlaySound(model.Assets.JumpSound)
-
-      jumpSpeed
-    else
-      model.PlayerVelocity.Y + gravity * dt
+  if jumpStarted && canJump then
+    spawnConfetti model
+    velocityY <- jumpSpeed
+  elif
+    not canJump
+    && not jumpHeld
+    && velocityY < 0.0f
+  then
+    velocityY <- velocityY * jumpCutMultiplier
 
   let velocity = Vector2(model.PlayerVelocity.X, velocityY)
   let prevPos = model.PlayerPosition
   let newPos = prevPos + velocity * dt
 
-  // Collect platforms from nearby chunks only (reuse pre-allocated buffer)
+  // Collect platforms, spikes, coins from nearby chunks
   nearbyPlatforms.Clear()
+  nearbySpikes.Clear()
+  nearbyCoins.Clear()
   let pcx = int(Math.Floor(float newPos.X / float chunkWorldSize))
   let pcy = int(Math.Floor(float newPos.Y / float chunkWorldSize))
 
@@ -109,6 +121,8 @@ let physicsSystem (dt: float32) (model: Model) : struct (Model * Cmd<Msg>) =
 
     if abs(cx - pcx) <= chunkLoadRadius && abs(cy - pcy) <= chunkLoadRadius then
       nearbyPlatforms.AddRange(chunk.Platforms)
+      nearbySpikes.AddRange(chunk.Spikes)
+      nearbyCoins.AddRange(chunk.Coins)
 
   let struct (finalPos, finalVel, isGrounded) =
     resolvePlatformCollision prevPos newPos velocity nearbyPlatforms
@@ -116,6 +130,42 @@ let physicsSystem (dt: float32) (model: Model) : struct (Model * Cmd<Msg>) =
   let mutable finalPos = finalPos
   let mutable finalVel = finalVel
   let mutable isGrounded = isGrounded
+
+  // Spike collision → respawn
+  let playerRect = playerBounds finalPos
+
+  for i = 0 to nearbySpikes.Count - 1 do
+    if checkCollision playerRect nearbySpikes[i] then
+      finalPos <- Vector2(spawnX, groundSurface - playerHeight)
+      finalVel <- Vector2.Zero
+      isGrounded <- true
+
+  // Coin collection → increment score
+  let mutable collectedCoins = ResizeArray<Rectangle>()
+
+  for i = 0 to nearbyCoins.Count - 1 do
+    if checkCollision playerRect nearbyCoins[i] then
+      model.Score <- model.Score + 1
+      collectedCoins.Add nearbyCoins[i]
+
+  // Remove collected coins from chunks (mark as Empty in grid)
+  for coinRect in collectedCoins do
+    for KeyValue(_key, chunk) in model.Chunks do
+      let cellX =
+        int((coinRect.X - chunk.Grid.Origin.X) / chunk.Grid.CellSize.X)
+
+      let cellY =
+        int((coinRect.Y - chunk.Grid.Origin.Y) / chunk.Grid.CellSize.Y)
+
+      if
+        cellX >= 0
+        && cellX < chunk.Grid.Width
+        && cellY >= 0
+        && cellY < chunk.Grid.Height
+      then
+        match CellGrid2D.get cellX cellY chunk.Grid with
+        | ValueSome Coin -> CellGrid2D.set cellX cellY Empty chunk.Grid
+        | _ -> ()
 
   // Respawn if fallen too far
   if finalPos.Y > groundLevel + 500.0f then
@@ -128,10 +178,6 @@ let physicsSystem (dt: float32) (model: Model) : struct (Model * Cmd<Msg>) =
     finalPos <- Vector2(spawnX, groundSurface - playerHeight)
     finalVel <- Vector2.Zero
     isGrounded <- true
-
-  // Clamp to world left edge
-  if finalPos.X < 0.0f then
-    finalPos <- Vector2(0.0f, finalPos.Y)
 
   model.PlayerPosition <- finalPos
   model.PlayerVelocity <- finalVel
@@ -156,7 +202,7 @@ let physicsSystem (dt: float32) (model: Model) : struct (Model * Cmd<Msg>) =
   // Smooth camera follow (mutates raylib Camera2D in place)
   let mutable cam = model.Camera
   Camera2D.smoothFollow &cam finalPos 0.1f
-  Camera2D.clampTarget &cam 0.0f -500.0f 999999.0f 2000.0f
+  Camera2D.clampTarget &cam -999999.0f -500.0f 999999.0f 2000.0f
   model.Camera <- cam
 
   // Track chunk coordinate
@@ -244,6 +290,26 @@ let dayNightSystem (dt: float32) (model: Model) : struct (Model * Cmd<Msg>) =
   model, Cmd.none
 
 // -------------------------------------------------------------
+// System: Minimap
+// -------------------------------------------------------------
+
+let minimapSystem (dt: float32) (model: Model) : struct (Model * Cmd<Msg>) =
+  let minimap = model.Minimap
+
+  Minimap.system
+    model.Chunks
+    model.DayNightTimeOfDay
+    model.PlayerPosition
+    &minimap
+
+  model, Cmd.none
+
+let diagnosticSystem (dt: float32) (model: Model) : struct (Model * Cmd<Msg>) =
+  model.Diagnostics.Fps <- Raylib.GetFPS()
+  model.Diagnostics.FrameTime <- dt
+  model, Cmd.none
+
+// -------------------------------------------------------------
 // Combined Update Pipeline (Level 3 — explicit phase ordering)
 // -------------------------------------------------------------
 
@@ -256,7 +322,6 @@ let update (msg: Msg) (model: Model) : struct (Model * Cmd<Msg>) =
   | Tick gt ->
     let dt = float32 gt.ElapsedGameTime.TotalSeconds
 
-    // Phase ordering: input → physics → chunk → animation → particles → day/night
     System.start model
     |> System.pipeMutable(inputSystem dt)
     |> System.pipeMutable(physicsSystem dt)
@@ -264,4 +329,6 @@ let update (msg: Msg) (model: Model) : struct (Model * Cmd<Msg>) =
     |> System.pipeMutable(animationSystem dt)
     |> System.pipeMutable(particleSystem dt)
     |> System.pipeMutable(dayNightSystem dt)
+    |> System.pipeMutable(minimapSystem dt)
+    |> System.pipeMutable(diagnosticSystem dt)
     |> System.finish id

@@ -3,6 +3,7 @@ namespace Mibo.Elmish.Graphics2D
 open System
 open System.Numerics
 open Raylib_cs
+open Mibo.Elmish
 open Mibo.Elmish.Graphics2D.Lighting
 
 /// <summary>Unit of measure for 2D render layer ordering.</summary>
@@ -196,6 +197,7 @@ type Command2D =
     layer: int<RenderLayer>
   // Camera, Shader, Target
   | BeginCamera of beginCameraCam: Camera2D * layer: int<RenderLayer>
+  | BeginCameraConfig of config: Camera2DConfig * layer: int<RenderLayer>
   | EndCamera of layer: int<RenderLayer>
   | BeginShader of beginShaderVal: Shader * layer: int<RenderLayer>
   | EndShader of layer: int<RenderLayer>
@@ -232,6 +234,11 @@ type Command2D =
     litColor: Color *
     layer: int<RenderLayer>
   | EndLighting of endLightingCtx: LightContext2D * layer: int<RenderLayer>
+  // Shadow Control
+  | EnableShadows of enableShadowsCtx: LightContext2D * layer: int<RenderLayer>
+  | DisableShadows of
+    disableShadowsCtx: LightContext2D *
+    layer: int<RenderLayer>
   // Particles
   | Particle of
     particleTexture: Texture2D *
@@ -526,6 +533,12 @@ module Command2D =
   let inline beginCamera (layer: int<RenderLayer>) (camera: Camera2D) =
     Command2D.BeginCamera(camera, layer)
 
+  let inline beginCameraConfig
+    (layer: int<RenderLayer>)
+    (config: Camera2DConfig)
+    =
+    Command2D.BeginCameraConfig(config, layer)
+
   let inline endCamera(layer: int<RenderLayer>) = Command2D.EndCamera(layer)
 
   let inline beginShader (layer: int<RenderLayer>) (shader: Shader) =
@@ -566,6 +579,19 @@ module Command2D =
 
   let inline clear (layer: int<RenderLayer>) (color: Color) =
     Command2D.Clear(color, layer)
+
+  // Shadow Control
+  let inline enableShadows
+    (layer: int<RenderLayer>)
+    (lightCtx: LightContext2D)
+    =
+    Command2D.EnableShadows(lightCtx, layer)
+
+  let inline disableShadows
+    (layer: int<RenderLayer>)
+    (lightCtx: LightContext2D)
+    =
+    Command2D.DisableShadows(lightCtx, layer)
 
 /// <summary>Convenience builders for <see cref="T:Mibo.Elmish.Graphics2D.Command2D.SpriteState"/>.</summary>
 module SpriteState =

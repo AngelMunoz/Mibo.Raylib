@@ -89,6 +89,29 @@ module LightCommands =
   let inline endLighting (lightCtx: LightContext2D) (layer: int<RenderLayer>) =
     Command2D.EndLighting(lightCtx, layer)
 
+  /// <summary>
+  /// Enables shadow raymarching for subsequent lit sprites in this context.
+  /// Mutates the light context immediately. The returned command is a layer placeholder.
+  /// </summary>
+  let inline enableShadows
+    (lightCtx: LightContext2D)
+    (layer: int<RenderLayer>)
+    =
+    lightCtx.ShadowsEnabled <- true
+    Command2D.EnableShadows(lightCtx, layer)
+
+  /// <summary>
+  /// Disables shadow raymarching for subsequent lit sprites in this context.
+  /// Occluders are still collected but not uploaded to the shader.
+  /// Mutates the light context immediately. The returned command is a layer placeholder.
+  /// </summary>
+  let inline disableShadows
+    (lightCtx: LightContext2D)
+    (layer: int<RenderLayer>)
+    =
+    lightCtx.ShadowsEnabled <- false
+    Command2D.DisableShadows(lightCtx, layer)
+
 // ═══════════════════════════════════════════════════════════════════
 // Draw Module Wrappers (buffer-returning, pipe-friendly)
 // ═══════════════════════════════════════════════════════════════════
@@ -149,4 +172,20 @@ module LightDraw =
     (buffer: RenderBuffer2D)
     =
     buffer.Add(LightCommands.endLighting lightCtx layer)
+    buffer
+
+  let inline enableShadows
+    (lightCtx: LightContext2D)
+    (layer: int<RenderLayer>)
+    (buffer: RenderBuffer2D)
+    =
+    buffer.Add(LightCommands.enableShadows lightCtx layer)
+    buffer
+
+  let inline disableShadows
+    (lightCtx: LightContext2D)
+    (layer: int<RenderLayer>)
+    (buffer: RenderBuffer2D)
+    =
+    buffer.Add(LightCommands.disableShadows lightCtx layer)
     buffer
