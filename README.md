@@ -4,7 +4,7 @@
 
 Following that spirit, Mibo.Raylib keeps it lean — no editors, no pipelines, no wizards. Just F# and the Elmish loop, with a handful of commodities to get out of your way and let you enjoy the craft.
 
-Mibo.Raylib is a port of the [Mibo](https://github.com/anomalyco/Mibo) micro-framework from **MonoGame** to **raylib-cs**, designed to allow **F#** developers to write games using familiar Elmish patterns for all kinds of game genres and sizes — no Content Pipeline, no C# tooling, no `.mgcb` files.
+Mibo.Raylib is a port of the [Mibo](https://github.com/AngelMunoz/Mibo) micro-framework from **MonoGame** to **raylib-cs**, designed to allow **F#** developers to write games using familiar Elmish patterns for all kinds of game genres and sizes — no Content Pipeline, no C# tooling, no `.mgcb` files.
 
 Mibo aims to solve 90% of use cases for enabling developers to focus on game logic rather than boilerplate code, providing guidelines and architecture for structuring game code, handling input, rendering, asset management, and time management among others.
 
