@@ -1,6 +1,6 @@
 module ThreeDSample.View
 
-#nowarn 9
+#nowarn "9"
 
 open System
 open System.Collections.Generic

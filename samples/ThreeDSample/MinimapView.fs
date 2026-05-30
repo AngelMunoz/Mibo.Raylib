@@ -1,6 +1,6 @@
 module ThreeDSample.Minimap
 
-#warnon 9
+#nowarn "9"
 
 open System.Collections.Generic
 open System.Numerics
