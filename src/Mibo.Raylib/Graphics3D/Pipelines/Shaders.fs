@@ -267,7 +267,12 @@ float computeShadowFromAtlas(vec3 worldPos, int casterIndex)
     // Apply UV offset/scale for atlas region
     vec2 atlasUV = projCoord.xy * shadowUVOffsets[casterIndex].zw + shadowUVOffsets[casterIndex].xy;
 
-    float bias = shadowBiases[casterIndex];
+    // Slope-scale bias: increases bias at steep angles to prevent shadow acne
+    float baseBias = shadowBiases[casterIndex];
+    float dzdx = dFdx(projCoord.z);
+    float dzdy = dFdy(projCoord.z);
+    float bias = baseBias + length(vec2(dzdx, dzdy)) * 0.5;
+
     float shadow = 0.0;
     vec2 texel = 1.0 / vec2(textureSize(shadowAtlas, 0));
     for (int x = -1; x <= 1; x++) {{
@@ -297,7 +302,12 @@ float computePointShadow(vec3 worldPos, int casterIndex)
 
     vec2 atlasUV = projCoord.xy * shadowUVOffsets[casterIndex].zw + shadowUVOffsets[casterIndex].xy;
 
-    float bias = shadowBiases[casterIndex];
+    // Slope-scale bias
+    float baseBias = shadowBiases[casterIndex];
+    float dzdx = dFdx(projCoord.z);
+    float dzdy = dFdy(projCoord.z);
+    float bias = baseBias + length(vec2(dzdx, dzdy)) * 0.5;
+
     float shadow = 0.0;
     vec2 texel = 1.0 / vec2(textureSize(shadowAtlas, 0));
     for (int x = -1; x <= 1; x++) {{
@@ -325,7 +335,12 @@ float computeSpotShadow(vec3 worldPos, int casterIndex)
 
     vec2 atlasUV = projCoord.xy * shadowUVOffsets[casterIndex].zw + shadowUVOffsets[casterIndex].xy;
 
-    float bias = shadowBiases[casterIndex];
+    // Slope-scale bias
+    float baseBias = shadowBiases[casterIndex];
+    float dzdx = dFdx(projCoord.z);
+    float dzdy = dFdy(projCoord.z);
+    float bias = baseBias + length(vec2(dzdx, dzdy)) * 0.5;
+
     float shadow = 0.0;
     vec2 texel = 1.0 / vec2(textureSize(shadowAtlas, 0));
     for (int x = -1; x <= 1; x++) {{
