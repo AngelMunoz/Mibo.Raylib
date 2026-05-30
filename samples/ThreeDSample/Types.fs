@@ -5,6 +5,7 @@ open System.Collections.Generic
 open System.Numerics
 open Raylib_cs
 open Mibo.Elmish
+open Mibo.Elmish.Graphics3D
 open Mibo.Input
 
 [<Struct>]
@@ -148,6 +149,34 @@ type Chunk = {
   OriginZ: int
 }
 
+type MinimapModel(playerPos: Vector3) =
+  member val Blocks =
+    Dictionary<struct (int * int), struct (float32 * BlockType)>() with get, set
+
+  member val Texture = Unchecked.defaultof<Texture2D> with get, set
+  member val TexReady = false with get, set
+  member val FrameCounter = 0 with get, set
+  member val LastPlayerPos = playerPos with get, set
+
+type DiagnosticsModel() =
+  member val Font = Raylib.GetFontDefault() with get, set
+  member val Fps = 0 with get, set
+  member val ChunkCount = 0 with get, set
+  member val Score = 0 with get, set
+  member val TimeOfDay = 0.0f with get, set
+  member val PlayerX = 0.0f with get, set
+  member val PlayerY = 0.0f with get, set
+  member val PlayerZ = 0.0f with get, set
+  member val IsGrounded = false with get, set
+
+type LightingModel() =
+  member val SkyColor = Color.Black with get, set
+  member val AmbientColor = Color.Black with get, set
+  member val AmbientIntensity = 0.0f with get, set
+  member val LightDirection = Vector3.Zero with get, set
+  member val LightColor = Color.White with get, set
+  member val LightIntensity = 0.0f with get, set
+
 type GameModel() =
   member val PlayerPosition = Constants.spawnPosition with get, set
   member val PlayerVelocity = Vector3.Zero with get, set
@@ -171,6 +200,10 @@ type GameModel() =
   member val Seed = 0 with get, set
   member val KeysToRemove = ResizeArray<struct (int * int)>() with get, set
   member val PlayerFacing = 0.0f with get, set
+  member val Minimap = MinimapModel Constants.spawnPosition with get, set
+  member val Diagnostics = DiagnosticsModel() with get, set
+  member val Lighting = LightingModel() with get, set
+  member val VisibleLights = ResizeArray<PointLight3D>() with get, set
 
 [<Struct>]
 type Msg =

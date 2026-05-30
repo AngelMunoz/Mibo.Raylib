@@ -4,11 +4,14 @@ open System
 open System.Numerics
 open Raylib_cs
 open Mibo.Elmish
+open Mibo.Elmish.Graphics3D
 open Mibo.Input
+open Mibo.Layout3D
 open ThreeDSample.Constants
 open ThreeDSample.Types
 open ThreeDSample.Physics
 open ThreeDSample.WorldGen
+open ThreeDSample.DayNight
 
 let inputSystem
   (dt: float32)
@@ -110,6 +113,88 @@ let dayNightSystem
   model.TotalTime <- model.TotalTime + dt
   struct (model, Cmd.none)
 
+let inline minimapSystem
+  (dt: float32)
+  (model: GameModel)
+  : struct (GameModel * Cmd<Msg>) =
+  let minimap = model.Minimap
+
+  Minimap.system
+    dt
+    model.Chunks
+    model.DayNightTimeOfDay
+    model.PlayerPosition
+    &minimap
+
+  struct (model, Cmd.none)
+
+let inline diagnosticsSystem
+  (dt: float32)
+  (model: GameModel)
+  : struct (GameModel * Cmd<Msg>) =
+  let diag = model.Diagnostics
+  Diagnostics.system diag
+  diag.ChunkCount <- model.Chunks.Count
+  diag.Score <- model.Score
+  diag.TimeOfDay <- model.DayNightTimeOfDay
+  diag.PlayerX <- model.PlayerPosition.X
+  diag.PlayerY <- model.PlayerPosition.Y
+  diag.PlayerZ <- model.PlayerPosition.Z
+  diag.IsGrounded <- model.IsGrounded
+  struct (model, Cmd.none)
+
+let inline lightingSystem
+  (dt: float32)
+  (model: GameModel)
+  : struct (GameModel * Cmd<Msg>) =
+  let time = model.DayNightTimeOfDay
+  let l = model.Lighting
+  l.SkyColor <- getSkyColor time
+  l.AmbientColor <- getAmbientColor time
+  l.AmbientIntensity <- getAmbientIntensity time
+  l.LightDirection <- getPrimaryLightDirection time arcRadius
+  l.LightColor <- getPrimaryLightColor time
+  l.LightIntensity <- getPrimaryLightIntensity time
+  struct (model, Cmd.none)
+
+let mushroomLightSystem
+  (dt: float32)
+  (model: GameModel)
+  : struct (GameModel * Cmd<Msg>) =
+  model.VisibleLights.Clear()
+  let camPos = model.CameraPosition
+  let mutable count = 0
+
+  for KeyValue(struct (_cx, _cz), chunk) in model.Chunks do
+    if count < 8 then
+      let bounds = {
+        Mibo.Layout3D.BoundingBox.Min = chunk.Bounds.Min
+        Mibo.Layout3D.BoundingBox.Max = chunk.Bounds.Max
+      }
+
+      CellGridRenderer3D.renderVolume
+        bounds
+        chunk.Grid
+        (fun worldPos blockType ->
+          if
+            blockType = BlockType.MushroomLight
+            && count < 8
+            && (worldPos - camPos).LengthSquared() <= 1600.0f
+          then
+            count <- count + 1
+
+            model.VisibleLights.Add(
+              {
+                Position = worldPos + Vector3(0.0f, 0.5f, 0.0f)
+                Color = Color(255uy, 200uy, 120uy)
+                Radius = 6.0f
+                CastsShadows = false
+                ShadowBias = ValueNone
+              }
+            ))
+
+  struct (model, Cmd.none)
+
 let update (msg: Msg) (model: GameModel) : struct (GameModel * Cmd<Msg>) =
   match msg with
   | InputMapped actions ->
@@ -122,5 +207,9 @@ let update (msg: Msg) (model: GameModel) : struct (GameModel * Cmd<Msg>) =
     |> System.pipeMutable(inputSystem dt)
     |> System.pipeMutable(physicsSystem dt)
     |> System.pipeMutable(chunkSystem dt)
+    |> System.pipeMutable(minimapSystem dt)
     |> System.pipeMutable(dayNightSystem dt)
+    |> System.pipeMutable(lightingSystem dt)
+    |> System.pipeMutable(mushroomLightSystem dt)
+    |> System.pipeMutable(diagnosticsSystem dt)
     |> System.finish id

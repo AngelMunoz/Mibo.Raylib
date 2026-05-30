@@ -10,7 +10,6 @@ open Mibo.Elmish.Graphics3D
 open Mibo.Layout3D
 open ThreeDSample.Constants
 open ThreeDSample.Types
-open ThreeDSample.DayNight
 
 let loadOrGetModel
   (cache: Dictionary<string, Model>)
@@ -87,8 +86,7 @@ let private instancedCtx =
   )
 
 let view (ctx: GameContext) (model: GameModel) (buffer: RenderBuffer3D) =
-  let time = 12.0f // DEBUG: fixed noon
-  let skyColor = DayNight.getSkyColor time
+  let l = model.Lighting
 
   let camera =
     Camera3D(
@@ -99,26 +97,22 @@ let view (ctx: GameContext) (model: GameModel) (buffer: RenderBuffer3D) =
       CameraProjection.Perspective
     )
 
-  let ambient = {
-    Color = DayNight.getAmbientColor time
-    Intensity = 0.6f
-  }
-
-  let lightDir = Vector3(0.0f, -1.0f, 0.0f)
-
   buffer
   |> Draw3D.beginCameraWith (
     Camera3D.render camera
-    |> Camera3D.withClear skyColor
+    |> Camera3D.withClear l.SkyColor
   )
-  |> Draw3D.setAmbientLight ambient
+  |> Draw3D.setAmbientLight {
+    Color = l.AmbientColor
+    Intensity = l.AmbientIntensity
+  }
   |> Draw3D.addDirectionalLight {
-    Direction = lightDir
-    Color = Color.White
-    Intensity = 1.5f
+    Direction = l.LightDirection
+    Color = l.LightColor
+    Intensity = l.LightIntensity
     CastsShadows = true
   }
-  |> ignore
+  |> Draw3D.drop
 
   currentModelCache <- model.ModelCache
   currentGameContext <- ctx
@@ -126,8 +120,6 @@ let view (ctx: GameContext) (model: GameModel) (buffer: RenderBuffer3D) =
 
   let camPos = model.CameraPosition
   let maxChunkDistSq = 2500.0f
-  let mutable mushroomLightCount = 0
-  let maxMushroomLights = 8
 
   for KeyValue(struct (cx, cz), chunk) in model.Chunks do
     let chunkCenter =
@@ -143,37 +135,15 @@ let view (ctx: GameContext) (model: GameModel) (buffer: RenderBuffer3D) =
         Mibo.Layout3D.BoundingBox.Max = chunk.Bounds.Max
       }
 
-      // Instanced block rendering via library
       CellGridRenderer3D.renderVolumeInstanced
         instancedCtx
         layoutBounds
         chunk.Grid
         buffer
 
-      // Mushroom lights — collected in the same chunk loop
-      CellGridRenderer3D.renderVolume
-        layoutBounds
-        chunk.Grid
-        (fun worldPos blockType ->
-          if
-            blockType = BlockType.MushroomLight
-            && mushroomLightCount < maxMushroomLights
-            && (worldPos - camPos).LengthSquared() <= 1600.0f
-          then
-            mushroomLightCount <- mushroomLightCount + 1
+  for light in model.VisibleLights do
+    buffer.Add(Command3D.addPointLight light)
 
-            buffer.Add(
-              Command3D.addPointLight {
-                Position = worldPos + Vector3(0.0f, 0.5f, 0.0f)
-                Color = Color(255uy, 200uy, 120uy)
-                Radius = 6.0f
-                CastsShadows = false
-                ShadowBias = ValueNone
-              }
-            )
-            |> ignore)
-
-  // Player model
   let playerModel =
     loadOrGetModel model.ModelCache KenneyModels.characterOobi ctx
 
@@ -189,92 +159,8 @@ let view (ctx: GameContext) (model: GameModel) (buffer: RenderBuffer3D) =
 
     Raymath.MatrixMultiply(rot, trans)
 
-  buffer.Add(Command3D.drawModel playerModel playerTransform) |> ignore
+  buffer.Add(Command3D.drawModel playerModel playerTransform)
 
   buffer |> Draw3D.endCamera |> Draw3D.drop
-
-  // Minimap — top-down orthographic overlay in bottom-right corner
-  let minimapSize = 40.0f
-  let minimapCamera =
-    Camera3D(
-      model.CameraPosition + Vector3(0.0f, 100.0f, 0.0f),
-      model.CameraPosition,
-      Vector3.UnitZ,
-      minimapSize, // ortho half-size = total visible width = 80 units
-      CameraProjection.Orthographic
-    )
-
-  buffer
-  |> Draw3D.beginCameraWith (
-    Camera3D.render minimapCamera
-    |> Camera3D.withViewport (Raylib_cs.Rectangle(0.75f, 0.0f, 0.25f, 0.25f))
-    |> Camera3D.withClear skyColor
-    |> Camera3D.withoutPostProcess
-  )
-  |> ignore
-
-  // Minimap culling — only chunks near the player
-  let minimapCamPos = model.CameraPosition
-  let minimapDistSq = 1600.0f // 40 unit radius
-
-  for KeyValue(struct (_cx, _cz), chunk) in model.Chunks do
-    let chunkCenter =
-      Vector3(
-        (chunk.Bounds.Min.X + chunk.Bounds.Max.X) * 0.5f,
-        (chunk.Bounds.Min.Y + chunk.Bounds.Max.Y) * 0.5f,
-        (chunk.Bounds.Min.Z + chunk.Bounds.Max.Z) * 0.5f
-      )
-
-    if (chunkCenter - minimapCamPos).LengthSquared() <= minimapDistSq then
-      let layoutBounds = {
-        Mibo.Layout3D.BoundingBox.Min = chunk.Bounds.Min
-        Mibo.Layout3D.BoundingBox.Max = chunk.Bounds.Max
-      }
-
-      CellGridRenderer3D.renderVolumeInstanced
-        instancedCtx
-        layoutBounds
-        chunk.Grid
-        buffer
-
-  // Player marker — bright unlit cube so it's visible from above
-  let markerSize = 1.5f
-  let markerTransform =
-    Raymath.MatrixMultiply(
-      Raymath.MatrixScale(markerSize, markerSize, markerSize),
-      Raymath.MatrixTranslate(
-        model.PlayerPosition.X,
-        model.PlayerPosition.Y + 2.0f,
-        model.PlayerPosition.Z
-      )
-    )
-
-  Command3D.drawMesh
-    Primitive3D.cube
-    markerTransform
-    (Material3D.unlit Color.Red)
-  |> buffer.Add
-
-  buffer |> Draw3D.endCamera |> Draw3D.drop
-
-  buffer.Add(
-    Command3D.drawImmediate(fun () ->
-      Raylib.DrawText(
-        $"FPS: {Raylib.GetFPS()}  Chunks: {model.Chunks.Count}  Score: {model.Score}",
-        10,
-        10,
-        20,
-        Color.Yellow
-      )
-
-      Raylib.DrawText(
-        $"Time: {model.DayNightTimeOfDay:F1}h  Pos: ({model.PlayerPosition.X:F0},{model.PlayerPosition.Y:F0},{model.PlayerPosition.Z:F0})  Grounded: {model.IsGrounded}",
-        10,
-        35,
-        20,
-        Color.Yellow
-      ))
-  )
-  |> ignore
 
   Draw3D.drop buffer

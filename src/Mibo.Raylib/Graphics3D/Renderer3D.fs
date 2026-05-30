@@ -9,7 +9,9 @@ open Mibo.Elmish
 type Renderer3DConfig = {
   /// <summary>
   /// Background clear color applied before rendering commands.
-  /// <see cref="F:Microsoft.FSharp.Core.ValueOption`1.ValueNone"/> uses <see cref="P:Raylib_cs.Color.Black"/>.
+  /// <see cref="F:Microsoft.FSharp.Core.ValueOption`1.ValueNone"/> skips clearing entirely,
+  /// which is useful when composing multiple renderers (e.g., 2D overlay on 3D scene).
+  /// <see cref="F:Microsoft.FSharp.Core.ValueOption`1.ValueSome"/> clears with the specified color.
   /// </summary>
   ClearColor: Color voption
 }
@@ -20,7 +22,13 @@ module Renderer3DConfig =
   /// <summary>
   /// Default configuration: black clear color.
   /// </summary>
-  let defaults: Renderer3DConfig = { ClearColor = ValueNone }
+  let defaults: Renderer3DConfig = { ClearColor = ValueSome Color.Black }
+
+  /// <summary>
+  /// Configuration that skips clearing the background.
+  /// Use when this renderer composites on top of another renderer's output.
+  /// </summary>
+  let noClear: Renderer3DConfig = { ClearColor = ValueNone }
 
 /// <summary>
 /// A deferred 3D renderer that accumulates commands each frame and executes them
@@ -59,7 +67,7 @@ type Renderer3D<'Model>
     member _.Draw(ctx, model, _gameTime) =
       match config.ClearColor with
       | ValueSome c -> Raylib.ClearBackground(c)
-      | ValueNone -> Raylib.ClearBackground(Color.Black)
+      | ValueNone -> ()
 
       buffer.Clear()
       view ctx model buffer
@@ -76,7 +84,7 @@ type Renderer3D<'Model>
 module Renderer3D =
 
   /// <summary>
-  /// Creates a renderer with default configuration.
+  /// Creates a renderer with default configuration (black clear color).
   /// </summary>
   /// <param name="pipeline">The 3D rendering pipeline that interprets commands.</param>
   /// <param name="view">
@@ -87,3 +95,18 @@ module Renderer3D =
     (view: GameContext -> 'Model -> RenderBuffer3D -> unit)
     : IRenderer<'Model> =
     new Renderer3D<'Model>(view, pipeline, Renderer3DConfig.defaults)
+
+  /// <summary>
+  /// Creates a renderer with custom configuration.
+  /// </summary>
+  /// <param name="config">The renderer configuration.</param>
+  /// <param name="pipeline">The 3D rendering pipeline that interprets commands.</param>
+  /// <param name="view">
+  /// The view function that populates the render buffer each frame.
+  /// </param>
+  let createWith
+    (config: Renderer3DConfig)
+    (pipeline: IRenderPipeline3D)
+    (view: GameContext -> 'Model -> RenderBuffer3D -> unit)
+    : IRenderer<'Model> =
+    new Renderer3D<'Model>(view, pipeline, config)

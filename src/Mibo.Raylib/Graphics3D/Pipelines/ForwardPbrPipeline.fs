@@ -1129,44 +1129,57 @@ module private ShadowPassHelpers =
   let collectMeshDraws(buffer: RenderBuffer3D) =
     let pool = System.Buffers.ArrayPool<MeshDraw>.Shared
 
-    // Pre-scan to count actual mesh draws for precise allocation
+    // Pre-scan to count actual mesh draws for precise allocation.
+    // Geometry between DisableShadows and EnableShadows is excluded.
     let mutable meshCount = 0
+    let mutable shadowsEnabled = true
+    let mutable i = 0
 
-    for i = 0 to buffer.Count - 1 do
+    while i < buffer.Count do
       match buffer[i] with
-      | Command3D.DrawMesh _ -> meshCount <- meshCount + 1
-      | Command3D.DrawSkinnedMesh _ -> meshCount <- meshCount + 1
-      | Command3D.DrawModel(model, _) ->
+      | Command3D.DisableShadows -> shadowsEnabled <- false
+      | Command3D.EnableShadows -> shadowsEnabled <- true
+      | Command3D.DrawMesh _ when shadowsEnabled ->
+        meshCount <- meshCount + 1
+      | Command3D.DrawSkinnedMesh _ when shadowsEnabled ->
+        meshCount <- meshCount + 1
+      | Command3D.DrawModel(model, _) when shadowsEnabled ->
         meshCount <- meshCount + model.MeshCount
-      | Command3D.DrawMeshInstanced(_, _, _, instanceCount) ->
+      | Command3D.DrawMeshInstanced(_, _, _, instanceCount) when shadowsEnabled ->
         meshCount <- meshCount + instanceCount
       | _ -> ()
+      i <- i + 1
 
     let arr = pool.Rent(max meshCount 1)
     let mutable count = 0
+    shadowsEnabled <- true
+    i <- 0
 
-    for i = 0 to buffer.Count - 1 do
+    while i < buffer.Count do
       match buffer[i] with
-      | Command3D.DrawMesh(mesh, transform, _) ->
+      | Command3D.DisableShadows -> shadowsEnabled <- false
+      | Command3D.EnableShadows -> shadowsEnabled <- true
+      | Command3D.DrawMesh(mesh, transform, _) when shadowsEnabled ->
         arr[count] <- { Mesh = mesh; Transform = transform }
         count <- count + 1
-      | Command3D.DrawSkinnedMesh(mesh, transform, _, _) ->
+      | Command3D.DrawSkinnedMesh(mesh, transform, _, _) when shadowsEnabled ->
         arr[count] <- { Mesh = mesh; Transform = transform }
         count <- count + 1
-      | Command3D.DrawModel(model, transform) ->
+      | Command3D.DrawModel(model, transform) when shadowsEnabled ->
         for mi = 0 to model.MeshCount - 1 do
           let mesh = NativePtr.get model.Meshes mi
           arr[count] <- { Mesh = mesh; Transform = transform }
           count <- count + 1
-      | Command3D.DrawMeshInstanced(mesh, transforms, _, instanceCount) ->
+      | Command3D.DrawMeshInstanced(mesh, transforms, _, instanceCount)
+        when shadowsEnabled ->
         for ti = 0 to instanceCount - 1 do
           arr[count] <- {
             Mesh = mesh
             Transform = transforms[ti]
           }
-
           count <- count + 1
       | _ -> ()
+      i <- i + 1
 
     struct (arr, count)
 
@@ -1728,6 +1741,8 @@ type ForwardPbrPipeline
         | Command3D.BeginCameraConfig cfg -> context.BeginCameraConfig(cfg, gameCtx.WindowWidth, gameCtx.WindowHeight)
         | Command3D.EndCamera -> context.EndCamera()
         | Command3D.SetShadowOrigin _ -> () // handled in pre-pass
+        | Command3D.EnableShadows -> () // handled in shadow collection
+        | Command3D.DisableShadows -> () // handled in shadow collection
         | Command3D.SetAmbientLight light -> context.SetAmbientLight(light)
         | Command3D.AddDirectionalLight light ->
           context.AddDirectionalLight(light)

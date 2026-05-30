@@ -4,22 +4,6 @@ open System
 open System.Numerics
 open Raylib_cs
 
-[<Struct>]
-type State = {
-  TimeOfDay: float32
-  DayDuration: float32
-}
-
-let initial = {
-  TimeOfDay = 12.0f
-  DayDuration = 60.0f
-}
-
-let inline update dt state = {
-  state with
-      TimeOfDay = (state.TimeOfDay + dt * (24.0f / state.DayDuration)) % 24.0f
-}
-
 let inline lerpColor (a: Color) (b: Color) (t: float32) =
   let t = Math.Clamp(t, 0.0f, 1.0f)
 
@@ -79,44 +63,43 @@ let getAmbientIntensity time : float32 =
   MathF.Max(avg / 255.0f * 0.7f, 0.05f)
 
 // ---------------------------------------------------------------------------
-// Two-body celestial model: sun arcs overhead during day, moon at night.
-// Both trace 180° arcs from east → west, opposite each other on the horizon.
-// The shader supports only one directional light, so we switch which body
-// drives it based on time of day. At dawn/dusk both intensities are ~0 so
-// the direction flip between opposite horizons is invisible.
+// Single directional light on a ~190° arc.
+// Sun: 6h–18h, Moon: 18h–6h. The extra 10° at each end handles the
+// fade-out/fade-in transition between cycles. One light, one shadow caster.
 // ---------------------------------------------------------------------------
 
-let private sunArc(time: float32) : Vector3 =
-  let t = (time - 6.0f) / 12.0f // 0 at dawn, 1 at dusk
-  let angle = t * MathF.PI // 0 → π
+[<Literal>]
+let private arcDegrees = 190.0f
 
-  Vector3(
-    MathF.Cos(angle) * 0.8f, // +1 east → -1 west
-    -MathF.Sin(angle) * 0.6f, // 0 horizon → -1 overhead → 0 horizon
-    MathF.Sin(angle * 0.5f) * 0.5f
-  )
+[<Literal>]
+let private fadeDegrees = 10.0f
 
-let private moonArc(time: float32) : Vector3 =
-  let t = ((time - 18.0f + 24.0f) % 24.0f) / 12.0f // 0 at moonrise (18h), 1 at moonset (6h)
-  let angle = t * MathF.PI
+/// Returns normalized light direction for a single celestial body
+/// on a 190° arc. t is 0..1 across the 12h half-cycle.
+let private celestialArc (t: float32) (arcRadius: float32) : Vector3 =
+  let startAngle = -5.0f * MathF.PI / 180.0f
+  let endAngle = 185.0f * MathF.PI / 180.0f
+  let angle = startAngle + t * (endAngle - startAngle)
 
-  Vector3(
-    MathF.Cos(angle) * 0.8f,
-    -MathF.Sin(angle) * 0.6f,
-    MathF.Sin(angle * 0.5f) * 0.5f
-  )
+  let pos =
+    Vector3(
+      MathF.Cos(angle) * arcRadius,
+      -MathF.Sin(angle) * arcRadius * 0.6f,
+      MathF.Sin(angle * 0.5f) * arcRadius * 0.5f
+    )
 
-/// Primary light direction — sun (6h–18h) or moon (18h–6h).
-/// Both are above the horizon on their respective arcs.
-let getPrimaryLightDirection(time: float32) : Vector3 =
+  Vector3.Normalize(pos)
+
+/// Single light direction — sun (6h–18h) or moon (18h–6h).
+let getPrimaryLightDirection (time: float32) (arcRadius: float32) : Vector3 =
   if time >= 6.0f && time <= 18.0f then
-    sunArc time
+    celestialArc ((time - 6.0f) / 12.0f) arcRadius
   else
-    moonArc time
+    let t = if time > 18.0f then (time - 18.0f) / 12.0f else (time + 6.0f) / 12.0f
+    celestialArc t arcRadius
 
 let getPrimaryLightColor(time: float32) : Color =
   if time >= 6.0f && time <= 18.0f then
-    // Daytime: warm sun
     if time < 8.0f then
       lerpColor
         (Color(255uy, 150uy, 80uy))
@@ -130,20 +113,30 @@ let getPrimaryLightColor(time: float32) : Color =
         (Color(255uy, 120uy, 60uy))
         ((time - 16.0f) / 2.0f)
   else
-    // Nighttime: cool blue moonlight
     Color(160uy, 190uy, 230uy)
 
+/// Light intensity with fade at arc edges.
+/// The ~10° overlap at dawn/dusk creates a smooth transition where
+/// the setting body fades out as the rising body fades in.
 let getPrimaryLightIntensity(time: float32) : float32 =
   if time >= 6.0f && time <= 18.0f then
-    // Daytime: ramp up at dawn, full at noon, ramp down at dusk
-    if time < 8.0f then (time - 6.0f) / 2.0f
-    elif time < 16.0f then 1.0f
-    else (18.0f - time) / 2.0f
-  elif time < 6.0f then
-    // After midnight → dawn: fade out
-    let t = time / 6.0f
-    (1.0f - t) * 0.3f
+    let t = (time - 6.0f) / 12.0f
+    if t * arcDegrees < fadeDegrees then
+      t * arcDegrees / fadeDegrees
+    elif (1.0f - t) * arcDegrees < fadeDegrees then
+      (1.0f - t) * arcDegrees / fadeDegrees
+    else
+      1.0f
   else
-    // Dusk → midnight: fade in
-    let t = (time - 18.0f) / 6.0f
-    t * 0.3f
+    let t =
+      if time > 18.0f then (time - 18.0f) / 12.0f
+      else (time + 6.0f) / 12.0f
+
+    let maxMoon = 0.3f
+
+    if t * arcDegrees < fadeDegrees then
+      t * arcDegrees / fadeDegrees * maxMoon
+    elif (1.0f - t) * arcDegrees < fadeDegrees then
+      (1.0f - t) * arcDegrees / fadeDegrees * maxMoon
+    else
+      maxMoon

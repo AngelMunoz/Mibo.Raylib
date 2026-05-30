@@ -4,6 +4,7 @@ open System
 open System.Numerics
 open Raylib_cs
 open Mibo.Elmish
+open Mibo.Elmish.Graphics2D
 open Mibo.Elmish.Graphics3D
 open Mibo.Elmish.Graphics3D.Pipelines
 open Mibo.Input
@@ -58,6 +59,10 @@ let init(ctx: GameContext) =
 let subscribe (ctx: GameContext) (model: GameModel) =
   InputMapper.subscribeStatic model.InputMap InputMapped ctx
 
+let overlayView (ctx: GameContext) (model: GameModel) (buffer: RenderBuffer2D) =
+  Minimap.view ctx model buffer
+  Diagnostics.view ctx model buffer
+
 [<EntryPoint>]
 let main _ =
   let program =
@@ -74,7 +79,18 @@ let main _ =
     |> Program.withSubscription subscribe
     |> Program.withTick Tick
     |> Program.withRenderer(fun () ->
-      let pipeline = ForwardPbrPipeline()
+      Renderer2D.createWith Renderer2DConfig.noClear overlayView)
+    |> Program.withRenderer(fun () ->
+      let pipeline =
+        ForwardPbrPipeline(
+          shadowBiasConfig = {
+            DirectionalBias = 0.002f
+            PointBias = 0.01f
+            SpotBias = 0.001f
+            SlopeScaleBias = 0.0005f
+          }
+        )
+
       Renderer3D.create pipeline View.view)
 
   let game = new RaylibGame<GameModel, Msg>(program)

@@ -145,6 +145,16 @@ module Draw3D =
     buffer.Add(Command3D.setShadowOrigin origin)
     buffer
 
+  /// <summary>Enables shadow casting for subsequent geometry until disabled.</summary>
+  let inline enableShadows (buffer: RenderBuffer3D) =
+    buffer.Add(Command3D.enableShadows())
+    buffer
+
+  /// <summary>Disables shadow casting for subsequent geometry until re-enabled.</summary>
+  let inline disableShadows (buffer: RenderBuffer3D) =
+    buffer.Add(Command3D.disableShadows())
+    buffer
+
   // ──────────────────────────────────────────────
   // Lighting
   // ──────────────────────────────────────────────

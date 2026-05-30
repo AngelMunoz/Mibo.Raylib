@@ -45,6 +45,8 @@ type Command3D =
   | AddDirectionalLight of AddDlight: DirectionalLight3D
   | AddPointLight of AddPlight: PointLight3D
   | AddSpotLight of AddSlight: SpotLight3D
+  | EnableShadows
+  | DisableShadows
   | DrawImmediate of action: (unit -> unit)
 
 /// <summary>
@@ -116,6 +118,9 @@ module Command3D =
 
   let inline addPointLight(light: PointLight3D) = Command3D.AddPointLight(light)
   let inline addSpotLight(light: SpotLight3D) = Command3D.AddSpotLight(light)
+
+  let inline enableShadows () = Command3D.EnableShadows
+  let inline disableShadows () = Command3D.DisableShadows
 
   let inline drawImmediate(action: unit -> unit) =
     Command3D.DrawImmediate(action)

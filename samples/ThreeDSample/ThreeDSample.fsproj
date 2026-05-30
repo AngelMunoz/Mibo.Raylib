@@ -8,6 +8,8 @@
     <Compile Include="Constants.fs" />
     <Compile Include="Types.fs" />
     <Compile Include="DayNight.fs" />
+    <Compile Include="MinimapView.fs" />
+    <Compile Include="DiagnosticsView.fs" />
     <Compile Include="WorldGen.fs" />
     <Compile Include="Physics.fs" />
     <Compile Include="Systems.fs" />

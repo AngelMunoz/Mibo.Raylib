@@ -74,6 +74,8 @@ let chunkEvictRadius = 4
 let spawnPosition =
   Vector3(float32 chunkWidth / 2.0f, 10.0f, float32 chunkDepth / 2.0f)
 
+let arcRadius = float32 chunkLoadRadius * chunkWorldWidth * 5.0f
+
 module KenneyModels =
   let basePath = "assets/kenney_platformer-kit/Models/"
 

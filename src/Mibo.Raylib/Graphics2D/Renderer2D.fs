@@ -34,7 +34,9 @@ type Renderer2DConfig = {
 
   /// <summary>
   /// Background clear color applied before rendering commands.
-  /// <see cref="F:Microsoft.FSharp.Core.ValueOption`1.ValueNone"/> uses <see cref="P:Raylib_cs.Color.Black"/>.
+  /// <see cref="F:Microsoft.FSharp.Core.ValueOption`1.ValueNone"/> skips clearing entirely,
+  /// which is useful when composing multiple renderers (e.g., 2D overlay on 3D scene).
+  /// <see cref="F:Microsoft.FSharp.Core.ValueOption`1.ValueSome"/> clears with the specified color.
   /// </summary>
   ClearColor: Color voption
 }
@@ -47,6 +49,15 @@ module Renderer2DConfig =
   /// Suitable for most 2D games that don't need screen-space effects.
   /// </summary>
   let defaults: Renderer2DConfig = {
+    PostProcess = ValueNone
+    ClearColor = ValueSome Color.Black
+  }
+
+  /// <summary>
+  /// Configuration that skips clearing the background.
+  /// Use when this renderer composites on top of another renderer's output.
+  /// </summary>
+  let noClear: Renderer2DConfig = {
     PostProcess = ValueNone
     ClearColor = ValueNone
   }
@@ -410,11 +421,9 @@ type Renderer2D<'Model>
 
       match config.PostProcess with
       | ValueNone ->
-        Raylib.ClearBackground(
-          match config.ClearColor with
-          | ValueSome c -> c
-          | ValueNone -> Color.Black
-        )
+        match config.ClearColor with
+        | ValueSome c -> Raylib.ClearBackground(c)
+        | ValueNone -> ()
 
         executeCommands()
       | ValueSome passes ->
@@ -422,11 +431,9 @@ type Renderer2D<'Model>
 
         Raylib.BeginTextureMode(sceneRT)
 
-        Raylib.ClearBackground(
-          match config.ClearColor with
-          | ValueSome c -> c
-          | ValueNone -> Color.Black
-        )
+        match config.ClearColor with
+        | ValueSome c -> Raylib.ClearBackground(c)
+        | ValueNone -> ()
 
         executeCommands()
         Raylib.EndTextureMode()
@@ -452,3 +459,17 @@ module Renderer2D =
     (view: GameContext -> 'Model -> RenderBuffer2D -> unit)
     : IRenderer<'Model> =
     new Renderer2D<'Model>(view, Renderer2DConfig.defaults) :> IRenderer<'Model>
+
+  /// <summary>
+  /// Creates a renderer with custom configuration.
+  /// </summary>
+  /// <param name="config">The renderer configuration.</param>
+  /// <param name="view">
+  /// The view function that populates the render buffer each frame.
+  /// Receives the game context, current model, and a mutable buffer.
+  /// </param>
+  let createWith
+    (config: Renderer2DConfig)
+    (view: GameContext -> 'Model -> RenderBuffer2D -> unit)
+    : IRenderer<'Model> =
+    new Renderer2D<'Model>(view, config) :> IRenderer<'Model>
