@@ -102,11 +102,11 @@ Run one of the samples, then copy its program setup (composition root) into your
 
 - Patterns
   - [Patterns Overview](patterns/overview.html)
-  - [System Pipeline](patterns/system-pipeline.html)
-  - [Async Chunk Loading](patterns/async-chunks.html)
-  - [3D Particles](patterns/particles-3d.html)
-  - [Multi-Renderer Compositing](patterns/multi-renderer.html)
-  - [Day/Night Cycle](patterns/day-night.html)
+  - [Composable Systems](patterns/composable-systems.html)
+  - [Background Work](patterns/background-work.html)
+  - [Pooled Particles](patterns/pooled-particles.html)
+  - [Layered Rendering](patterns/layered-rendering.html)
+  - [Pre-computed State](patterns/precomputed-state.html)
 
 ## Built on
 

@@ -1,0 +1,98 @@
+---
+title: Pre-computed Derived State
+category: Patterns
+categoryindex: 6
+index: 66
+---
+
+# Pre-computed Derived State
+
+## What and Why
+
+Many game values depend on other values that change every frame — sky color depends on time, visibility depends on positions, health bars depend on hit points. The naive approach computes these in the view function. This couples logic to rendering, duplicates computation across systems, and makes testing impossible.
+
+The pattern: compute derived values once per frame in a dedicated system. Store results in a lightweight model. Every other system — rendering, AI, UI — reads the pre-computed values without recalculating.
+
+## Use Cases
+
+### Day/night cycle
+Time drives sky color, light direction, ambient intensity, and shadow parameters. A lighting system computes all of these from the time-of-day. The renderer reads them directly.
+
+### Animation state
+Time drives bone matrices, sprite frames, and blend weights. An animation system computes poses from time. The renderer applies them to meshes.
+
+### AI perception
+Positions drive visibility, threat level, and awareness. A perception system computes which enemies can see the player, which are flanking, which are distracted. The behavior tree reads these results.
+
+### Physics queries
+Positions and velocities drive nearest enemy, line of sight, and predicted intercept points. A query system computes these. The AI and combat systems read them.
+
+### UI state
+Game state drives health bar widths, cooldown timers, and resource counters. A UI state system computes display values from raw data. The HUD reads them without touching game logic.
+
+### Weather effects
+Time and position drive wind direction, precipitation intensity, and fog density. A weather system computes these from game state. The renderer and physics system read them.
+
+## The Technique
+
+Compute derived values in a dedicated system:
+
+```fsharp
+let lightingSystem (dt: float32) (model: GameModel) : struct (GameModel * Cmd<Msg>) =
+  let time = model.TimeOfDay
+  model.Lighting.SkyColor <- getSkyColor time
+  model.Lighting.LightDirection <- getSunDirection time
+  model.Lighting.AmbientIntensity <- getAmbientIntensity time
+  struct (model, Cmd.none)
+```
+
+Store results in a lightweight model:
+
+```fsharp
+type LightingModel() =
+  member val SkyColor = Color.Black with get, set
+  member val LightDirection = Vector3.Zero with get, set
+  member val AmbientIntensity = 0.0f with get, set
+```
+
+The view reads pre-computed values — zero computation:
+
+```fsharp
+let view (ctx: GameContext) (model: GameModel) (buffer: RenderBuffer3D) =
+  let l = model.Lighting
+  buffer
+  |> Draw3D.beginCameraWith (Camera3D.render camera |> Camera3D.withClear l.SkyColor)
+  |> Draw3D.setAmbientLight { Color = l.SkyColor; Intensity = l.AmbientIntensity }
+  |> Draw3D.addDirectionalLight { Direction = l.LightDirection; ... }
+```
+
+Systems run in order, so derived systems run after their inputs:
+
+```fsharp
+System.start model
+|> System.pipeMutable (dayNightSystem dt)    // clock first
+|> System.pipeMutable (lightingSystem dt)    // compute from clock
+|> System.finish id
+```
+
+## Key Insight
+
+Moving computation from the view to a system means:
+- The view stays simple — it just reads state.
+- Systems can be tested independently — no renderer needed.
+- Derived values are available to all systems, not just rendering.
+- The render path does minimal work.
+
+The same derived value can feed multiple consumers. Lighting affects rendering, but also AI (visibility in dark areas) and gameplay (torch necessity). Pre-computing once means every consumer reads the same consistent value.
+
+## When to use
+
+- Any value that depends on multiple inputs and changes every frame.
+- Values needed by multiple systems — rendering, AI, UI, gameplay.
+- Expensive computations that would slow down the render path.
+- You want to test logic without running the renderer.
+
+## See also
+
+- [ThreeDSample/DayNight.fs](https://github.com/...) and [ThreeDSample/Lighting.fs](https://github.com/...) — day/night cycle as pre-computed state.
+- [Composable Systems](composable-systems.html) — how pre-computed state fits into the system pipeline.

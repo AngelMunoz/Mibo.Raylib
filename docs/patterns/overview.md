@@ -7,32 +7,29 @@ index: 61
 
 # Patterns Overview
 
-Common game development patterns for Mibo.Raylib. Each page presents a general, reusable technique you can apply to any game.
+General game development patterns for Mibo.Raylib. Each page presents a reusable technique — not an API reference, but a working recipe for problems every game developer faces.
 
-These are not API references. They are working recipes — concrete solutions to problems you will hit as your game grows.
+These patterns are independent. Apply one, two, or all of them depending on what your game needs.
 
 ## Available Patterns
 
 | Pattern | What it solves |
 |---------|---------------|
-| [System Pipeline](system-pipeline.html) | Organizing per-frame updates into a composable chain of independent systems |
-| [Async Chunk Loading](async-chunks.html) | Streaming large worlds in the background without blocking the main thread |
-| [3D Particles](particles-3d.html) | High-performance billboard particles with zero GC pressure |
-| [Multi-Renderer Compositing](multi-renderer.html) | Layering 2D HUD, minimaps, and debug overlays on top of a 3D scene |
-| [Day/Night Cycle](day-night.html) | Time-based lighting transitions as a standalone, testable system |
+| [Composable Systems](composable-systems.html) | Breaking monolithic updates into small, ordered, testable phases |
+| [Background Work](background-work.html) | Running heavy computation off the main thread without blocking the game loop |
+| [Pooled Particles](pooled-particles.html) | Zero-GC particle effects with pre-allocated arrays and fade-and-compact |
+| [Layered Rendering](layered-rendering.html) | Compositing multiple render passes — HUDs, minimaps, debug overlays |
+| [Pre-computed State](precomputed-state.html) | Computing derived values once per frame, reading them cheaply everywhere |
 
 ## How to read these pages
 
 Each pattern follows the same structure:
 
 1. **What and Why** — What the pattern does and when you need it.
-2. **When to use** — Concrete signals that this pattern applies.
-3. **Quick Start** — Minimal code to get it running.
-4. **Deep Dive** — How it works internally, with detailed explanations.
-5. **See also** — Cross-links to related docs.
+2. **Use Cases** — Multiple scenarios where this pattern applies.
+3. **The Technique** — The core idea, with generic code.
+4. **When to use** — Concrete signals that this pattern applies.
 
-## Source references
+## Samples
 
-For complete, working implementations of all these patterns, see the `samples/ThreeDSample/` project.
-
-See also: [System Pipeline](system.html) (API reference), [Scaling Mibo.Raylib](scaling.html) (architecture ladder).
+The `PlatformerSample` and `ThreeDSample` projects demonstrate these patterns in complete games. Each pattern page links to the relevant sample code.
