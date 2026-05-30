@@ -160,14 +160,8 @@ let view (ctx: GameContext) (model: GameModel) (buffer: RenderBuffer3D) =
 
   let p = model.Particles
 
-  if p.Count > 0 then
-    Draw3D.drawBillboardBatch
-      (Array.create p.Count p.Texture)
-      p.Positions
-      p.Sizes
-      p.Colors
-      p.Count
-      buffer
+  for i = 0 to p.Count - 1 do
+    Draw3D.drawBillboard p.Texture p.Positions[i] p.Sizes[i] p.Colors[i] buffer
     |> Draw3D.drop
 
   buffer

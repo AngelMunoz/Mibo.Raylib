@@ -169,6 +169,7 @@ type DiagnosticsModel() =
   member val PlayerY = 0.0f with get, set
   member val PlayerZ = 0.0f with get, set
   member val IsGrounded = false with get, set
+  member val ParticleCount = 0 with get, set
 
 type LightingModel() =
   member val SkyColor = Color.Black with get, set

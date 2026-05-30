@@ -53,26 +53,29 @@ let private spawnConfetti(model: GameModel) =
   let p = model.Particles
   let mutable pc = p.Count
 
-  for _ in 0..19 do
+  for _ in 0..100 do
     if pc < p.Positions.Length then
       let offset =
         Vector3(
-          float32(rng.NextDouble() * 2.0 - 1.0),
-          float32(rng.NextDouble() * 0.5),
-          float32(rng.NextDouble() * 2.0 - 1.0)
+          float32(rng.NextDouble() * 0.4 - 0.2),
+          float32(rng.NextDouble() * 0.2),
+          float32(rng.NextDouble() * 0.4 - 0.2)
         )
 
       p.Positions[pc] <-
         model.PlayerPosition + Vector3(0.0f, playerHeight * 0.5f, 0.0f) + offset
 
-      p.Sizes[pc] <- Vector2(0.3f, 0.3f)
+      p.Sizes[pc] <- Vector2(0.05f, 0.05f)
       p.Colors[pc] <- confettiColors[rng.Next(confettiColors.Length)]
+
+      let angle = float32(rng.NextDouble()) * MathF.PI * 6.0f
+      let speed = float32(rng.NextDouble()) * 3.0f + 5.0f
 
       p.Velocities[pc] <-
         Vector3(
-          float32(rng.NextDouble() * 6.0 - 3.0),
-          float32(rng.NextDouble() * 4.0 + 2.0),
-          float32(rng.NextDouble() * 6.0 - 3.0)
+          MathF.Cos(angle) * speed,
+          float32(rng.NextDouble()) * 3.0f + 2.0f,
+          MathF.Sin(angle) * speed
         )
 
       pc <- pc + 1
@@ -204,11 +207,11 @@ let particleSystem
 
   for i = 0 to count - 1 do
     let vel = velocities[i]
-    let newVel = Vector3(vel.X, vel.Y + gravity * dt * 0.05f, vel.Z)
+    let newVel = Vector3(vel.X, vel.Y + gravity * dt * 0.6f, vel.Z)
     velocities[i] <- newVel
     positions[i] <- positions[i] + newVel * dt
 
-  let fadeAmount = 60.0f * dt
+  let fadeAmount = 130.0f * dt
   let mutable writeIdx = 0
 
   for readIdx = 0 to count - 1 do
@@ -269,6 +272,7 @@ let inline diagnosticsSystem
   diag.PlayerY <- model.PlayerPosition.Y
   diag.PlayerZ <- model.PlayerPosition.Z
   diag.IsGrounded <- model.IsGrounded
+  diag.ParticleCount <- model.Particles.Count
   struct (model, Cmd.none)
 
 let inline lightingSystem

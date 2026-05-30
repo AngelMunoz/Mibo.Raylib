@@ -26,7 +26,7 @@ let view (ctx: GameContext) (model: GameModel) (buffer: RenderBuffer2D) =
   |> Draw.text {
     Font = diag.Font
     Text =
-      $"Time: {diag.TimeOfDay:F1}h  Pos: ({diag.PlayerX:F0},{diag.PlayerY:F0},{diag.PlayerZ:F0})  Grounded: {diag.IsGrounded}"
+      $"Time: {diag.TimeOfDay:F1}h  Pos: ({diag.PlayerX:F0},{diag.PlayerY:F0},{diag.PlayerZ:F0})  Grounded: {diag.IsGrounded}  Particles: {diag.ParticleCount}"
     Position = Vector2(10.0f, 35.0f)
     FontSize = 20.0f
     Spacing = 1.0f

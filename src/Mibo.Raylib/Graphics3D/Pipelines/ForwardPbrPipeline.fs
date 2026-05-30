@@ -872,25 +872,20 @@ type private PipelineContext
     (texture: Texture2D, position: Vector3, size: Vector2, color: Color)
     =
     if cameraActive then
-      let transform =
-        Matrix4x4.CreateBillboard(
-          position,
-          currentCamera.Position,
-          Vector3.UnitY,
-          Vector3.UnitY
-        )
+      ensureShaderInactive()
+      Rlgl.EnableShader(Rlgl.GetShaderIdDefault())
 
-      let scaled = Matrix4x4.CreateScale(size.X, size.Y, 1.0f)
-      let final = scaled * transform
+      let source =
+        Rectangle(0.0f, 0.0f, float32 texture.Width, float32 texture.Height)
 
-      let mat = {
-        Material3D.defaults with
-            AlbedoColor = color
-            AlbedoMap = ValueSome texture
-      }
-
-      let normalMatrix = computeNormalMatrix final
-      drawMeshCore Primitive3D.plane final normalMatrix mat
+      Raylib.DrawBillboardRec(
+        currentCamera,
+        texture,
+        source,
+        position,
+        size,
+        color
+      )
 
   member _.DrawLine3D(start: Vector3, finish: Vector3, color: Color) =
     if cameraActive then
@@ -935,6 +930,9 @@ type private PipelineContext
       // Switch back to regular shader for subsequent non-instanced draws
       ensureShaderInactive()
 
+  // TODO: Implement proper batching — compute billboard vertices manually and
+  // submit in a single rlBegin(RL_QUADS)/rlEnd block with one texture bind,
+  // instead of calling DrawBillboardRec per billboard (which flushes separately).
   member _.DrawBillboardBatch
     (
       textures: Texture2D[],
@@ -944,63 +942,26 @@ type private PipelineContext
       count: int
     ) =
     if cameraActive then
-      // Group billboards by texture to minimize material switches
-      let mutable batchStart = 0
+      ensureShaderInactive()
+      Rlgl.EnableShader(Rlgl.GetShaderIdDefault())
 
-      while batchStart < count do
-        let batchTexture = textures[batchStart]
-        let mutable batchEnd = batchStart + 1
+      for i = 0 to count - 1 do
+        let source =
+          Rectangle(
+            0.0f,
+            0.0f,
+            float32 textures[i].Width,
+            float32 textures[i].Height
+          )
 
-        while batchEnd < count && textures[batchEnd].Id = batchTexture.Id do
-          batchEnd <- batchEnd + 1
-
-        let batchSize = batchEnd - batchStart
-        let transforms = Array.zeroCreate<Matrix4x4> batchSize
-
-        for i = 0 to batchSize - 1 do
-          let idx = batchStart + i
-
-          let billboard =
-            Matrix4x4.CreateBillboard(
-              positions[idx],
-              currentCamera.Position,
-              Vector3.UnitY,
-              Vector3.UnitY
-            )
-
-          transforms[i] <-
-            Matrix4x4.CreateScale(sizes[idx].X, sizes[idx].Y, 1.0f) * billboard
-
-        let mat3d = {
-          Material3D.defaults with
-              AlbedoColor = colors[batchStart]
-              AlbedoMap = ValueSome batchTexture
-        }
-
-        // Switch to instanced shader
-        ensureShaderInactive()
-        Raylib.BeginShaderMode instancedShader
-        shaderActive <- true
-
-        if instLightsDirty then
-          uploadLightsInstanced()
-
-        setShaderVec3 instancedShader iLocCameraPos currentCamera.Position
-        setShaderInt instancedShader iLocShadowPass 0
-
-        setMaterialUniformsInstanced Matrix4x4.Identity mat3d
-        let raylibMat = getOrCreateInstancedMaterial mat3d
-
-        Raylib.DrawMeshInstanced(
-          Primitive3D.plane,
-          raylibMat,
-          transforms,
-          batchSize
+        Raylib.DrawBillboardRec(
+          currentCamera,
+          textures[i],
+          source,
+          positions[i],
+          sizes[i],
+          colors[i]
         )
-
-        ensureShaderInactive()
-
-        batchStart <- batchEnd
 
   member _.AddPointLight(light: PointLight3D) =
     pointLights.Add light
