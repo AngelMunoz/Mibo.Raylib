@@ -270,9 +270,8 @@ module Camera3D =
   /// Convert a raylib <see cref="T:Raylib_cs.Camera3D"/> to a Mibo <see cref="T:Mibo.Elmish.Camera"/>
   /// by computing view and projection matrices.
   /// </summary>
-  let fromRaylib (cam: Raylib_cs.Camera3D) : Camera = {
-    View =
-      Matrix4x4.CreateLookAt(cam.Position, cam.Target, cam.Up)
+  let fromRaylib(cam: Raylib_cs.Camera3D) : Camera = {
+    View = Matrix4x4.CreateLookAt(cam.Position, cam.Target, cam.Up)
     Projection =
       match cam.Projection with
       | CameraProjection.Perspective ->
@@ -295,7 +294,7 @@ module Camera3D =
   /// Create a rendering config from a raylib camera.
   /// Defaults: fullscreen, no clear, all post-process passes.
   /// </summary>
-  let render (camera: Raylib_cs.Camera3D) : Camera3DConfig = {
+  let render(camera: Raylib_cs.Camera3D) : Camera3DConfig = {
     Camera = camera
     Viewport = ValueNone
     ClearColor = ValueNone
@@ -303,45 +302,53 @@ module Camera3D =
   }
 
   /// <summary>Set viewport in normalized screen coordinates (0-1).</summary>
-  let withViewport (viewport: Raylib_cs.Rectangle) (config: Camera3DConfig) =
-    { config with Viewport = ValueSome viewport }
+  let withViewport (viewport: Raylib_cs.Rectangle) (config: Camera3DConfig) = {
+    config with
+        Viewport = ValueSome viewport
+  }
 
   /// <summary>Clear with this color before rendering.</summary>
-  let withClear (color: Color) (config: Camera3DConfig) =
-    { config with ClearColor = ValueSome color }
+  let withClear (color: Color) (config: Camera3DConfig) = {
+    config with
+        ClearColor = ValueSome color
+  }
 
   /// <summary>Use only specific post-process pass indices.</summary>
-  let withPostProcess (passes: int[]) (config: Camera3DConfig) =
-    { config with PostProcessPasses = ValueSome passes }
+  let withPostProcess (passes: int[]) (config: Camera3DConfig) = {
+    config with
+        PostProcessPasses = ValueSome passes
+  }
 
   /// <summary>Disable post-processing for this camera.</summary>
-  let withoutPostProcess (config: Camera3DConfig) =
-    { config with PostProcessPasses = ValueSome [||] }
+  let withoutPostProcess(config: Camera3DConfig) = {
+    config with
+        PostProcessPasses = ValueSome [||]
+  }
 
   // ── Convenience Constructors ──
 
   /// <summary>Split-screen left half. Clears with given color.</summary>
   let splitScreenLeft (camera: Raylib_cs.Camera3D) (clearColor: Color) =
     render camera
-    |> withViewport (Raylib_cs.Rectangle(0.0f, 0.0f, 0.5f, 1.0f))
+    |> withViewport(Raylib_cs.Rectangle(0.0f, 0.0f, 0.5f, 1.0f))
     |> withClear clearColor
 
   /// <summary>Split-screen right half. Clears with given color.</summary>
   let splitScreenRight (camera: Raylib_cs.Camera3D) (clearColor: Color) =
     render camera
-    |> withViewport (Raylib_cs.Rectangle(0.5f, 0.0f, 0.5f, 1.0f))
+    |> withViewport(Raylib_cs.Rectangle(0.5f, 0.0f, 0.5f, 1.0f))
     |> withClear clearColor
 
   /// <summary>Split-screen top half. Clears with given color.</summary>
   let splitScreenTop (camera: Raylib_cs.Camera3D) (clearColor: Color) =
     render camera
-    |> withViewport (Raylib_cs.Rectangle(0.0f, 0.0f, 1.0f, 0.5f))
+    |> withViewport(Raylib_cs.Rectangle(0.0f, 0.0f, 1.0f, 0.5f))
     |> withClear clearColor
 
   /// <summary>Split-screen bottom half. Clears with given color.</summary>
   let splitScreenBottom (camera: Raylib_cs.Camera3D) (clearColor: Color) =
     render camera
-    |> withViewport (Raylib_cs.Rectangle(0.0f, 0.5f, 1.0f, 0.5f))
+    |> withViewport(Raylib_cs.Rectangle(0.0f, 0.5f, 1.0f, 0.5f))
     |> withClear clearColor
 
   /// <summary>Picture-in-picture overlay. No post-process by default.</summary>

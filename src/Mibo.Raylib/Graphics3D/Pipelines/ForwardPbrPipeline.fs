@@ -1,4 +1,4 @@
-#nowarn "9"
+#nowarn 9
 
 namespace Mibo.Elmish.Graphics3D.Pipelines
 
@@ -800,7 +800,9 @@ type private PipelineContext
     cameraActive <- true
     currentCamera <- cam
 
-  member _.BeginCameraConfig(cfg: Camera3DConfig, windowWidth: int, windowHeight: int) =
+  member _.BeginCameraConfig
+    (cfg: Camera3DConfig, windowWidth: int, windowHeight: int)
+    =
     if cameraActive then
       ensureShaderInactive()
       Raylib.EndMode3D()
@@ -808,10 +810,10 @@ type private PipelineContext
     // Apply viewport and clear
     match cfg.Viewport with
     | ValueSome vp ->
-      let x = int (vp.X * float32 windowWidth)
-      let y = int (vp.Y * float32 windowHeight)
-      let w = int (vp.Width * float32 windowWidth)
-      let h = int (vp.Height * float32 windowHeight)
+      let x = int(vp.X * float32 windowWidth)
+      let y = int(vp.Y * float32 windowHeight)
+      let w = int(vp.Width * float32 windowWidth)
+      let h = int(vp.Height * float32 windowHeight)
 
       // Scissor-clear so we only clear the viewport region
       match cfg.ClearColor with
@@ -1139,8 +1141,7 @@ module private ShadowPassHelpers =
       match buffer[i] with
       | Command3D.DisableShadows -> shadowsEnabled <- false
       | Command3D.EnableShadows -> shadowsEnabled <- true
-      | Command3D.DrawMesh _ when shadowsEnabled ->
-        meshCount <- meshCount + 1
+      | Command3D.DrawMesh _ when shadowsEnabled -> meshCount <- meshCount + 1
       | Command3D.DrawSkinnedMesh _ when shadowsEnabled ->
         meshCount <- meshCount + 1
       | Command3D.DrawModel(model, _) when shadowsEnabled ->
@@ -1148,6 +1149,7 @@ module private ShadowPassHelpers =
       | Command3D.DrawMeshInstanced(_, _, _, instanceCount) when shadowsEnabled ->
         meshCount <- meshCount + instanceCount
       | _ -> ()
+
       i <- i + 1
 
     let arr = pool.Rent(max meshCount 1)
@@ -1170,15 +1172,18 @@ module private ShadowPassHelpers =
           let mesh = NativePtr.get model.Meshes mi
           arr[count] <- { Mesh = mesh; Transform = transform }
           count <- count + 1
-      | Command3D.DrawMeshInstanced(mesh, transforms, _, instanceCount)
-        when shadowsEnabled ->
+      | Command3D.DrawMeshInstanced(mesh, transforms, _, instanceCount) when
+        shadowsEnabled
+        ->
         for ti = 0 to instanceCount - 1 do
           arr[count] <- {
             Mesh = mesh
             Transform = transforms[ti]
           }
+
           count <- count + 1
       | _ -> ()
+
       i <- i + 1
 
     struct (arr, count)
@@ -1539,7 +1544,8 @@ type ForwardPbrPipeline
                       | ValueSome origin -> origin
                       | ValueNone ->
                         match atlasCfg.OriginStrategy with
-                        | ShadowOriginStrategy.CameraTarget -> activeCamera.Target
+                        | ShadowOriginStrategy.CameraTarget ->
+                          activeCamera.Target
                         | ShadowOriginStrategy.SceneCenter -> Vector3.Zero
                         | ShadowOriginStrategy.Custom f -> f activeCamera
 
@@ -1738,7 +1744,12 @@ type ForwardPbrPipeline
         | Command3D.DrawBillboardBatch(textures, positions, sizes, colors, count) ->
           context.DrawBillboardBatch(textures, positions, sizes, colors, count)
         | Command3D.BeginCamera cam -> context.BeginCamera(cam)
-        | Command3D.BeginCameraConfig cfg -> context.BeginCameraConfig(cfg, gameCtx.WindowWidth, gameCtx.WindowHeight)
+        | Command3D.BeginCameraConfig cfg ->
+          context.BeginCameraConfig(
+            cfg,
+            gameCtx.WindowWidth,
+            gameCtx.WindowHeight
+          )
         | Command3D.EndCamera -> context.EndCamera()
         | Command3D.SetShadowOrigin _ -> () // handled in pre-pass
         | Command3D.EnableShadows -> () // handled in shadow collection

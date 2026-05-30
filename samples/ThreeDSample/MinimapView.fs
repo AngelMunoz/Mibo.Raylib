@@ -1,6 +1,6 @@
 module ThreeDSample.Minimap
 
-#nowarn "9"
+#warnon 9
 
 open System.Collections.Generic
 open System.Numerics
@@ -201,41 +201,35 @@ let private viewInner
   let halfMinimap = minimapSize * 0.5f
 
   if minimap.TexReady then
-    buffer.Add(
-      Command2D.sprite {
-        Texture = minimap.Texture
-        Dest = Rectangle(minimapX, minimapY, minimapSize, minimapSize)
-        Source = Rectangle(0.0f, 0.0f, float32 texSize, float32 texSize)
-        Origin = Vector2.Zero
-        Rotation = 0.0f
-        Color = Color.White
-        Layer = 100<RenderLayer>
-      }
-    )
+    buffer
+    |> Draw.sprite {
+      Texture = minimap.Texture
+      Dest = Rectangle(minimapX, minimapY, minimapSize, minimapSize)
+      Source = Rectangle(0.0f, 0.0f, float32 texSize, float32 texSize)
+      Origin = Vector2.Zero
+      Rotation = 0.0f
+      Color = Color.White
+      Layer = 100<RenderLayer>
+    }
+    |> Draw.drop
 
   let centerX = minimapX + halfMinimap
   let centerY = minimapY + halfMinimap
   let facingX = sin playerFacing
   let facingZ = cos playerFacing
 
-  buffer.Add(
-    Command2D.fillCircle
-      (102<RenderLayer>, Color.Yellow)
-      (Vector2(centerX, centerY), 3.0f)
-  )
-
-  buffer.Add(
-    Command2D.lineThick
-      (102<RenderLayer>, Color.Yellow, 2.0f)
-      (Vector2(centerX, centerY),
-       Vector2(centerX + facingX * 10.0f, centerY + facingZ * 10.0f))
-  )
-
-  buffer.Add(
-    Command2D.rectOutline
-      (103<RenderLayer>, Color.White, 2.0f)
-      (Rectangle(minimapX, minimapY, minimapSize, minimapSize))
-  )
+  buffer
+  |> Draw.fillCircle
+    (102<RenderLayer>, Color.Yellow)
+    (Vector2(centerX, centerY), 3.0f)
+  |> Draw.lineThick
+    (102<RenderLayer>, Color.Yellow, 2.0f)
+    (Vector2(centerX, centerY),
+     Vector2(centerX + facingX * 10.0f, centerY + facingZ * 10.0f))
+  |> Draw.rectOutline
+    (103<RenderLayer>, Color.White, 2.0f)
+    (Rectangle(minimapX, minimapY, minimapSize, minimapSize))
+  |> Draw.drop
 
 let view (ctx: GameContext) (model: GameModel) (buffer: RenderBuffer2D) =
   viewInner ctx model.Minimap model.PlayerPosition model.PlayerFacing buffer

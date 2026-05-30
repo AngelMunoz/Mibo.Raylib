@@ -106,9 +106,14 @@ module Command3D =
     Command3D.DrawBillboardBatch(textures, positions, sizes, colors, count)
 
   let inline beginCamera(camera: Camera3D) = Command3D.BeginCamera(camera)
-  let inline beginCameraConfig(config: Camera3DConfig) = Command3D.BeginCameraConfig(config)
+
+  let inline beginCameraConfig(config: Camera3DConfig) =
+    Command3D.BeginCameraConfig(config)
+
   let inline endCamera() = Command3D.EndCamera
-  let inline setShadowOrigin(origin: Vector3) = Command3D.SetShadowOrigin(origin)
+
+  let inline setShadowOrigin(origin: Vector3) =
+    Command3D.SetShadowOrigin(origin)
 
   let inline setAmbientLight(light: AmbientLight3D) =
     Command3D.SetAmbientLight(light)
@@ -119,8 +124,8 @@ module Command3D =
   let inline addPointLight(light: PointLight3D) = Command3D.AddPointLight(light)
   let inline addSpotLight(light: SpotLight3D) = Command3D.AddSpotLight(light)
 
-  let inline enableShadows () = Command3D.EnableShadows
-  let inline disableShadows () = Command3D.DisableShadows
+  let inline enableShadows() = Command3D.EnableShadows
+  let inline disableShadows() = Command3D.DisableShadows
 
   let inline drawImmediate(action: unit -> unit) =
     Command3D.DrawImmediate(action)

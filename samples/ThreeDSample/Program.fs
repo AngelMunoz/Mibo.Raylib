@@ -89,8 +89,11 @@ let main _ =
             SpotBias = 0.001f
             SlopeScaleBias = 0.001f
           },
-          shadowAtlasConfig =
-            {ShadowAtlasConfig.defaults with Resolution = 4096; DirectionalLightSize = ValueSome 30.f}
+          shadowAtlasConfig = {
+            ShadowAtlasConfig.defaults with
+                Resolution = 4096
+                DirectionalLightSize = ValueSome 30.f
+          }
 
         )
 

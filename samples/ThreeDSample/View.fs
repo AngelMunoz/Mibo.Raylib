@@ -1,5 +1,7 @@
 module ThreeDSample.View
 
+#nowarn 9
+
 open System
 open System.Collections.Generic
 open System.Numerics
@@ -49,11 +51,9 @@ let private resolveMeshesAndMaterial(blockType: BlockType) =
       if m.MeshCount > 0 then
         [|
           for mi = 0 to m.MeshCount - 1 do
-            #nowarn 9
             let mesh = NativePtr.get m.Meshes mi
             let matIdx = NativePtr.get m.MeshMaterial mi
             let raylibMat = NativePtr.get m.Materials matIdx
-            #warnon 9
             struct (mesh, Material3D.fromRaylibMaterial raylibMat)
         |]
       else
@@ -98,9 +98,8 @@ let view (ctx: GameContext) (model: GameModel) (buffer: RenderBuffer3D) =
     )
 
   buffer
-  |> Draw3D.beginCameraWith (
-    Camera3D.render camera
-    |> Camera3D.withClear l.SkyColor
+  |> Draw3D.beginCameraWith(
+    Camera3D.render camera |> Camera3D.withClear l.SkyColor
   )
   |> Draw3D.setAmbientLight {
     Color = l.AmbientColor
@@ -142,7 +141,7 @@ let view (ctx: GameContext) (model: GameModel) (buffer: RenderBuffer3D) =
         buffer
 
   for light in model.VisibleLights do
-    buffer.Add(Command3D.addPointLight light)
+    Draw3D.addPointLight light buffer |> Draw3D.drop
 
   let playerModel =
     loadOrGetModel model.ModelCache KenneyModels.characterOobi ctx
@@ -159,8 +158,7 @@ let view (ctx: GameContext) (model: GameModel) (buffer: RenderBuffer3D) =
 
     Raymath.MatrixMultiply(rot, trans)
 
-  buffer.Add(Command3D.drawModel playerModel playerTransform)
-
-  buffer |> Draw3D.endCamera |> Draw3D.drop
-
-  Draw3D.drop buffer
+  buffer
+  |> Draw3D.drawModel playerModel playerTransform
+  |> Draw3D.endCamera
+  |> Draw3D.drop

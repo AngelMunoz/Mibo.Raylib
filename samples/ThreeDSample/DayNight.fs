@@ -95,7 +95,12 @@ let getPrimaryLightDirection (time: float32) (arcRadius: float32) : Vector3 =
   if time >= 6.0f && time <= 18.0f then
     celestialArc ((time - 6.0f) / 12.0f) arcRadius
   else
-    let t = if time > 18.0f then (time - 18.0f) / 12.0f else (time + 6.0f) / 12.0f
+    let t =
+      if time > 18.0f then
+        (time - 18.0f) / 12.0f
+      else
+        (time + 6.0f) / 12.0f
+
     celestialArc t arcRadius
 
 let getPrimaryLightColor(time: float32) : Color =
@@ -121,6 +126,7 @@ let getPrimaryLightColor(time: float32) : Color =
 let getPrimaryLightIntensity(time: float32) : float32 =
   if time >= 6.0f && time <= 18.0f then
     let t = (time - 6.0f) / 12.0f
+
     if t * arcDegrees < fadeDegrees then
       t * arcDegrees / fadeDegrees
     elif (1.0f - t) * arcDegrees < fadeDegrees then
@@ -129,8 +135,10 @@ let getPrimaryLightIntensity(time: float32) : float32 =
       1.0f
   else
     let t =
-      if time > 18.0f then (time - 18.0f) / 12.0f
-      else (time + 6.0f) / 12.0f
+      if time > 18.0f then
+        (time - 18.0f) / 12.0f
+      else
+        (time + 6.0f) / 12.0f
 
     let maxMoon = 0.3f
 
