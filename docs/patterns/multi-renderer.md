@@ -32,21 +32,7 @@ Program.mkProgram init update
 
 > _**IMPORTANT**_: Register the 2D overlay **first**, then the 3D scene. The 3D renderer clears the screen. The 2D renderer draws on top without clearing.
 
-## Deep Dive: ThreeDSample's renderer setup
-
-From `Program.fs:90`:
-
-```fsharp
-|> Program.withRenderer (fun () ->
-    Renderer2D.createWith Renderer2DConfig.noClear overlayView)
-|> Program.withRenderer (fun () ->
-    let pipeline =
-      ForwardPbrPipeline(
-        shadowBiasConfig = { ... },
-        shadowAtlasConfig = { ... }
-      )
-    Renderer3D.create pipeline View.view)
-```
+## Deep Dive
 
 ### Why this order works
 
@@ -61,11 +47,12 @@ The overlay view is a normal 2D view function. It draws on a `RenderBuffer2D`:
 
 ```fsharp
 let overlayView (ctx: GameContext) (model: GameModel) (buffer: RenderBuffer2D) =
-  Minimap.view ctx model buffer
-  Diagnostics.view ctx model buffer
+  drawMinimap model buffer
+  drawDiagnostics model buffer
+  drawHealthBar model buffer
 ```
 
-The minimap draws a textured quad with player position and facing direction. The diagnostics draw text showing FPS, chunk count, score, and position.
+Each helper draws its own content — the overlay view just composes them.
 
 ### `Renderer2DConfig.noClear`
 
@@ -87,7 +74,7 @@ This tells the 2D renderer to skip clearing the framebuffer. Without it, the 2D 
 | Use case | How |
 |----------|-----|
 | HUD overlay | `Renderer2D.createWith noClear` + text/sprite drawing |
-| Minimap | 2D renderer with a texture generated from chunk data |
+| Minimap | 2D renderer with a texture generated from world data |
 | Debug overlay | 2D renderer drawing lines, text, and shapes |
 | Split-screen | Two `Renderer3D.create` with different viewports |
 | Post-process | Single 3D renderer with a custom pipeline |
@@ -97,5 +84,9 @@ This tells the 2D renderer to skip clearing the framebuffer. Without it, the 2D 
 ### Alternative: 2D overlay inside 3D
 
 For some UI elements (health bars above enemies), you might want to draw 2D content inside the 3D view using `Draw3D.drawBillboard`. Use multi-renderer compositing for screen-space UI (HUD, minimap) and billboards for world-space UI.
+
+### For a complete example
+
+See `samples/ThreeDSample/Program.fs` for a full renderer setup.
 
 See also: [3D Rendering Overview](graphics3d/overview.html), [Rendering Overview](rendering.html).

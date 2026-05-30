@@ -32,27 +32,27 @@ model.PendingChunks : HashSet<struct (int * int)>
 // 3. Generate on background thread, deliver result as a message
 let generateChunkAsync (cx: int) (cz: int) (seed: int) : Cmd<Msg> =
   Cmd.ofAsync
-    (async { return generateChunk cx cz seed })
+    (async { return generateTerrain cx cz seed })
     (fun chunk -> ChunkCreated(struct (cx, cz), chunk))
-    (fun _ex -> ChunkCreated(struct (cx, cz), generateChunk cx cz seed))
+    (fun _ex -> ChunkCreated(struct (cx, cz), generateTerrain cx cz seed))
 ```
 
 ## Deep Dive
 
 ### The chunk system
 
-`chunkSystem` runs every frame. It checks which chunks near the player are missing, queues async generation for each, and evicts distant chunks.
+A chunk system runs every frame. It checks which chunks near the player are missing, queues async generation for each, and evicts distant chunks.
 
 ```fsharp
 let chunkSystem (dt: float32) (model: GameModel) : struct (GameModel * Cmd<Msg>) =
   // Which chunk is the player in?
-  let pcx = int(Math.Floor(float model.PlayerPosition.X / float chunkWorldWidth))
-  let pcz = int(Math.Floor(float model.PlayerPosition.Z / float chunkWorldDepth))
+  let pcx = int(Math.Floor(float playerPos.X / float chunkSize))
+  let pcz = int(Math.Floor(float playerPos.Z / float chunkSize))
 
   let keysToGenerate = ResizeArray<struct (int * int)>()
 
-  for x in pcx - chunkLoadRadius .. pcx + chunkLoadRadius do
-    for z in pcz - chunkLoadRadius .. pcz + chunkLoadRadius do
+  for x in pcx - loadRadius .. pcx + loadRadius do
+    for z in pcz - loadRadius .. pcz + loadRadius do
       let key = struct (x, z)
 
       if not(model.Chunks.ContainsKey(key))
@@ -60,7 +60,7 @@ let chunkSystem (dt: float32) (model: GameModel) : struct (GameModel * Cmd<Msg>)
         model.PendingChunks.Add(key) |> ignore
         keysToGenerate.Add(key)
 
-  evictDistantChunks model.PlayerPosition model.Chunks model.KeysToRemove
+  evictDistantChunks playerPos model.Chunks model.KeysToRemove
 
   if keysToGenerate.Count = 0 then
     struct (model, Cmd.none)
@@ -96,20 +96,20 @@ Chunks far from the player get removed to free memory:
 
 ```fsharp
 let evictDistantChunks playerPos chunks keysToRemove =
-  let pcx = int(Math.Floor(float playerPos.X / float chunkWorldWidth))
-  let pcz = int(Math.Floor(float playerPos.Z / float chunkWorldDepth))
+  let pcx = int(Math.Floor(float playerPos.X / float chunkSize))
+  let pcz = int(Math.Floor(float playerPos.Z / float chunkSize))
   keysToRemove.Clear()
 
   for KeyValue(key, _) in chunks do
     let struct (cx, cz) = key
-    if abs(cx - pcx) > chunkEvictRadius || abs(cz - pcz) > chunkEvictRadius then
+    if abs(cx - pcx) > evictRadius || abs(cz - pcz) > evictRadius then
       keysToRemove.Add key
 
   for i = 0 to keysToRemove.Count - 1 do
     chunks.TryRemove(keysToRemove[i]) |> ignore
 ```
 
-> _**TIP**_: Use `chunkLoadRadius` for loading and a larger `chunkEvictRadius` for eviction. This creates a buffer zone — chunks don't load and unload every time the player crosses a boundary.
+> _**TIP**_: Use `loadRadius` for loading and a larger `evictRadius` for eviction. This creates a buffer zone — chunks don't load and unload every time the player crosses a boundary.
 
 ### Thread safety
 
@@ -119,13 +119,13 @@ let evictDistantChunks playerPos chunks keysToRemove =
 
 ### Error handling
 
-The error callback in `Cmd.ofAsync` provides a fallback. In the sample it retries synchronously, but you could return a placeholder chunk or skip it:
+The error callback in `Cmd.ofAsync` provides a fallback. You can retry synchronously, return a placeholder chunk, or skip it:
 
 ```fsharp
 Cmd.ofAsync
-  (async { return generateChunk cx cz seed })
+  (async { return generateTerrain cx cz seed })
   (fun chunk -> ChunkCreated(struct (cx, cz), chunk))
-  (fun _ex -> ChunkCreated(struct (cx, cz), generateChunk cx cz seed))
+  (fun _ex -> ChunkCreated(struct (cx, cz), generateTerrain cx cz seed))
 ```
 
 ### Loading chunks at startup
@@ -134,14 +134,18 @@ For the initial area, generate synchronously so chunks are ready before the firs
 
 ```fsharp
 let loadInitialChunks (model: GameModel) =
-  let pcx = int(Math.Floor(float spawnPosition.X / float chunkWorldWidth))
-  let pcz = int(Math.Floor(float spawnPosition.Z / float chunkWorldDepth))
+  let pcx = int(Math.Floor(float spawnPosition.X / float chunkSize))
+  let pcz = int(Math.Floor(float spawnPosition.Z / float chunkSize))
 
-  for x in pcx - chunkLoadRadius .. pcx + chunkLoadRadius do
-    for z in pcz - chunkLoadRadius .. pcz + chunkLoadRadius do
+  for x in pcx - loadRadius .. pcx + loadRadius do
+    for z in pcz - loadRadius .. pcz + loadRadius do
       let key = struct (x, z)
       if not(model.Chunks.ContainsKey key) then
-        model.Chunks[key] <- generateChunk x z model.Seed
+        model.Chunks[key] <- generateTerrain x z model.Seed
 ```
+
+### For a complete example
+
+See `samples/ThreeDSample/ChunkSystem.fs` for a full implementation.
 
 See also: [System Pipeline](system-pipeline.html), [3D Rendering Overview](graphics3d/overview.html).

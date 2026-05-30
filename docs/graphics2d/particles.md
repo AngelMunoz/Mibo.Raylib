@@ -41,7 +41,7 @@ buffer
 |> ParticleDraw.particles particleTexture particles particleCount 10<RenderLayer>
 ```
 
-`ParticleDraw.particles` produces a single `IRenderCommand2D` that draws all particles in a loop. All particles share one texture.
+`ParticleDraw.particles` adds a single command to the buffer that draws all particles in a loop. All particles share one texture.
 
 ## Simulation helpers
 

@@ -44,37 +44,25 @@ let inputSystem (dt: float32) (model: Model) : struct (Model * Cmd<Msg>) =
   struct (model, Cmd.none)
 ```
 
-## Deep Dive: ThreeDSample's 9-system pipeline
-
-The `ThreeDSample` game runs 9 systems every frame. Here is the actual pipeline from `Systems.fs:370`:
-
-```fsharp
-System.start model
-|> System.pipeMutable (inputSystem dt)
-|> System.pipeMutable (physicsSystem dt)
-|> System.pipeMutable (chunkSystem dt)
-|> System.pipeMutable (particleSystem dt)
-|> System.pipeMutable (minimapSystem dt)
-|> System.pipeMutable (dayNightSystem dt)
-|> System.pipeMutable (lightingSystem dt)
-|> System.pipeMutable (mushroomLightSystem dt)
-|> System.pipeMutable (diagnosticsSystem dt)
-|> System.finish id
-```
+## Deep Dive
 
 ### System responsibilities
 
+A typical game might run these systems each frame:
+
 | System | What it does | Emits commands? |
 |--------|-------------|-----------------|
-| `inputSystem` | Reads held actions, updates camera yaw/pitch | No |
-| `physicsSystem` | Gravity, movement, collision, camera follow | No |
-| `chunkSystem` | Loads/unloads chunks around the player | Yes (`ChunkCreated`) |
-| `particleSystem` | Physics + fade-and-compact for confetti | No |
-| `minimapSystem` | Regenerates minimap image periodically | Yes (`MinimapReady`) |
+| `inputSystem` | Reads held actions, updates camera or character state | No |
+| `physicsSystem` | Gravity, movement, collision detection | No |
+| `chunkSystem` | Loads/unloads world chunks around the player | Yes (`ChunkCreated`) |
+| `particleSystem` | Physics integration + fade-and-compact for particles | No |
+| `aiSystem` | Runs NPC behavior, pathfinding | No |
 | `dayNightSystem` | Advances time-of-day clock | No |
-| `lightingSystem` | Pre-computes sky, ambient, and sun colors | No |
-| `mushroomLightSystem` | Collects nearby glowing mushrooms | Yes (`MushroomLightsReady`) |
-| `diagnosticsSystem` | Copies stats into diagnostics model | No |
+| `lightingSystem` | Pre-computes sky, ambient, and directional light colors | No |
+| `minimapSystem` | Regenerates minimap image periodically | Yes (`MinimapReady`) |
+| `diagnosticsSystem` | Copies stats into diagnostics model for overlay | No |
+
+You don't need all of these — pick the systems your game requires and compose them.
 
 ### Why `pipeMutable` and not `pipe`?
 
@@ -84,14 +72,29 @@ Use `pipe` when you want immutable updates (functional style). Use `pipeMutable`
 
 ### Ordering matters
 
-The pipeline runs top-to-bottom. In ThreeDSample the order is:
+The pipeline runs top-to-bottom. The general rule:
 
-1. **Input first** — so physics sees fresh input.
-2. **Physics second** — so chunks and particles see the new player position.
-3. **Chunks third** — so the minimap sees loaded chunks.
-4. **Lighting last** — so it reads the final time-of-day.
+1. **Input first** — so downstream systems see fresh input.
+2. **Simulation second** — physics, AI, particles, world streaming.
+3. **Derived state third** — lighting, minimap, diagnostics.
+4. **Rendering last** — reads the final model state.
 
 > _**TIP**_: Put systems that produce data before systems that consume it. Input before physics. Physics before rendering.
+
+### Adding or removing systems
+
+To add a new system, write a function with the standard signature and insert it at the right position in the pipeline:
+
+```fsharp
+System.start model
+|> System.pipeMutable (inputSystem dt)
+|> System.pipeMutable (weatherSystem dt)   // new
+|> System.pipeMutable (physicsSystem dt)
+|> System.pipeMutable (particleSystem dt)
+|> System.finish id
+```
+
+To disable a system, comment it out. No other code changes needed.
 
 ### Snapshot boundaries
 
@@ -107,5 +110,9 @@ System.start model
 ```
 
 After the snapshot, you can't accidentally call a mutable phase. The compiler enforces it.
+
+### For a complete example
+
+See `samples/ThreeDSample/Systems.fs` for a full implementation with nine systems.
 
 See also: [System Pipeline API](system.html), [Scaling Mibo.Raylib](scaling.html).

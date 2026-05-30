@@ -9,13 +9,13 @@ index: 64
 
 ## What and Why
 
-Particles add juice — confetti on jumps, dust on landings, sparks on hits. You need hundreds of them without killing frame rate or triggering garbage collection.
+Particles add juice — explosions, dust clouds, sparks, smoke, fire, confetti. You need hundreds of them without killing frame rate or triggering garbage collection.
 
 This pattern uses pre-allocated parallel arrays (positions, velocities, sizes, colors) and a fade-and-compact loop that removes dead particles in-place. No lists, no allocations per particle, no GC pressure.
 
 ## When to use
 
-- You need short-lived visual effects (explosions, confetti, dust, sparks).
+- You need short-lived visual effects (explosions, dust, sparks, smoke, fire).
 - You want hundreds of particles at 60+ FPS.
 - You're already using the 3D rendering pipeline with billboards.
 - You care about GC pauses (console games, VR, competitive).
@@ -39,20 +39,23 @@ All arrays are pre-allocated to a max capacity. `Count` tracks how many slots ar
 ### Spawn particles by writing directly into arrays
 
 ```fsharp
-let spawnConfetti (model: GameModel) =
+let spawnBurst (particles: ParticleModel) (origin: Vector3) (colors: Color[]) =
   let rng = System.Random.Shared
-  let p = model.Particles
-  let mutable pc = p.Count
+  let mutable pc = particles.Count
 
   for _ in 0..100 do
-    if pc < p.Positions.Length then
-      p.Positions[pc] <- model.PlayerPosition + offset
-      p.Sizes[pc] <- Vector2(0.05f, 0.05f)
-      p.Colors[pc] <- confettiColors[rng.Next(confettiColors.Length)]
-      p.Velocities[pc] <- Vector3(cos angle * speed, upSpeed, sin angle * speed)
+    if pc < particles.Positions.Length then
+      let angle = rng.NextSingle() * MathF.Tau
+      let speed = 2.0f + rng.NextSingle() * 3.0f
+      let upSpeed = 4.0f + rng.NextSingle() * 2.0f
+
+      particles.Positions[pc] <- origin
+      particles.Sizes[pc] <- Vector2(0.05f, 0.05f)
+      particles.Colors[pc] <- colors[rng.Next(colors.Length)]
+      particles.Velocities[pc] <- Vector3(cos angle * speed, upSpeed, sin angle * speed)
       pc <- pc + 1
 
-  p.Count <- pc
+  particles.Count <- pc
 ```
 
 No `ResizeArray.add`, no list cons, no allocation. Just array index writes.
@@ -133,7 +136,7 @@ for i = 0 to p.Count - 1 do
   |> Draw3D.drop
 ```
 
-> _**TIP**_: Use a 1x1 white texture for solid-color particles. Tint with the `color` parameter. For textured particles (smoke, fire), load a sprite atlas.
+> _**TIP**_: Use a 1x1 white texture for solid-color particles (sparks, confetti). Tint with the `color` parameter. For textured particles (smoke, fire), load a sprite atlas.
 
 ### Performance characteristics
 
@@ -147,16 +150,12 @@ for i = 0 to p.Count - 1 do
 
 > _**NOTE**_: For thousands of particles, switch from per-particle `drawBillboard` to `drawBillboardBatch` which sends all particles in a single draw call.
 
-### Triggering particles
+### Triggering particles from any system
 
-In the sample, confetti spawns on jump:
+The particle system doesn't care where particles come from. Any system can call `spawnBurst` — input (jump effects), physics (landing dust), combat (hit sparks), or AI (enemy death explosions). Just write into the shared `ParticleModel` arrays.
 
-```fsharp
-if model.IsGrounded && model.Actions.Started.Contains(GameAction.Jump) then
-  spawnConfetti model
-  // apply jump velocity...
-```
+### For a complete example
 
-You can spawn from any system. The particle system doesn't care where particles come from.
+See `samples/ThreeDSample/Particles.fs` for a full implementation.
 
 See also: [3D Rendering Overview](graphics3d/overview.html), [System Pipeline](system-pipeline.html).

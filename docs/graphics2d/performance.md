@@ -52,20 +52,14 @@ for hp in healthBars do
     buffer |> Draw.fillRect (10<RenderLayer>, Color.Red) hp.Rect
 ```
 
-## 4. Prefer struct commands for custom rendering
+## 4. Struct commands are already zero-allocation
 
-If you implement `IRenderCommand2D` directly (see [Custom Commands](custom-commands.html)), use a struct to avoid heap allocations:
+`Command2D` is a `[<Struct>]` discriminated union — every command is stack-allocated with no heap pressure. For custom rendering logic, use `DrawImmediate` which is also zero-allocation:
 
 ```fsharp
-// Good: zero heap allocation per command
-[<Struct>]
-type MyCommand(data: int, layer: int<RenderLayer>) =
-    interface IRenderCommand2D with
-        member _.Layer = layer
-        member _.Render _ = ...
-
-// Avoid: class or object-expression in a loop
-// (each object-expression allocates)
+// Good: DrawImmediate is zero-allocation
+buffer |> Draw.drawImmediate 10<RenderLayer> (fun () ->
+    Raylib.DrawCircleV(pos, 5f, Color.Red))
 ```
 
 ## 5. Minimize state-switching commands
@@ -87,7 +81,7 @@ raylib's internal batching is most efficient when consecutive draw calls use the
 
 ## 7. The buffer is allocation-free after warmup
 
-`RenderBuffer2D` uses `ArrayPool<IRenderCommand2D>` internally. It grows as needed but never allocates per-frame once it reaches capacity. Default initial capacity is 1024 commands.
+`RenderBuffer2D` uses `ArrayPool<Command2D>` internally. It grows as needed but never allocates per-frame once it reaches capacity. Default initial capacity is 1024 commands.
 
 ## 8. Culling
 

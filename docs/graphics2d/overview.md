@@ -7,7 +7,7 @@ index: 11
 
 # 2D Rendering
 
-The 2D rendering pipeline is a **deferred command system**: each frame, your view function populates a `RenderBuffer2D` with `IRenderCommand2D` values, and the `Renderer2D<'Model>` sorts them by layer and executes them in order.
+The 2D rendering pipeline is a **deferred command system**: each frame, your view function populates a `RenderBuffer2D` with `Command2D` values, and the `Renderer2D<'Model>` sorts them by layer and executes them in order.
 
 ## What and Why
 
@@ -56,7 +56,6 @@ Two ways to add commands to the buffer:
 |-------|-------------|
 | `Draw.*` DSL | Everyday use — pipe-friendly, supports partial application |
 | `Command2D.*` factories | When you need to store or reuse commands without a buffer |
-| `IRenderCommand2D` directly | Custom rendering logic (see [Custom Commands](custom-commands.html)) |
 
 ## Lighting
 
@@ -98,6 +97,6 @@ buffer
 - [Buffer & Commands](buffer-and-commands.html) — How to build every type of draw command
 - [Lighting & Shadows](lighting.html) — Point, directional, ambient lights + SDF shadows
 - [Particles](particles.html) — Batched textured quads
-- [Custom Commands](custom-commands.html) — Implementing IRenderCommand2D
+- [Custom Commands](custom-commands.html) — Custom rendering with DrawImmediate
 - [Performance](performance.html) — Writing efficient rendering code
 - [Camera](../camera.html) — Cameras and coordinate transforms
