@@ -73,7 +73,7 @@ let main _ =
           Width = 1280
           Height = 720
           Title = "Mibo 3D Platformer"
-          TargetFPS = 60
+          TargetFPS = 120
     })
     |> Program.withInput
     |> Program.withSubscription subscribe
@@ -87,8 +87,11 @@ let main _ =
             DirectionalBias = 0.002f
             PointBias = 0.01f
             SpotBias = 0.001f
-            SlopeScaleBias = 0.0005f
-          }
+            SlopeScaleBias = 0.001f
+          },
+          shadowAtlasConfig =
+            {ShadowAtlasConfig.defaults with Resolution = 4096; DirectionalLightSize = ValueSome 30.f}
+
         )
 
       Renderer3D.create pipeline View.view)
