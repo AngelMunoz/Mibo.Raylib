@@ -285,7 +285,13 @@ type Renderer2D<'Model>
       | Command2D.LineStrip(points, color, _) ->
         Raylib.DrawLineStrip(points, points.Length, color)
       | Command2D.Bezier(start, control, finish, thickness, color, _) ->
-        Raylib.DrawLineBezier(start, finish, thickness, color)
+        Raylib.DrawSplineSegmentBezierQuadratic(
+          start,
+          control,
+          finish,
+          thickness,
+          color
+        )
       | Command2D.Triangle(v1, v2, v3, color, _) ->
         Raylib.DrawTriangle(v1, v2, v3, color)
       | Command2D.TriangleFan(points, color, _) ->

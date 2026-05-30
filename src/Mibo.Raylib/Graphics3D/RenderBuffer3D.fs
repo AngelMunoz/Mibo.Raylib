@@ -66,3 +66,4 @@ type RenderBuffer3D([<Struct>] ?capacity: int) =
     member _.Dispose() =
       ArrayPool<Command3D>.Shared.Return(items)
       items <- Array.empty
+      count <- 0
