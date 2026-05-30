@@ -38,4 +38,23 @@ The 2D pipeline is built on `Renderer2D<'Model>` in the `Mibo.Elmish.Graphics2D`
 
 ## 3D Rendering
 
-The 3D pipeline (coming soon) is built on `Batch3DRenderer<'Model>` in the `Mibo.Elmish.Graphics3D` namespace.
+The 3D pipeline is built on `Renderer3D<'Model>` in the `Mibo.Elmish.Graphics3D` namespace. It uses a pluggable `IRenderPipeline3D` that interprets `Command3D` values — draw meshes, billboards, lights, shadows, and post-processing passes.
+
+- [3D Rendering Overview](graphics3d/overview.html) — What, Why, When
+- [Camera](camera.html) — `Camera3DConfig`, split-screen, overlay cameras
+
+## Multi-Renderer Compositing
+
+You can combine 2D and 3D renderers in the same program. The 3D scene renders first, then the 2D renderer composites on top (HUD, menus, debug overlays).
+
+```fsharp
+Program.mkProgram init update
+|> Program.withRenderer (fun () ->
+    Renderer3D.create pipeline view3D)
+|> Program.withRenderer (fun () ->
+    Renderer2D.create view2D)
+```
+
+The 2D renderer uses `Renderer3DConfig.noClear` (or `Renderer2DConfig.noClear`) to skip clearing the background, preserving the 3D scene underneath. Per-camera clear control is also available via `Camera3DConfig` and `Camera2DConfig`.
+
+See also: [Camera](camera.html) for multi-camera patterns.

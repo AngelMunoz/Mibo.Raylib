@@ -189,6 +189,31 @@ Point light shadows are bounded by the light's radius, so they're cheaper than d
 
 Sprites drawn with `Draw.sprite` (instead of `LightDraw.litSprite`) render at full brightness, ignoring lighting. This is useful for UI, minimaps, or any element that shouldn't be affected by scene lighting.
 
+## Shadow toggle
+
+You can enable or disable shadows globally via `LightContext2D.ShadowsEnabled`:
+
+```fsharp
+// Disable shadows (property)
+model.Lighting.ShadowsEnabled <- false
+
+// Or use commands in the render buffer
+buffer
+|> LightDraw.disableShadows model.Lighting 90<RenderLayer>
+|> // ... sprites drawn here won't cast/receive shadows ...
+|> LightDraw.enableShadows model.Lighting 100<RenderLayer>
+```
+
+`Reset()` re-enables shadows automatically each frame.
+
+When to disable shadows:
+
+- **Performance** — Shadows are the most expensive part of the lighting pipeline. Disable on low-end hardware or when you have many shadow-casting lights.
+- **Stylized look** — Flat lighting without shadows suits certain art styles (e.g., retro pixel art).
+- **Interior scenes** — Disable directional shadows in small rooms where they add little visual value.
+
+> _**TIP**_: Disable shadows per-section rather than globally. Use `disableShadows`/`enableShadows` to skip shadows only for specific layers (e.g., background tiles) while keeping them for foreground objects.
+
 ## See Also
 
 - [Particles](particles.html) — Batched particle rendering

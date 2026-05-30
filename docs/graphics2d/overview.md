@@ -73,6 +73,26 @@ buffer
 
 See [Lighting & Shadows](lighting.html) for details.
 
+## Multi-camera rendering
+
+Use `Camera2DConfig` for viewport-based rendering, split-screen, or overlay cameras:
+
+```fsharp
+// Split-screen left/right
+let left = Camera2D.splitScreenLeft cam1 Color.CornflowerBlue
+let right = Camera2D.splitScreenRight cam2 Color.DarkGreen
+
+buffer
+|> Draw.beginCameraWith 0<RenderLayer> left
+|> // ... left viewport ...
+|> Draw.endCamera 100<RenderLayer>
+|> Draw.beginCameraWith 200<RenderLayer> right
+|> // ... right viewport ...
+|> Draw.endCamera 300<RenderLayer>
+```
+
+`Camera2DConfig` controls viewport (normalized 0–1 coordinates) and clear color. See [Camera](../camera.html) for the full API.
+
 ## Next steps
 
 - [Buffer & Commands](buffer-and-commands.html) — How to build every type of draw command

@@ -81,16 +81,24 @@ Run one of the samples, then copy its program setup (composition root) into your
   - [System pipeline (phases + snapshot)](system.html)
   - [Service composition](services.html)
   - [Scaling Mibo.Raylib (Simple → Complex)](scaling.html)
+  - [F# For Perf](performance.html)
 
  - Rendering
    - [Rendering Overview](rendering.html)
+   - [Camera](camera.html)
+   - [Shaders](shaders.html)
+   - [Culling](culling.html)
    - [2D Rendering](graphics2d/overview.html)
+   - [3D Rendering](graphics3d/overview.html)
 
  - Input
    - [Input (raw + mapped)](input.html)
 
  - Assets
    - [Assets (loading + caching)](assets.html)
+
+ - Amenities
+   - [Animation](animation.html)
 
 ## Built on
 

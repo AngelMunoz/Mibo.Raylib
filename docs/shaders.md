@@ -70,14 +70,19 @@ Set shader parameters using `Raylib.SetShaderValue`:
 
 ```fsharp
 open System.Numerics
+open System.Runtime.InteropServices
 open Raylib_cs
 
 // Set a float uniform
-Raylib.SetShaderValue(myShader, Raylib.GetShaderLocation(myShader, "tint"), Vector4.One, ShaderUniformDataType.ShaderUniformVec4)
+let loc = Raylib.GetShaderLocation(myShader, "tint")
+let mutable value = 1.0f
+use p = fixed &value
+Raylib.SetShaderValue(myShader, loc, NativePtr.toVoidPtr p, ShaderUniformDataType.ShaderUniformFloat)
 
-// Set a matrix uniform
+// Set a matrix uniform (no fixed needed)
 let world = Matrix4x4.Identity
-Raylib.SetShaderValue(myShader, Raylib.GetShaderLocation(myShader, "world"), world, ShaderUniformDataType.ShaderUniformMat4)
+let matLoc = Raylib.GetShaderLocation(myShader, "world")
+Raylib.SetShaderValueMatrix(myShader, matLoc, world)
 ```
 
 | Uniform Type | `ShaderUniformDataType` |
@@ -87,6 +92,52 @@ Raylib.SetShaderValue(myShader, Raylib.GetShaderLocation(myShader, "world"), wor
 | `Vector3` | `ShaderUniformVec3` |
 | `Vector4` | `ShaderUniformVec4` |
 | `Matrix4x4` | `ShaderUniformMat4` |
+
+> _**IMPORTANT**_: The project uses `[<DisableRuntimeMarshalling>]`. This affects how `SetShaderValue` works — see the critical warning below.
+
+## DisableRuntimeMarshalling and `SetShaderValue`
+
+Because the project uses `[<DisableRuntimeMarshalling>]`, you **must** use `fixed + NativePtr.toVoidPtr` when passing scalar, vector, or struct values to `SetShaderValue`. Passing raw values directly as `void*` arguments causes the runtime to treat the value itself as a memory address, leading to access violations.
+
+**DO NOT** do this:
+
+```fsharp
+// WRONG — runtime treats the int value as a pointer address
+Raylib.SetShaderValue(shader, loc, 1, ShaderUniformDataType.ShaderUniformInt)
+
+// WRONG — runtime treats the float value as a pointer address
+Raylib.SetShaderValue(shader, loc, 0.5f, ShaderUniformDataType.ShaderUniformFloat)
+
+// WRONG — runtime treats the Vector3 as a pointer address
+Raylib.SetShaderValue(shader, loc, Vector3.One, ShaderUniformDataType.ShaderUniformVec3)
+```
+
+**ALWAYS** pin the value and pass a pointer:
+
+```fsharp
+open System.Runtime.InteropServices
+
+let setShaderInt (shader: Shader) (loc: int) (value: int) =
+    use p = fixed &value
+    Raylib.SetShaderValue(shader, loc, NativePtr.toVoidPtr p, ShaderUniformDataType.ShaderUniformInt)
+
+let setShaderFloat (shader: Shader) (loc: int) (value: float32) =
+    use p = fixed &value
+    Raylib.SetShaderValue(shader, loc, NativePtr.toVoidPtr p, ShaderUniformDataType.ShaderUniformFloat)
+
+let setShaderVec3 (shader: Shader) (loc: int) (value: Vector3) =
+    use p = fixed &value
+    Raylib.SetShaderValue(shader, loc, NativePtr.toVoidPtr p, ShaderUniformDataType.ShaderUniformVec3)
+
+let setShaderVec4 (shader: Shader) (loc: int) (value: Vector4) =
+    use p = fixed &value
+    Raylib.SetShaderValue(shader, loc, NativePtr.toVoidPtr p, ShaderUniformDataType.ShaderUniformVec4)
+```
+
+**Exceptions:**
+
+- `SetShaderValueMatrix` takes `Matrix4x4` directly (not `void*`) — this works correctly without `fixed`.
+- `Rlgl.SetUniform` (raw rlgl) also requires `fixed + NativePtr.toVoidPtr`.
 
 ## Where to Learn More
 
