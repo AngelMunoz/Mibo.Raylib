@@ -143,9 +143,6 @@ let view (ctx: GameContext) (model: GameModel) (buffer: RenderBuffer3D) =
         chunk.Grid
         buffer
 
-  for light in model.VisibleLights do
-    Draw3D.addPointLight light buffer |> Draw3D.drop
-
   let playerModel =
     loadOrGetModel model.ModelCache KenneyModels.characterOobi ctx
 
@@ -160,6 +157,18 @@ let view (ctx: GameContext) (model: GameModel) (buffer: RenderBuffer3D) =
       )
 
     Raymath.MatrixMultiply(rot, trans)
+
+  let p = model.Particles
+
+  if p.Count > 0 then
+    Draw3D.drawBillboardBatch
+      (Array.create p.Count p.Texture)
+      p.Positions
+      p.Sizes
+      p.Colors
+      p.Count
+      buffer
+    |> Draw3D.drop
 
   buffer
   |> Draw3D.drawModel playerModel playerTransform

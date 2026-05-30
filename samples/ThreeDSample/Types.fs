@@ -178,6 +178,14 @@ type LightingModel() =
   member val LightColor = Color.White with get, set
   member val LightIntensity = 0.0f with get, set
 
+type ParticleModel() =
+  member val Positions = Array.zeroCreate<Vector3> 512 with get, set
+  member val Velocities = Array.zeroCreate<Vector3> 512 with get, set
+  member val Sizes = Array.zeroCreate<Vector2> 512 with get, set
+  member val Colors = Array.zeroCreate<Color> 512 with get, set
+  member val Count = 0 with get, set
+  member val Texture = Unchecked.defaultof<Texture2D> with get, set
+
 type GameModel() =
   member val PlayerPosition = Constants.spawnPosition with get, set
   member val PlayerVelocity = Vector3.Zero with get, set
@@ -209,6 +217,8 @@ type GameModel() =
   member val Lighting = LightingModel() with get, set
   member val VisibleLights = ResizeArray<PointLight3D>() with get, set
   member val PendingChunks = HashSet<struct (int * int)>() with get, set
+  member val Particles = ParticleModel() with get, set
+  member val JumpSound = Unchecked.defaultof<Sound> with get, set
 
 [<Struct>]
 type Msg =

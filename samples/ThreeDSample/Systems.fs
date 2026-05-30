@@ -37,6 +37,49 @@ let inputSystem
   model.CameraPitch <- Math.Clamp(pitch, -0.5f, 1.3f)
   struct (model, Cmd.none)
 
+let private confettiColors = [|
+  Color(255uy, 50uy, 50uy, 255uy)
+  Color(50uy, 255uy, 50uy, 255uy)
+  Color(50uy, 50uy, 255uy, 255uy)
+  Color(255uy, 255uy, 50uy, 255uy)
+  Color(255uy, 50uy, 255uy, 255uy)
+  Color(50uy, 255uy, 255uy, 255uy)
+  Color(255uy, 150uy, 50uy, 255uy)
+  Color(255uy, 50uy, 150uy, 255uy)
+|]
+
+let private spawnConfetti(model: GameModel) =
+  let rng = System.Random.Shared
+  let p = model.Particles
+  let mutable pc = p.Count
+
+  for _ in 0..19 do
+    if pc < p.Positions.Length then
+      let offset =
+        Vector3(
+          float32(rng.NextDouble() * 2.0 - 1.0),
+          float32(rng.NextDouble() * 0.5),
+          float32(rng.NextDouble() * 2.0 - 1.0)
+        )
+
+      p.Positions[pc] <-
+        model.PlayerPosition + Vector3(0.0f, playerHeight * 0.5f, 0.0f) + offset
+
+      p.Sizes[pc] <- Vector2(0.3f, 0.3f)
+      p.Colors[pc] <- confettiColors[rng.Next(confettiColors.Length)]
+
+      p.Velocities[pc] <-
+        Vector3(
+          float32(rng.NextDouble() * 6.0 - 3.0),
+          float32(rng.NextDouble() * 4.0 + 2.0),
+          float32(rng.NextDouble() * 6.0 - 3.0)
+        )
+
+      pc <- pc + 1
+
+  p.Count <- pc
+  Raylib.PlaySound(model.JumpSound)
+
 let physicsSystem
   (dt: float32)
   (model: GameModel)
@@ -45,6 +88,7 @@ let physicsSystem
 
   let vel =
     if model.IsGrounded && model.Actions.Started.Contains(GameAction.Jump) then
+      spawnConfetti model
       Vector3(model.PlayerVelocity.X, jumpSpeed, model.PlayerVelocity.Z)
     else
       model.PlayerVelocity
@@ -146,6 +190,38 @@ let dayNightSystem
 
   model.DayNightTimeOfDay <- newTime
   model.TotalTime <- model.TotalTime + dt
+  struct (model, Cmd.none)
+
+let particleSystem
+  (dt: float32)
+  (model: GameModel)
+  : struct (GameModel * Cmd<Msg>) =
+  let p = model.Particles
+  let positions = p.Positions
+  let velocities = p.Velocities
+  let colors = p.Colors
+  let mutable count = p.Count
+
+  for i = 0 to count - 1 do
+    let vel = velocities[i]
+    let newVel = Vector3(vel.X, vel.Y + gravity * dt * 0.05f, vel.Z)
+    velocities[i] <- newVel
+    positions[i] <- positions[i] + newVel * dt
+
+  let fadeAmount = 60.0f * dt
+  let mutable writeIdx = 0
+
+  for readIdx = 0 to count - 1 do
+    let c = colors[readIdx]
+    let newAlpha = MathF.Max(0.0f, float32 c.A - fadeAmount)
+
+    if newAlpha > 0.0f then
+      positions[writeIdx] <- positions[readIdx]
+      velocities[writeIdx] <- velocities[readIdx]
+      colors[writeIdx] <- Color(c.R, c.G, c.B, byte newAlpha)
+      writeIdx <- writeIdx + 1
+
+  p.Count <- writeIdx
   struct (model, Cmd.none)
 
 let inline minimapSystem
@@ -291,6 +367,7 @@ let update (msg: Msg) (model: GameModel) : struct (GameModel * Cmd<Msg>) =
     |> System.pipeMutable(inputSystem dt)
     |> System.pipeMutable(physicsSystem dt)
     |> System.pipeMutable(chunkSystem dt)
+    |> System.pipeMutable(particleSystem dt)
     |> System.pipeMutable(minimapSystem dt)
     |> System.pipeMutable(dayNightSystem dt)
     |> System.pipeMutable(lightingSystem dt)

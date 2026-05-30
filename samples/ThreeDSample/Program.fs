@@ -48,6 +48,15 @@ let init(ctx: GameContext) =
   model.Seed <- Random.Shared.Next()
   loadInitialChunks model
 
+  let particleImg =
+    Raylib.GenImageColor(1, 1, Color(255uy, 255uy, 255uy, 255uy))
+
+  model.Particles.Texture <- Raylib.LoadTextureFromImage(particleImg)
+  Raylib.UnloadImage(particleImg)
+
+  let assets = GameContext.getService<IAssets> ctx
+  model.JumpSound <- assets.Sound("assets/sfx_jump.ogg")
+
   let target = spawnPosition + Vector3(0.0f, playerHeight * 0.5f, 0.0f)
   model.CameraTarget <- target
 
