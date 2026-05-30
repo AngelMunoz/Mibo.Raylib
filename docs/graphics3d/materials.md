@@ -1,7 +1,7 @@
 ---
 title: 3D Materials
-category: Rendering
-categoryindex: 3
+category: 3D Rendering
+categoryindex: 5
 index: 23
 ---
 
@@ -28,18 +28,18 @@ Key properties:
 // Simple red material
 let redMat = Material3D.colored Color.Red
 
-// PBR metal with roughness
-let metalMat =
-    Material3D.defaults
-    |> Material3D.withAlbedoColor (Color(180, 180, 180, 255))
-    |> Material3D.withRoughness 0.2f
-    |> Material3D.withMetallic 1.0f
+// PBR metal with roughness (record update for scalar properties)
+let metalMat = {
+    Material3D.defaults with
+        AlbedoColor = Color(180, 180, 180, 255)
+        Roughness = 0.2f
+        Metallic = 1.0f
+}
 
 // Textured material
 let woodMat =
-    Material3D.defaults
+    { Material3D.defaults with Roughness = 0.8f }
     |> Material3D.withAlbedoMap woodTexture
-    |> Material3D.withRoughness 0.8f
 
 // In your view:
 buffer
@@ -64,15 +64,22 @@ buffer
 
 ## Builder pattern
 
-All materials start from `Material3D.defaults` or a convenience constructor, then chain `with*` functions:
+All materials start from `Material3D.defaults` or a convenience constructor. Use record update syntax for scalar properties and `with*` functions for texture maps:
 
 ```fsharp
-// From defaults
-let mat =
+// Scalar properties via record update
+let mat = {
+    Material3D.defaults with
+        AlbedoColor = Color.Blue
+        Roughness = 0.3f
+        Metallic = 0.8f
+}
+
+// Texture maps via builder functions
+let texturedMat =
     Material3D.defaults
-    |> Material3D.withAlbedoColor Color.Blue
-    |> Material3D.withRoughness 0.3f
-    |> Material3D.withMetallic 0.8f
+    |> Material3D.withAlbedoMap albedoTex
+    |> Material3D.withNormalMap normalTex
 
 // Shorthand constructors
 let red = Material3D.colored Color.Red          // albedo = red, rest default

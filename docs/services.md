@@ -83,19 +83,19 @@ let init (env: Env) (ctx: GameContext) =
     env.Network.Connect()
 
     // Async call (e.g. fetching data)
-    let cmd = Cmd.ofAsync env.Leaderboard.Load () LeaderboardLoaded LeaderboardError
+    let cmd = Cmd.ofAsync (async { return env.Leaderboard.Load() }) LeaderboardLoaded LeaderboardError
 
-    { Score = 0; HighScores = [] }, cmd
+    struct ({ Score = 0; HighScores = [] }, cmd)
 
 let update (env: Env) (msg: Msg) (model: Model) =
     match msg with
     | ScoreChanged newScore ->
         // Trigger async operation
-        let cmd = Cmd.ofAsync env.Leaderboard.SubmitScore newScore (fun _ -> ScoreSubmitted) ScoreError
-        { model with Score = newScore }, cmd
+        let cmd = Cmd.ofAsync (async { return env.Leaderboard.SubmitScore(newScore) }) (fun _ -> ScoreSubmitted) ScoreError
+        struct ({ model with Score = newScore }, cmd)
 
     | LeaderboardLoaded scores ->
-        { model with HighScores = scores }, Cmd.none
+        struct ({ model with HighScores = scores }, Cmd.none)
 
 let view (env: Env) (ctx: GameContext) (model: Model) (buffer: RenderBuffer<RenderCmd2D>) =
     // Draw score, etc.
@@ -116,10 +116,7 @@ let main _args =
     let program =
         Program.mkProgram init update
         |> Program.withConfig (fun cfg ->
-            cfg.Title <- "My Game"
-            cfg.Width <- 1280
-            cfg.Height <- 720
-            cfg.TargetFPS <- 60)
+            { cfg with Title = "My Game"; Width = 1280; Height = 720; TargetFPS = 60 })
         |> Program.withAssets
         |> Program.withRenderer (fun () -> Renderer2D.create view)
 

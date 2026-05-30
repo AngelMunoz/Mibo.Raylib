@@ -77,7 +77,7 @@ open Raylib_cs
 let loc = Raylib.GetShaderLocation(myShader, "tint")
 let mutable value = 1.0f
 use p = fixed &value
-Raylib.SetShaderValue(myShader, loc, NativePtr.toVoidPtr p, ShaderUniformDataType.ShaderUniformFloat)
+Raylib.SetShaderValue(myShader, loc, NativePtr.toVoidPtr p, ShaderUniformDataType.Float)
 
 // Set a matrix uniform (no fixed needed)
 let world = Matrix4x4.Identity
@@ -87,11 +87,11 @@ Raylib.SetShaderValueMatrix(myShader, matLoc, world)
 
 | Uniform Type | `ShaderUniformDataType` |
 |---|---|
-| `float` | `ShaderUniformFloat` |
-| `Vector2` | `ShaderUniformVec2` |
-| `Vector3` | `ShaderUniformVec3` |
-| `Vector4` | `ShaderUniformVec4` |
-| `Matrix4x4` | `ShaderUniformMat4` |
+| `float` | `ShaderUniformDataType.Float` |
+| `Vector2` | `ShaderUniformDataType.Vec2` |
+| `Vector3` | `ShaderUniformDataType.Vec3` |
+| `Vector4` | `ShaderUniformDataType.Vec4` |
+| `Matrix4x4` | `ShaderUniformDataType.Mat4` |
 
 > _**IMPORTANT**_: The project uses `[<DisableRuntimeMarshalling>]`. This affects how `SetShaderValue` works — see the critical warning below.
 
@@ -103,13 +103,13 @@ Because the project uses `[<DisableRuntimeMarshalling>]`, you **must** use `fixe
 
 ```fsharp
 // WRONG — runtime treats the int value as a pointer address
-Raylib.SetShaderValue(shader, loc, 1, ShaderUniformDataType.ShaderUniformInt)
+Raylib.SetShaderValue(shader, loc, 1, ShaderUniformDataType.Int)
 
 // WRONG — runtime treats the float value as a pointer address
-Raylib.SetShaderValue(shader, loc, 0.5f, ShaderUniformDataType.ShaderUniformFloat)
+Raylib.SetShaderValue(shader, loc, 0.5f, ShaderUniformDataType.Float)
 
 // WRONG — runtime treats the Vector3 as a pointer address
-Raylib.SetShaderValue(shader, loc, Vector3.One, ShaderUniformDataType.ShaderUniformVec3)
+Raylib.SetShaderValue(shader, loc, Vector3.One, ShaderUniformDataType.Vec3)
 ```
 
 **ALWAYS** pin the value and pass a pointer:
@@ -119,19 +119,19 @@ open System.Runtime.InteropServices
 
 let setShaderInt (shader: Shader) (loc: int) (value: int) =
     use p = fixed &value
-    Raylib.SetShaderValue(shader, loc, NativePtr.toVoidPtr p, ShaderUniformDataType.ShaderUniformInt)
+    Raylib.SetShaderValue(shader, loc, NativePtr.toVoidPtr p, ShaderUniformDataType.Int)
 
 let setShaderFloat (shader: Shader) (loc: int) (value: float32) =
     use p = fixed &value
-    Raylib.SetShaderValue(shader, loc, NativePtr.toVoidPtr p, ShaderUniformDataType.ShaderUniformFloat)
+    Raylib.SetShaderValue(shader, loc, NativePtr.toVoidPtr p, ShaderUniformDataType.Float)
 
 let setShaderVec3 (shader: Shader) (loc: int) (value: Vector3) =
     use p = fixed &value
-    Raylib.SetShaderValue(shader, loc, NativePtr.toVoidPtr p, ShaderUniformDataType.ShaderUniformVec3)
+    Raylib.SetShaderValue(shader, loc, NativePtr.toVoidPtr p, ShaderUniformDataType.Vec3)
 
 let setShaderVec4 (shader: Shader) (loc: int) (value: Vector4) =
     use p = fixed &value
-    Raylib.SetShaderValue(shader, loc, NativePtr.toVoidPtr p, ShaderUniformDataType.ShaderUniformVec4)
+    Raylib.SetShaderValue(shader, loc, NativePtr.toVoidPtr p, ShaderUniformDataType.Vec4)
 ```
 
 **Exceptions:**

@@ -1,7 +1,7 @@
 ---
 title: GPU Instancing
-category: Rendering
-categoryindex: 3
+category: 3D Rendering
+categoryindex: 5
 index: 24
 ---
 

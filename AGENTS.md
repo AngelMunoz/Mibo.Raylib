@@ -2,9 +2,14 @@
 
 Mibo.Raylib is a port of the Mibo micro-framework from MonoGame to raylib-cs, designed to allow F# developers to write games using familiar patterns for all kinds of game genres and sizes.
 
-Mibo aims to solve 90% of use cases for enabling developers to focus on game logic rather than boilerplate code, providing guidelines and architecture for structuring game code, handling input, rendering, asset management, and time management among others.
+Mibo aims to solve 90% of use cases for enabling developers to focus on game logic rather than boilerplate code, providing guidelines and architecture for structuring game game code, handling input, rendering, asset management, and time management among others.
 
 General setup and usage instructions can be found in the [README.md](README.md) file.
+
+## Imperatives
+
+1. **NEVER PUSH WITHOUT PERMISSION.** Always ask before pushing to the remote.
+2. **Always run `dotnet fantomas .` before committing code.** Format all F# files before staging.
 
 ## Project Structure
 

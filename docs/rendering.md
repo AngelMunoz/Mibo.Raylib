@@ -55,6 +55,6 @@ Program.mkProgram init update
     Renderer2D.create view2D)
 ```
 
-The 2D renderer uses `Renderer3DConfig.noClear` (or `Renderer2DConfig.noClear`) to skip clearing the background, preserving the 3D scene underneath. Per-camera clear control is also available via `Camera3DConfig` and `Camera2DConfig`.
+The 2D renderer uses `Renderer2DConfig.noClear` to skip clearing the background, preserving the 3D scene underneath. Per-camera clear control is also available via `Camera3DConfig` and `Camera2DConfig`.
 
 See also: [Camera](camera.html) for multi-camera patterns.

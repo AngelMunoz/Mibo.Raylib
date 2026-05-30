@@ -27,15 +27,14 @@ let program =
   Program.mkProgram init update
   // 1. Configure window settings via GameConfig
   |> Program.withConfig (fun cfg ->
-      cfg.Width <- 1280
-      cfg.Height <- 720
-      cfg.Title <- "My Game"
-      cfg.TargetFPS <- 60)
+      { cfg with Width = 1280; Height = 720; Title = "My Game"; TargetFPS = 60 })
   // 2. Add Mibo.Raylib services
   |> Program.withAssets   // No-op currently; caching is automatic in IAssets
   |> Program.withTick Tick // Enqueue a message every frame
   // 3. Define the view
-  |> Program.withRenderer (fun () -> Batch3DRenderer.create view3d)
+  |> Program.withRenderer (fun () ->
+      let pipeline = ForwardPbrPipeline(...)
+      Renderer3D.create pipeline View.view)
   |> Program.withRenderer (fun () -> Renderer2D.create viewUi)
 
 // Run the game
@@ -119,10 +118,7 @@ Gives you direct access to the `GameConfig` record before the game initializes.
 
 ```fsharp
 |> Program.withConfig (fun cfg ->
-    cfg.Width <- 1280
-    cfg.Height <- 720
-    cfg.Title <- "My Game"
-    cfg.TargetFPS <- 60)
+    { cfg with Width = 1280; Height = 720; Title = "My Game"; TargetFPS = 60 })
 ```
 
 > _**TIP**_: **Cumulative Pipeline**: You can call `withConfig` multiple times; each callback is executed in the order it was added, allowing you to layer configuration.

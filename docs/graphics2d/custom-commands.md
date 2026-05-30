@@ -1,90 +1,42 @@
 ---
 title: Custom Commands & Escape Hatches
-category: Rendering
-categoryindex: 3
+category: 2D Rendering
+categoryindex: 4
 index: 16
 ---
 
 # Custom Commands & Escape Hatches
 
-When the built-in `Draw.*` commands don't cover your use case, you have two options: implement `IRenderCommand2D` directly, or use the `DrawImmediate` escape hatch.
+The 2D rendering system is built on a discriminated union (`Command2D`). The `Draw.*` DSL covers standard shapes, sprites, text, and render state. When you need to go outside those primitives, `DrawImmediate` is the escape hatch.
 
-## IRenderCommand2D
+## What and Why
 
-The `IRenderCommand2D` interface is what every command implements. You can create your own by implementing two members:
+`DrawImmediate` lets you run arbitrary rendering code inside the command pipeline. The renderer flushes raylib's internal batch, temporarily exits any active camera and shader modes, runs your action, then restores the previous state. Your code executes outside the batch — direct rlgl calls, custom meshes, GPU operations.
 
-```fsharp
-type IRenderCommand2D =
-  abstract Layer: int<RenderLayer>
-  abstract Render: context: IRenderContext -> unit
-```
+You give up batching. You gain full control.
 
-### Object expression (recommended for one-off commands)
+## When to use
 
-```fsharp
-let fadeScreen (color: Color, alpha: float32, layer: int<RenderLayer>) =
-  { new IRenderCommand2D with
-      member _.Layer = layer
-      member _.Render _ =
-        Raylib.DrawRectangle(0, 0, Raylib.GetScreenWidth(), Raylib.GetScreenHeight(),
-          Color(int color.R, int color.G, int color.B, int(alpha * 255f)))
-  }
+Use `DrawImmediate` when:
 
-// Usage:
-buffer.Add(fadeScreen(Color.Black, 0.5f, 50<RenderLayer>))
-```
+- You need direct `Rlgl.*` calls (custom vertices, instancing, compute dispatches).
+- You're integrating a third-party renderer that writes to the GL context directly.
+- The built-in `Draw.*` commands can't express what you need.
 
-### Struct command (performance-sensitive, many instances)
+Otherwise, use `Draw.*`. It batches automatically and is faster.
 
-For commands that are created in bulk (e.g., a tile renderer), prefer a struct to avoid heap allocations:
+## When to use which
 
-```fsharp
-[<Struct>]
-type TileCommand(texture: Texture2D, source: Rectangle, dest: Rectangle, layer: int<RenderLayer>) =
-  interface IRenderCommand2D with
-    member _.Layer = layer
-    member _.Render _ =
-      Raylib.DrawTexturePro(texture, source, dest, Vector2.Zero, 0f, Color.White)
-```
+| Scenario | Approach |
+|----------|----------|
+| Standard sprites, text, shapes | `Draw.*` DSL |
+| Direct rlgl / instancing / compute | `DrawImmediate` |
 
-### Custom lighting pass
+## DrawImmediate
 
-You can interleave with the lighting system by accessing the light context via `IRenderContext.GameContext`:
+There are two ways to create a `DrawImmediate` command:
 
-```fsharp
-let customLightPass (lightCtx: LightContext2D) (layer: int<RenderLayer>) =
-  { new IRenderCommand2D with
-      member _.Layer = layer
-      member _.Render ctx =
-        // Access game context for services etc.
-        let gc = ctx.GameContext
-        // ... custom light logic
-  }
-```
-
-## The render context
-
-Your command's `Render` method receives an `IRenderContext` that provides:
-
-| Member | Purpose |
-|--------|---------|
-| `GameContext` | Access to services, window size, input |
-| `CurrentCamera` | Active camera, if any |
-| `BeginCamera(c)` | Start camera transform (flushes batch, ends previous) |
-| `EndCamera()` | End camera transform (flushes batch) |
-| `BeginShader(s)` | Start shader mode (flushes batch, ends previous) |
-| `EndShader()` | End shader mode (flushes batch) |
-| `DrawImmediate(action)` | Run raw rlgl code (see below) |
-
-The context tracks camera and shader state to prevent nested `BeginMode2D`/`EndMode2D` conflicts. You generally don't need to call these from commands — use `Draw.beginCamera`/`Draw.endCamera` at the buffer level instead.
-
-## DrawImmediate (escape hatch)
-
-`DrawImmediate` flushes raylib's internal batch, temporarily exits camera and shader modes, runs your action, then restores the previous state. Use this for:
-
-- Direct rlgl calls (`Rlgl.Begin`, `Rlgl.Vertex2f`, etc.)
-- Custom mesh rendering
-- Any GPU operation that must not be batched with standard draw calls
+### Via the Draw DSL (pipe-friendly)
 
 ```fsharp
 buffer
@@ -99,14 +51,85 @@ buffer
   )
 ```
 
-**Cost**: Each `DrawImmediate` call forces a batch flush before and after. Use sparingly — prefer built-in `Draw.*` commands whenever possible.
+### As a Command2D factory
 
-## When to use which
+```fsharp
+let cmd = Command2D.drawImmediate 0<RenderLayer> (fun () ->
+    Rlgl.Begin(DrawMode.Quads)
+    Rlgl.Color4f(0f, 1f, 0f, 1f)
+    Rlgl.Vertex2f(0f, 0f)
+    Rlgl.Vertex2f(50f, 0f)
+    Rlgl.Vertex2f(50f, 50f)
+    Rlgl.Vertex2f(0f, 50f)
+    Rlgl.End()
+  )
 
-| Scenario | Approach |
-|----------|----------|
-| Standard sprites, text, shapes | `Draw.*` (zero effort) |
-| Many instances of the same primitive | Struct implementing `IRenderCommand2D` |
-| One-off special effect | Object expression |
-| Direct rlgl / instancing / compute | `DrawImmediate` |
-| Interop with third-party renderers | `DrawImmediate` or custom struct command |
+buffer.Add(cmd)
+```
+
+### What happens internally
+
+When the renderer encounters a `Command2D.DrawImmediate` case:
+
+1. `Rlgl.DrawRenderBatchActive()` — flushes pending geometry.
+2. Active shader mode is ended (if any).
+3. Active camera mode is ended (if any).
+4. Your `action` runs.
+5. Previous camera and shader modes are restored.
+
+This is implemented in `Renderer2D.fs` at the `drawImmediate` helper (line 142). The `try`/`finally` block guarantees state restoration even if your action throws.
+
+### Example: custom textured quad with rlgl
+
+```fsharp
+let drawCustomQuad (texture: Texture2D) (layer: int<RenderLayer>) (buffer: RenderBuffer2D) =
+  buffer
+  |> Draw.drawImmediate layer (fun () ->
+      Rlgl.SetTexture(int texture.Id)
+      Rlgl.Begin(DrawMode.Quads)
+      Rlgl.Color4ub(255uy, 255uy, 255uy, 255uy)
+      Rlgl.TexCoord2f(0f, 0f); Rlgl.Vertex2f(0f, 0f)
+      Rlgl.TexCoord2f(1f, 0f); Rlgl.Vertex2f(200f, 0f)
+      Rlgl.TexCoord2f(1f, 1f); Rlgl.Vertex2f(200f, 200f)
+      Rlgl.TexCoord2f(0f, 1f); Rlgl.Vertex2f(0f, 200f)
+      Rlgl.End()
+      Rlgl.SetTexture(0u)
+    )
+```
+
+> _**IMPORTANT**_: Each `DrawImmediate` call forces a batch flush before and after. If you call it in a loop (e.g., once per entity), you pay the flush cost every time. Batch your custom work into a single `DrawImmediate` call where possible.
+
+## Full pipeline example
+
+Mix `Draw.*` commands and `DrawImmediate` in the same buffer. Commands execute in layer order.
+
+```fsharp
+let view (ctx: GameContext) (model: Model) (buffer: RenderBuffer2D) =
+  let layer0 = 0<RenderLayer>
+  let layer10 = 10<RenderLayer>
+
+  buffer
+  |> Draw.fillRect (layer0, Color.DarkGray) (Rectangle(0f, 0f, 800f, 600f))
+  |> Draw.sprite (SpriteState.create(model.Tex, model.Dest, model.Src))
+  |> Draw.drawImmediate layer10 (fun () ->
+      Rlgl.Begin(DrawMode.Quads)
+      Rlgl.Color4f(1f, 1f, 0f, 0.5f)
+      Rlgl.Vertex2f(300f, 300f)
+      Rlgl.Vertex2f(400f, 300f)
+      Rlgl.Vertex2f(400f, 400f)
+      Rlgl.Vertex2f(300f, 400f)
+      Rlgl.End()
+    )
+  |> Draw.text (
+      TextState.create(model.Font, "Overlay", Vector2(10f, 10f))
+      |> TextState.withLayer layer10
+    )
+  |> Draw.drop
+```
+
+> _**TIP**_: Use `Draw.drop` at the end of your view function to discard the buffer reference and silence unused-value warnings.
+
+## See also:
+
+- [Buffer & Commands](buffer-and-commands.html) — the `Draw.*` DSL and command reference.
+- [Overview](overview.html) — 2D rendering pipeline architecture.

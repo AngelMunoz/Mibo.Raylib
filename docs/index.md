@@ -83,22 +83,30 @@ Run one of the samples, then copy its program setup (composition root) into your
   - [Scaling Mibo.Raylib (Simple → Complex)](scaling.html)
   - [F# For Perf](performance.html)
 
- - Rendering
-   - [Rendering Overview](rendering.html)
-   - [Camera](camera.html)
-   - [Shaders](shaders.html)
-   - [Culling](culling.html)
-   - [2D Rendering](graphics2d/overview.html)
-   - [3D Rendering](graphics3d/overview.html)
+- Rendering
+  - [Rendering Overview](rendering.html)
+  - [Camera](camera.html)
+  - [Shaders](shaders.html)
+  - [Culling](culling.html)
+  - [2D Rendering](graphics2d/overview.html)
+  - [3D Rendering](graphics3d/overview.html)
 
- - Input
-   - [Input (raw + mapped)](input.html)
+- Input
+  - [Input (raw + mapped)](input.html)
 
- - Assets
-   - [Assets (loading + caching)](assets.html)
+- Assets
+  - [Assets (loading + caching)](assets.html)
 
- - Amenities
-   - [Animation](animation.html)
+- Amenities
+  - [Animation](animation.html)
+
+- Patterns
+  - [Patterns Overview](patterns/overview.html)
+  - [System Pipeline](patterns/system-pipeline.html)
+  - [Async Chunk Loading](patterns/async-chunks.html)
+  - [3D Particles](patterns/particles-3d.html)
+  - [Multi-Renderer Compositing](patterns/multi-renderer.html)
+  - [Day/Night Cycle](patterns/day-night.html)
 
 ## Built on
 
