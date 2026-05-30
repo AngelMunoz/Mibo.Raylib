@@ -271,7 +271,7 @@ float computeShadowFromAtlas(vec3 worldPos, int casterIndex)
     float baseBias = shadowBiases[casterIndex];
     float dzdx = dFdx(projCoord.z);
     float dzdy = dFdy(projCoord.z);
-    float bias = baseBias + length(vec2(dzdx, dzdy)) * 0.5;
+    float bias = baseBias + length(vec2(dzdx, dzdy)) * 3.0;
 
     float shadow = 0.0;
     vec2 texel = 1.0 / vec2(textureSize(shadowAtlas, 0));
@@ -306,7 +306,7 @@ float computePointShadow(vec3 worldPos, int casterIndex)
     float baseBias = shadowBiases[casterIndex];
     float dzdx = dFdx(projCoord.z);
     float dzdy = dFdy(projCoord.z);
-    float bias = baseBias + length(vec2(dzdx, dzdy)) * 0.5;
+    float bias = baseBias + length(vec2(dzdx, dzdy)) * 3.0;
 
     float shadow = 0.0;
     vec2 texel = 1.0 / vec2(textureSize(shadowAtlas, 0));
@@ -339,7 +339,7 @@ float computeSpotShadow(vec3 worldPos, int casterIndex)
     float baseBias = shadowBiases[casterIndex];
     float dzdx = dFdx(projCoord.z);
     float dzdy = dFdy(projCoord.z);
-    float bias = baseBias + length(vec2(dzdx, dzdy)) * 0.5;
+    float bias = baseBias + length(vec2(dzdx, dzdy)) * 3.0;
 
     float shadow = 0.0;
     vec2 texel = 1.0 / vec2(textureSize(shadowAtlas, 0));
