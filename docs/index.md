@@ -16,6 +16,8 @@ Mibo.Raylib is a lightweight, Elmish-based game framework built on top of raylib
 
 To get started with Mibo.Raylib, you need the [dotnet SDK](https://get.dot.net) installed.
 
+> **NOTE:** Mibo.Raylib is currently in early development. NuGet packages are not yet available, but you can clone the repository and run the samples to see it in action.
+
 Start by cloning the repository and running one of the samples:
 
 ```bash
@@ -42,71 +44,23 @@ You can then start building your game using any of the following:
 
 ## Why Mibo.Raylib?
 
-Traditional game engines often rely heavily on mutable state and complex object hierarchies. Mibo.Raylib offers an alternative:
+Traditional game engines often rely heavily on complex object hierarchies, vendor specific tooling and no specific architecture guidance. Mibo.Raylib offers an alternative:
 
-- **Functional First**: Write your game logic as pure functions that transform state.
-- **Predictable State**: The entire game state (the Model) is centralized and immutable.
-- **Elmish Architecture**: Leverage the robust MVU pattern for clear separation of concerns.
-- **raylib Power**: Benefit from the performance and simplicity of raylib.
-- **Deferred Rendering**: Built-in 2D and 3D batchers that handle sorting and lighting for you.
-
-## Core Patterns
-
-### The Elmish Loop
-
-Shader-based multi-pass rendering. Every Mibo.Raylib game follows a simple loop:
-
-1. **Init**: Define your initial state.
-2. **Update**: Purely calculate the next state based on messages (input, timers, etc.).
-3. **View**: Describe what should be rendered based on the current state.
-4. **Subscribe**: Listen to external events like keyboard or touch input.
-
-### Semantic Input Mapping
-
-Instead of checking for specific keys in your player logic, Mibo.Raylib encourages mapping keys to **Actions**. This allows for easy input rebinding and multi-device support.
-
-### Deferred Batched Rendering
-
-All rendering is deferred into a `RenderBuffer`, sorted by layer, and executed in a single pass per renderer. This enables efficient 2D lighting and post-processing without coupling render logic to the update loop.
-
-## Getting Started
-
-Run one of the samples, then copy its program setup (composition root) into your own project.
-
-## Documentation
-
-- Architecture
-  - [Elmish (MVU) runtime](elmish.html)
-  - [Programs & composition](program.html)
-  - [System pipeline (phases + snapshot)](system.html)
-  - [Service composition](services.html)
-  - [Scaling Mibo.Raylib (Simple → Complex)](scaling.html)
-  - [F# For Perf](performance.html)
-
-- Rendering
-  - [Rendering Overview](rendering.html)
-  - [Camera](camera.html)
-  - [Shaders](shaders.html)
-  - [Culling](culling.html)
-  - [2D Rendering](graphics2d/overview.html)
-  - [3D Rendering](graphics3d/overview.html)
-
-- Input
-  - [Input (raw + mapped)](input.html)
-
-- Assets
-  - [Assets (loading + caching)](assets.html)
-
-- Amenities
-  - [Animation](animation.html)
-
-- Patterns
-  - [Patterns Overview](patterns/overview.html)
-  - [Composable Systems](patterns/composable-systems.html)
-  - [Background Work](patterns/background-work.html)
-  - [Pooled Particles](patterns/pooled-particles.html)
-  - [Layered Rendering](patterns/layered-rendering.html)
-  - [Pre-computed State](patterns/precomputed-state.html)
+- **Functional First**
+  - Write your game logic as pure functions that transform state.
+  - When you grow enough you adopt mutable state in a predictable way to squeeze out more performance, but you can start simple and keep it pure as long as you want.
+  - F# inline, compiler optimizations around functions, byrefs, structs and value types allow you to write high-level code without sacrificing performance.
+- **Predictable State**
+  - The MVU architecture enforces a clear separation of concerns with a single source of truth for your game state, making it easier to reason about and debug.
+  - The unidirectional data flow ensures that state changes are predictable and traceable, which is especially beneficial in complex game logic.
+- **Elmish Architecture**
+  - A well-known architecture in the F# community with a twist for games.
+- **raylib Power**
+  - Built on top of raylib, a simple and easy-to-use library to enjoy videogames programming.
+  - Cross-platform support and a rich set of features for graphics, input, audio, and more.
+- **Deferred Rendering**
+  - Be ready for efficient lighting and post-processing effects without coupling your render logic to the update loop.
+  - Be ready for networked games with client-side prediction and server reconciliation without coupling your game logic to the rendering.
 
 ## Built on
 
