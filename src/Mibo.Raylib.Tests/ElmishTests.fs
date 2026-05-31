@@ -186,6 +186,97 @@ let tests =
         Expect.equal steps 2 "Expected capped steps"
         Expect.isTrue dropped "Expected dropped time"
         Expect.equal acc2 0.0f "Accumulator should reset on drop"
+
+      testCase "zero dt returns 0 steps"
+      <| fun _ ->
+        let struct (acc, steps, dropped) =
+          FixedStep.compute 0.1f 10 1.0f 0.0f 0.0f
+
+        Expect.equal steps 0 "Zero dt should give 0 steps"
+
+        Expect.floatClose
+          Accuracy.medium
+          (float acc)
+          0.0
+          "Accumulator should be 0"
+
+        Expect.isFalse dropped "Should not drop"
+
+      testCase "negative dt is clamped to 0"
+      <| fun _ ->
+        let struct (acc, steps, dropped) =
+          FixedStep.compute 0.1f 10 1.0f 0.0f -0.5f
+
+        Expect.equal steps 0 "Negative dt should give 0 steps"
+
+        Expect.floatClose
+          Accuracy.medium
+          (float acc)
+          0.0
+          "Accumulator should be 0"
+
+        Expect.isFalse dropped "Should not drop"
+
+      testCase "dt exactly equal to step gives 1 step"
+      <| fun _ ->
+        let struct (acc, steps, dropped) =
+          FixedStep.compute 0.1f 10 1.0f 0.0f 0.1f
+
+        Expect.equal steps 1 "Exactly one step"
+        Expect.floatClose Accuracy.medium (float acc) 0.0 "No remainder"
+        Expect.isFalse dropped "Should not drop"
+
+      testCase "dt slightly less than step gives 0 steps"
+      <| fun _ ->
+        let struct (acc, steps, dropped) =
+          FixedStep.compute 0.1f 10 1.0f 0.0f 0.099f
+
+        Expect.equal steps 0 "Should not reach step threshold"
+
+        Expect.floatClose
+          Accuracy.medium
+          (float acc)
+          0.099
+          "Accumulator should hold dt"
+
+        Expect.isFalse dropped "Should not drop"
+
+      testCase "dt = step * N exactly gives N steps with near-zero remainder"
+      <| fun _ ->
+        let struct (acc, steps, dropped) =
+          FixedStep.compute 0.1f 10 1.0f 0.0f 0.3f
+
+        Expect.equal steps 3 "Should be exactly 3 steps"
+        Expect.isTrue (abs acc < 0.001f) "Remainder should be near zero"
+        Expect.isFalse dropped "Should not drop"
+
+      testCase "maxSteps = 0 returns 0 steps"
+      <| fun _ ->
+        let struct (acc, steps, dropped) =
+          FixedStep.compute 0.1f 0 1.0f 0.0f 0.5f
+
+        Expect.equal steps 0 "maxSteps=0 should give 0 steps"
+        Expect.isFalse dropped "Should not drop"
+
+      testCase "stepSeconds = 0 returns 0 steps"
+      <| fun _ ->
+        let struct (acc, steps, dropped) =
+          FixedStep.compute 0.0f 10 1.0f 0.0f 0.5f
+
+        Expect.equal steps 0 "step=0 should give 0 steps"
+        Expect.isFalse dropped "Should not drop"
+
+      testCase "accumulator carries over between calls"
+      <| fun _ ->
+        let struct (acc1, steps1, _) = FixedStep.compute 0.1f 10 1.0f 0.0f 0.15f
+
+        Expect.equal steps1 1 "First call: 1 step"
+        Expect.floatClose Accuracy.medium (float acc1) 0.05 "Remainder 0.05"
+
+        let struct (acc2, steps2, _) = FixedStep.compute 0.1f 10 1.0f acc1 0.06f
+
+        Expect.equal steps2 1 "Second call: 1 step (0.05+0.06=0.11 >= 0.1)"
+        Expect.floatClose Accuracy.medium (float acc2) 0.01 "Remainder 0.01"
     ]
 
     testList "System" [

@@ -26,8 +26,9 @@ type BoundingSphere = { Center: Vector3; Radius: float32 }
 /// </remarks>
 type Frustum(viewProjection: Matrix4x4) =
 
-  // Gribb/Hartmann plane extraction for row-major matrices
-  // Each plane: (normal.x, normal.y, normal.z, d) where d is the signed distance
+  // Gribb/Hartmann plane extraction adapted for row-major matrices (System.Numerics).
+  // In row-major, p_clip = p * VP, so x_clip = p.col1, w_clip = p.col4, etc.
+  // The frustum half-spaces are: x_clip + w_clip >= 0 (left), w_clip - x_clip >= 0 (right), etc.
   let normalizePlane(p: Vector4) =
     let len = float32(sqrt(double(p.X * p.X + p.Y * p.Y + p.Z * p.Z)))
 
@@ -37,58 +38,58 @@ type Frustum(viewProjection: Matrix4x4) =
       p
 
   let planes = [|
-    // Left:   row4 + row1
+    // Left:   col1 + col4  →  x_clip + w_clip >= 0
     normalizePlane(
       Vector4(
-        viewProjection.M41 + viewProjection.M11,
-        viewProjection.M42 + viewProjection.M12,
-        viewProjection.M43 + viewProjection.M13,
-        viewProjection.M44 + viewProjection.M14
+        viewProjection.M11 + viewProjection.M14,
+        viewProjection.M21 + viewProjection.M24,
+        viewProjection.M31 + viewProjection.M34,
+        viewProjection.M41 + viewProjection.M44
       )
     )
-    // Right:  row4 - row1
+    // Right:  col4 - col1  →  w_clip - x_clip >= 0
     normalizePlane(
       Vector4(
-        viewProjection.M41 - viewProjection.M11,
-        viewProjection.M42 - viewProjection.M12,
-        viewProjection.M43 - viewProjection.M13,
-        viewProjection.M44 - viewProjection.M14
+        viewProjection.M14 - viewProjection.M11,
+        viewProjection.M24 - viewProjection.M21,
+        viewProjection.M34 - viewProjection.M31,
+        viewProjection.M44 - viewProjection.M41
       )
     )
-    // Bottom: row4 + row2
+    // Bottom: col2 + col4  →  y_clip + w_clip >= 0
     normalizePlane(
       Vector4(
-        viewProjection.M41 + viewProjection.M21,
-        viewProjection.M42 + viewProjection.M22,
-        viewProjection.M43 + viewProjection.M23,
-        viewProjection.M44 + viewProjection.M24
+        viewProjection.M12 + viewProjection.M14,
+        viewProjection.M22 + viewProjection.M24,
+        viewProjection.M32 + viewProjection.M34,
+        viewProjection.M42 + viewProjection.M44
       )
     )
-    // Top:    row4 - row2
+    // Top:    col4 - col2  →  w_clip - y_clip >= 0
     normalizePlane(
       Vector4(
-        viewProjection.M41 - viewProjection.M21,
-        viewProjection.M42 - viewProjection.M22,
-        viewProjection.M43 - viewProjection.M23,
-        viewProjection.M44 - viewProjection.M24
+        viewProjection.M14 - viewProjection.M12,
+        viewProjection.M24 - viewProjection.M22,
+        viewProjection.M34 - viewProjection.M32,
+        viewProjection.M44 - viewProjection.M42
       )
     )
-    // Near:   row4 + row3
+    // Near:   col3 + col4  →  z_clip + w_clip >= 0
     normalizePlane(
       Vector4(
-        viewProjection.M41 + viewProjection.M31,
-        viewProjection.M42 + viewProjection.M32,
-        viewProjection.M43 + viewProjection.M33,
-        viewProjection.M44 + viewProjection.M34
+        viewProjection.M13 + viewProjection.M14,
+        viewProjection.M23 + viewProjection.M24,
+        viewProjection.M33 + viewProjection.M34,
+        viewProjection.M43 + viewProjection.M44
       )
     )
-    // Far:    row4 - row3
+    // Far:    col4 - col3  →  w_clip - z_clip >= 0
     normalizePlane(
       Vector4(
-        viewProjection.M41 - viewProjection.M31,
-        viewProjection.M42 - viewProjection.M32,
-        viewProjection.M43 - viewProjection.M33,
-        viewProjection.M44 - viewProjection.M34
+        viewProjection.M14 - viewProjection.M13,
+        viewProjection.M24 - viewProjection.M23,
+        viewProjection.M34 - viewProjection.M33,
+        viewProjection.M44 - viewProjection.M43
       )
     )
   |]
@@ -127,11 +128,13 @@ type Frustum(viewProjection: Matrix4x4) =
       let nvz = if p.Z >= 0.0f then box.Min.Z else box.Max.Z
       let nVertex = Vector3(nvx, nvy, nvz)
 
-      if dot4 p nVertex > 0.0f then
-        // n-vertex is in front of the plane -> box is completely outside
+      if result = ContainmentType.Disjoint then
+        ()
+      elif dot4 p pVertex < 0.0f then
+        // p-vertex is behind the plane -> entire box is outside
         result <- ContainmentType.Disjoint
-      elif dot4 p pVertex >= 0.0f then
-        // p-vertex is in front -> box intersects this plane
+      elif dot4 p nVertex < 0.0f then
+        // n-vertex is behind but p-vertex is in front -> box straddles
         result <- ContainmentType.Intersects
 
     result
