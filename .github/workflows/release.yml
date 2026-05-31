@@ -72,6 +72,10 @@ jobs:
         if: steps.check_tag.outputs.exists == 'false'
         run: dotnet restore
 
+      - name: Run Tests
+        if: steps.check_tag.outputs.exists == 'false'
+        run: dotnet test --configuration Release --no-restore
+
       - name: Build
         if: steps.check_tag.outputs.exists == 'false'
         run: dotnet build --configuration Release --no-restore
