@@ -1403,7 +1403,7 @@ let lightContextTests =
   testList "LightContext2D accumulation" [
     test "Reset clears all accumulated state" {
       let shader = Unchecked.defaultof<Shader>
-      let ctx = LightContext2D(litShader = shader)
+      use ctx = new LightContext2D(litShader = shader)
       ctx.Ambient <- Color(100uy, 100uy, 100uy, 255uy)
       ctx.DirLights.Add(DirectionalLight2D.create v1)
       ctx.PointLights.Add(PointLight2D.create(v2, 50.0f))
@@ -1427,7 +1427,7 @@ let lightContextTests =
 
     test "ShadowsEnabled can be toggled" {
       let shader = Unchecked.defaultof<Shader>
-      let ctx = LightContext2D(litShader = shader)
+      use ctx = new LightContext2D(litShader = shader)
       Expect.isTrue ctx.ShadowsEnabled "Default should be true"
       ctx.ShadowsEnabled <- false
       Expect.isFalse ctx.ShadowsEnabled "Should be false after setting"
@@ -1435,7 +1435,7 @@ let lightContextTests =
 
     test "Ambient property can be set and retrieved" {
       let shader = Unchecked.defaultof<Shader>
-      let ctx = LightContext2D(litShader = shader)
+      use ctx = new LightContext2D(litShader = shader)
       ctx.Ambient <- Color.Red
       Expect.equal ctx.Ambient Color.Red "Ambient should be Red"
     }
@@ -1449,7 +1449,7 @@ let lightCommandTests =
   testList "LightCommands" [
     test "setAmbient mutates context and returns NoopLight" {
       let shader = Unchecked.defaultof<Shader>
-      let ctx = LightContext2D(litShader = shader)
+      use ctx = new LightContext2D(litShader = shader)
       let ambient = AmbientLight2D.create Color.White
       let cmd = LightCommands.setAmbient ctx (5<RenderLayer>, ambient)
       Expect.equal ctx.Ambient Color.White "Ambient should be set to White"
@@ -1462,7 +1462,7 @@ let lightCommandTests =
 
     test "addPointLight adds to context and returns NoopLight" {
       let shader = Unchecked.defaultof<Shader>
-      let ctx = LightContext2D(litShader = shader)
+      use ctx = new LightContext2D(litShader = shader)
       let light = PointLight2D.create(v1, 50.0f)
       let cmd = LightCommands.addPointLight ctx 3<RenderLayer> light
       Expect.equal ctx.PointLights.Count 1 "Should have 1 point light"
@@ -1476,7 +1476,7 @@ let lightCommandTests =
 
     test "addDirectionalLight adds to context and returns NoopLight" {
       let shader = Unchecked.defaultof<Shader>
-      let ctx = LightContext2D(litShader = shader)
+      use ctx = new LightContext2D(litShader = shader)
       let light = DirectionalLight2D.create v2
       let cmd = LightCommands.addDirectionalLight ctx 4<RenderLayer> light
       Expect.equal ctx.DirLights.Count 1 "Should have 1 directional light"
@@ -1490,7 +1490,7 @@ let lightCommandTests =
 
     test "addOccluder adds to context and returns NoopLight" {
       let shader = Unchecked.defaultof<Shader>
-      let ctx = LightContext2D(litShader = shader)
+      use ctx = new LightContext2D(litShader = shader)
       let occ = Occluder2D.create(v1, v2)
       let cmd = LightCommands.addOccluder ctx 2<RenderLayer> occ
       Expect.equal ctx.Occluders.Count 1 "Should have 1 occluder"
@@ -1503,7 +1503,7 @@ let lightCommandTests =
 
     test "endLighting returns EndLighting command" {
       let shader = Unchecked.defaultof<Shader>
-      let ctx = LightContext2D(litShader = shader)
+      use ctx = new LightContext2D(litShader = shader)
       let cmd = LightCommands.endLighting ctx 10<RenderLayer>
 
       match cmd with
@@ -1514,7 +1514,7 @@ let lightCommandTests =
 
     test "enableShadows sets ShadowsEnabled and returns EnableShadows" {
       let shader = Unchecked.defaultof<Shader>
-      let ctx = LightContext2D(litShader = shader)
+      use ctx = new LightContext2D(litShader = shader)
       ctx.ShadowsEnabled <- false
       let cmd = LightCommands.enableShadows ctx 1<RenderLayer>
       Expect.isTrue ctx.ShadowsEnabled "ShadowsEnabled should be true"
@@ -1527,7 +1527,7 @@ let lightCommandTests =
 
     test "disableShadows clears ShadowsEnabled and returns DisableShadows" {
       let shader = Unchecked.defaultof<Shader>
-      let ctx = LightContext2D(litShader = shader)
+      use ctx = new LightContext2D(litShader = shader)
       let cmd = LightCommands.disableShadows ctx 1<RenderLayer>
       Expect.isFalse ctx.ShadowsEnabled "ShadowsEnabled should be false"
 
@@ -1539,7 +1539,7 @@ let lightCommandTests =
 
     test "light commands can be added to RenderBuffer2D via LightDraw" {
       let shader = Unchecked.defaultof<Shader>
-      let ctx = LightContext2D(litShader = shader)
+      use ctx = new LightContext2D(litShader = shader)
       let buf = RenderBuffer2D()
 
       buf
