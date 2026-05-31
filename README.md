@@ -1,5 +1,14 @@
 # Mibo.Raylib
 
+> Install the templates:
+>
+> ```bash
+> dotnet new install Mibo.Raylib.Templates
+> dotnet new mibo-2d -o MyGame
+> cd MyGame
+> dotnet run
+> ```
+
 > **NOTE for ADVENTURERS:** raylib is a programming library to enjoy videogames programming; no fancy interface, no visual helpers, no debug button... just coding in the most pure spartan-programmers way.
 
 Following that spirit, Mibo.Raylib keeps it lean, just F# and the Elmish loop with a handful of commodities to get out of your way and let you enjoy the craft.

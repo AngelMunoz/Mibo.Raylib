@@ -16,20 +16,11 @@ Mibo.Raylib is a lightweight, Elmish-based game framework built on top of raylib
 
 To get started with Mibo.Raylib, you need the [dotnet SDK](https://get.dot.net) installed.
 
-> **NOTE:** Mibo.Raylib is currently in early development. NuGet packages are not yet available, but you can clone the repository and run the samples to see it in action.
-
-Start by cloning the repository and running one of the samples:
-
 ```bash
-git clone https://github.com/your-org/Mibo.Raylib
-cd Mibo.Raylib
-dotnet run --project samples/PlatformerSample
-```
-
-Or the 3D sample:
-
-```bash
-dotnet run --project samples/ThreeDSample
+dotnet new install Mibo.Raylib.Templates
+dotnet new mibo-2d -o MyGame
+cd MyGame
+dotnet run
 ```
 
 The projects in `samples/PlatformerSample` and `samples/ThreeDSample` show complete, working setups.
