@@ -128,7 +128,9 @@ type Frustum(viewProjection: Matrix4x4) =
       let nvz = if p.Z >= 0.0f then box.Min.Z else box.Max.Z
       let nVertex = Vector3(nvx, nvy, nvz)
 
-      if dot4 p pVertex < 0.0f then
+      if result = ContainmentType.Disjoint then
+        ()
+      elif dot4 p pVertex < 0.0f then
         // p-vertex is behind the plane -> entire box is outside
         result <- ContainmentType.Disjoint
       elif dot4 p nVertex < 0.0f then
