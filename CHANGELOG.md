@@ -4,6 +4,10 @@
 
 ### Added
 
+- `Mibo.Raylib.Templates` NuGet package with `mibo-raylib-2d` and `mibo-raylib-3d` dotnet templates for scaffolding new Mibo Raylib game projects.
+
+### Added
+
 - PlatformerSample: 2D minimap with MVU pattern (`MinimapModel`, `Minimap.system`, `Minimap.view`). Bakes tiles into CPU image, uploads to GPU texture, draws as single sprite. Background matches sky color gradient.
 - PlatformerSample: Variable jump height — releasing jump early cuts upward velocity for short hops.
 - PlatformerSample: New tile types — `Spikes` (hazard), `Coin` (collectible, increments score), `Flag` (goal marker).
